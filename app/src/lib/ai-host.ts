@@ -2,18 +2,19 @@
 
 import { db } from "./db";
 import { publish } from "./events";
+import { ApiError } from "./api";
 import { generateText, NoGeminiKeysError } from "./ai";
-import { START_MIN_HUMANS, ROUND_EVENTS, PHASE_DURATIONS_SEC } from "./scenario";
+import { START_MIN_HUMANS, ROUND_EVENTS, PHASE_DURATIONS_SEC, INTRO_DURATION_SEC, DEBRIEF_DURATION_SEC } from "./scenario";
 import { ROUND_NAMES, PHASE_BANNERS } from "./labels";
 import { startSession, requestPhaseTransition } from "./game-service";
 
 /** Minimum ms into a phase before all-ready fast-forward (anti-flash). */
 const MIN_PHASE_MS: Record<string, number> = {
-  EVENT: 3000,
-  DECISION: 5000,
-  MARKET_OPEN: 8000,
-  RECAP: 5000,
-  INTRO: 3000,
+  EVENT: 12_000,
+  DECISION: 30_000,
+  MARKET_OPEN: 15_000,
+  RECAP: 8_000,
+  INTRO: 20_000,
 };
 
 function minHumansToStart(autoHost: boolean): number {
@@ -85,8 +86,8 @@ function phaseDurationMs(session: {
   phase: string | null;
   autoHost: boolean;
 }): number {
-  if (session.status === "INTRO") return 20_000;
-  if (session.status === "DEBRIEF") return 45_000;
+  if (session.status === "INTRO") return INTRO_DURATION_SEC * 1000;
+  if (session.status === "DEBRIEF") return DEBRIEF_DURATION_SEC * 1000;
   if (session.phase && session.phase in PHASE_DURATIONS_SEC) {
     const sec = PHASE_DURATIONS_SEC[session.phase as keyof typeof PHASE_DURATIONS_SEC];
     if (session.phase === "RECAP" && session.autoHost) return 30_000;
@@ -111,20 +112,20 @@ export async function setPhaseReady(
   ready: boolean,
 ): Promise<void> {
   const session = await db.gameSession.findUnique({ where: { id: sessionId } });
-  if (!session) throw new Error("ROOM_NOT_FOUND");
+  if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
   if (
     !["INTRO", "ROUND_1", "ROUND_2", "ROUND_3", "ROUND_4", "DEBRIEF"].includes(
       session.status,
     )
   ) {
-    throw new Error("INVALID_STATE");
+    throw new ApiError("INVALID_STATE", 409);
   }
 
   const updated = await db.participant.updateMany({
     where: { sessionId, userId, isBot: false },
     data: { phaseReady: ready },
   });
-  if (updated.count === 0) throw new Error("FORBIDDEN");
+  if (updated.count === 0) throw new ApiError("FORBIDDEN", 403);
 
   const s = await db.gameSession.update({
     where: { id: sessionId },

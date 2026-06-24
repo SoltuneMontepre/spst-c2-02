@@ -44,8 +44,12 @@ export function useSessionResult(sessionId: string, enabled: boolean) {
     queryKey: ["session", sessionId, "result"],
     queryFn: () => apiFetch<SessionResultView>(`/api/sessions/${sessionId}/result`),
     enabled,
-    refetchInterval: (q) =>
-      q.state.data?.status === "DEBRIEF" ? 5000 : false,
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return false;
+      if (d.status === "DEBRIEF" && !d.aiDebrief) return 5000;
+      return false;
+    },
   });
 }
 

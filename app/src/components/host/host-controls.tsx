@@ -23,52 +23,63 @@ export function HostControls({
   const canExtend = inRound && phase !== "SETTLEMENT" && phase !== "RECAP";
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {status === "INTRO" ? (
-        autoHost ? (
-          <p className="text-sm text-muted-foreground">
-            AI điều phối sẽ tự bắt đầu vòng 1…
-          </p>
-        ) : (
-          <Button disabled={pending} onClick={() => onAction("next")}>
-            <Play className="size-4" /> Bắt đầu vòng 1
-          </Button>
-        )
-      ) : null}
+    <div className="flex min-h-[7.5rem] flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {status === "INTRO" ? (
+          autoHost ? (
+            <p className="text-sm text-muted-foreground">
+              AI điều phối sẽ tự bắt đầu vòng 1…
+            </p>
+          ) : (
+            <Button disabled={pending} onClick={() => onAction("next")}>
+              <Play className="size-4" /> Bắt đầu vòng 1
+            </Button>
+          )
+        ) : null}
 
-      {inRound ? (
-        <>
-          <Button disabled={pending} onClick={() => onAction("next")}>
-            <SkipForward className="size-4" />
-            {phase === "RECAP" ? "Vòng tiếp theo" : "Giai đoạn tiếp"}
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={pending}
-            onClick={() => onAction(paused ? "resume" : "pause")}
-          >
-            {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
-            {paused ? "Tiếp tục" : "Tạm dừng"}
-          </Button>
-          <Button variant="outline" disabled={pending || !canExtend} onClick={() => onAction("extend")}>
-            <Plus className="size-4" /> Gia hạn 30s
-          </Button>
-        </>
-      ) : null}
+        {inRound ? (
+          <>
+            <Button disabled={pending} onClick={() => onAction("next")}>
+              <SkipForward className="size-4" />
+              {phase === "RECAP" ? "Vòng tiếp theo" : "Giai đoạn tiếp"}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={pending}
+              onClick={() => onAction(paused ? "resume" : "pause")}
+            >
+              {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+              {paused ? "Tiếp tục" : "Tạm dừng"}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={pending || !canExtend}
+              onClick={() => onAction("extend")}
+            >
+              <Plus className="size-4" /> Gia hạn 30s
+            </Button>
+          </>
+        ) : null}
 
-      {status === "DEBRIEF" ? (
-        autoHost ? (
-          <p className="text-sm text-muted-foreground">
-            AI điều phối sẽ tự hoàn tất và lưu kết quả…
-          </p>
-        ) : (
-          <Button disabled={pending} onClick={() => onAction("end")}>
-            <Square className="size-4" /> Hoàn tất & lưu
-          </Button>
-        )
-      ) : null}
+        {status === "DEBRIEF" ? (
+          autoHost ? (
+            <p className="text-sm text-muted-foreground">
+              AI điều phối sẽ tự hoàn tất và lưu kết quả…
+            </p>
+          ) : (
+            <Button disabled={pending} onClick={() => onAction("end")}>
+              <Square className="size-4" /> Hoàn tất & lưu
+            </Button>
+          )
+        ) : null}
+      </div>
 
-      <Button variant="destructive" disabled={pending} onClick={() => onAction("end")}>
+      <Button
+        variant="destructive"
+        className="mt-auto w-full sm:w-auto"
+        disabled={pending}
+        onClick={() => onAction("end")}
+      >
         Kết thúc phiên
       </Button>
     </div>

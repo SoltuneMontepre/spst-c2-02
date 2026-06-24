@@ -12,8 +12,8 @@ export function RoleBadge({ role }: { role: Role | null }) {
   return (
     <span
       className={cn(
-        "rounded-full px-2 py-0.5 text-xs font-medium",
-        role ? "bg-accent/15 text-accent-foreground" : "bg-muted text-muted-foreground",
+        "inline-block max-w-full truncate rounded-full px-2 py-0.5 text-xs font-medium",
+        role ? "bg-accent/15 text-foreground" : "bg-muted text-muted-foreground",
       )}
     >
       {role ? ROLE_LABELS[role] : "Chưa phân vai"}

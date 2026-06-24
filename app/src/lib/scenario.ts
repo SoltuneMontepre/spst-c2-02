@@ -97,15 +97,15 @@ export const UPGRADE_COSTS = {
 
 /** Phase durations in seconds (SRS §4.2, §4.3). */
 export const PHASE_DURATIONS_SEC = {
-  EVENT: 15,
-  DECISION: 45,
+  EVENT: 22,
+  DECISION: 60,
   MARKET_OPEN: 60,
   SETTLEMENT: 0, // server-driven, no fixed timer
   RECAP: 30, // minimum before host may advance
 } as const;
 
 /** AI-host timed intro / debrief (no manual host needed). */
-export const INTRO_DURATION_SEC = 20;
+export const INTRO_DURATION_SEC = 45;
 export const DEBRIEF_DURATION_SEC = 45;
 
 export const PHASE_EXTENSION_SEC = 30;

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCreateRoom, useJoinRoom } from "@/hooks/use-session-room";
 import { ApiClientError } from "@/hooks/use-api";
 
@@ -25,44 +24,39 @@ export function RoomActions() {
       : null;
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>Bắt đầu phiên chợ</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        <Button size="lg" disabled={create.isPending} onClick={() => create.mutate()}>
-          {create.isPending ? "Đang tạo phòng…" : "Tạo phòng (Host)"}
+    <div className="flex flex-col gap-5">
+      <Button size="lg" disabled={create.isPending} onClick={() => create.mutate()}>
+        {create.isPending ? "Đang tạo phòng…" : "Tạo phòng (Host)"}
+      </Button>
+      {create.error instanceof ApiClientError &&
+      create.error.code === "ACTIVE_HOST_SESSION" ? (
+        <p className="text-sm text-danger">Bạn đang có một phòng đang mở.</p>
+      ) : null}
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" /> hoặc tham gia bằng mã{" "}
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form
+        className="flex flex-col gap-2 sm:flex-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (code.trim().length === 6) join.mutate(code.trim().toUpperCase());
+        }}
+      >
+        <Input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="Mã phòng"
+          maxLength={6}
+          className="uppercase tracking-widest sm:flex-1"
+        />
+        <Button type="submit" variant="secondary" disabled={join.isPending}>
+          Tham gia
         </Button>
-        {create.error instanceof ApiClientError &&
-        create.error.code === "ACTIVE_HOST_SESSION" ? (
-          <p className="text-sm text-danger">Bạn đang có một phòng đang mở.</p>
-        ) : null}
-
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> hoặc tham gia bằng mã{" "}
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.trim().length === 6) join.mutate(code.trim().toUpperCase());
-          }}
-        >
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="Mã phòng"
-            maxLength={6}
-            className="uppercase tracking-widest"
-          />
-          <Button type="submit" variant="secondary" disabled={join.isPending}>
-            Tham gia
-          </Button>
-        </form>
-        {joinError ? <p className="text-sm text-danger">{joinError}</p> : null}
-      </CardContent>
-    </Card>
+      </form>
+      {joinError ? <p className="text-sm text-danger">{joinError}</p> : null}
+    </div>
   );
 }

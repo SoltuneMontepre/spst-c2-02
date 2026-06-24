@@ -41,13 +41,13 @@ function phaseMapTips(
       return [
         "Đọc biến cố vòng — đây là «cú sốc» cung hoặc cầu, không phải lệnh mua bán.",
         VALUE_VS_PRICE,
-        "Chưa cần vào khu nhiệm vụ; chuẩn bị tinh thần cho giai đoạn quyết định.",
-        ready,
+        "Chưa cần vào khu — xem bản đồ và nhớ khu sáng là của bạn; chờ «Ra quyết định».",
+        "Giai đoạn biến cố kéo dài khoảng 22 giây để đọc.",
       ];
     case "DECISION":
       return [
         role
-          ? `Vào khu «${roleZoneLabel(role)}» trên bản đồ để ra quyết định vòng này.`
+          ? `Chạm khu «${roleZoneLabel(role)}» (đang sáng) để vào nhiệm vụ — bạn có ~60 giây.`
           : "Chọn khu phù hợp vai trò của bạn trên bản đồ.",
         role === "PRODUCER"
           ? "Nhà sản xuất: chọn sản lượng, có thể đầu tư nâng cấp (áp dụng vòng sau)."
@@ -114,10 +114,11 @@ export function getGuidance(ctx: GuidanceContext): GuidanceContent {
         return {
           title: "Giới thiệu phiên",
           tips: [
+            "Dành thời gian xem bản đồ bên dưới — khu sáng là nơi bạn sẽ làm việc.",
             "Bạn sẽ chơi 4 vòng thanh long; mỗi vòng có biến cố thị trường khác nhau.",
             PHASE_FLOW,
             ctx.role
-              ? `Vai của bạn: ${roleZoneLabel(ctx.role)} — khu sáng trên bản đồ là nơi bạn làm việc.`
+              ? `Vai của bạn: ${roleZoneLabel(ctx.role)} — chạm khu đó khi giai đoạn «Ra quyết định».`
               : "Bản đồ có 5 khu; khu sáng là nhiệm vụ của bạn khi vòng bắt đầu.",
             "Tháp quan sát mở cho mọi người — xem giá trị vs giá cả.",
             VALUE_VS_PRICE,

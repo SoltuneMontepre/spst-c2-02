@@ -12,8 +12,9 @@ export default async function LobbyPage({
   const { id } = await params;
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <LobbyView sessionId={id} />
-    </main>
+    <LobbyView
+      sessionId={id}
+      displayName={session.user.name ?? "Người chơi"}
+    />
   );
 }

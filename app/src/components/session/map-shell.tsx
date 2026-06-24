@@ -3,18 +3,76 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
-import { GamePhaseHud } from "@/components/session/game-phase-hud";
-import { PlayerStatusBar } from "./player-status-bar";
+import { GameBentoShell } from "@/components/session/game-bento-shell";
 import { MapZones } from "./map-zones";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
-import { GameGuidance } from "@/components/learning/game-guidance";
+import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { zoneLabelForRole } from "@/lib/game-zones";
+import type { Role } from "@/generated/prisma/enums";
 
 const ENDED = ["COMPLETED", "INCOMPLETE", "CANCELLED"];
 
+function MapPhaseHint({
+  status,
+  phase,
+  role,
+}: {
+  status: string;
+  phase: string | null;
+  role: Role | null;
+}) {
+  if (status === "INTRO") {
+    return (
+      <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+        <p className="font-semibold">Làm quen bản đồ</p>
+        <p className="mt-1 text-muted-foreground">
+          Khu sáng là nơi bạn làm việc theo vai trò
+          {role ? ` (${ROLE_LABELS[role]})` : ""}. Chọn khu ở cột trái khi đến lúc.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "EVENT") {
+    return (
+      <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
+        <p className="font-semibold">Đang công bố biến cố</p>
+        <p className="mt-1 text-muted-foreground">
+          Đọc timer & hướng dẫn bên phải — chờ «Ra quyết định» rồi vào khu của bạn.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "DECISION" && role) {
+    return (
+      <div className="rounded-xl border border-primary bg-primary/10 px-4 py-3 text-sm">
+        <p className="font-semibold">Ra quyết định</p>
+        <p className="mt-1 text-muted-foreground">
+          Chọn <span className="font-medium text-foreground">{zoneLabelForRole(role)}</span>{" "}
+          ở cột trái hoặc ô bên dưới.
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "MARKET_OPEN" && role) {
+    return (
+      <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm">
+        <p className="font-semibold">Chợ đã mở</p>
+        <p className="mt-1 text-muted-foreground">
+          Vào <span className="font-medium text-foreground">{zoneLabelForRole(role)}</span>{" "}
+          để mua bán.
+        </p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function MapShell({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  useSessionStream(sessionId);
   const { data, isLoading } = useSessionSnapshot(sessionId);
 
   useEffect(() => {
@@ -30,42 +88,36 @@ export function MapShell({ sessionId }: { sessionId: string }) {
   }
 
   const recapRound = data.analytics.find((r) => r.number === data.currentRound);
+  const role = data.self?.role ?? null;
+  const mapInteractive =
+    data.status !== "INTRO" &&
+    (data.phase === "DECISION" || data.phase === "MARKET_OPEN");
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 p-4">
-      <GameGuidance
-        context={{
-          screen: "map",
-          status: data.status,
-          phase: data.phase,
-          role: data.self?.role ?? null,
-          autoHost: data.autoHost,
-        }}
-      />
-      <GamePhaseHud sessionId={sessionId} data={data} />
-      <PlayerStatusBar self={data.self} />
-      {data.status === "INTRO" ? (
-        <div className="flex flex-col gap-3 rounded-xl bg-muted px-4 py-6 text-sm">
-          <p className="font-semibold">Chào mừng đến Phiên chợ giá trị</p>
-          <p className="text-muted-foreground">
-            Bạn sẽ trải nghiệm bốn vòng mô phỏng thị trường thanh long. Hãy nhớ: giá trị
-            (lao động xã hội) và giá cả (giao dịch) là hai đại lượng khác nhau; cung-cầu
-            tác động trực tiếp tới giá cả, không tạo ra giá trị.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Vai của bạn: {data.self?.role ?? "đang chờ"} · Bản đồ có năm khu — chọn khu
-            phù hợp khi vòng 1 bắt đầu.
-          </p>
-        </div>
-      ) : data.phase === "RECAP" && recapRound ? (
-        <RoundRecapCard sessionId={sessionId} round={recapRound} />
-      ) : (
-        <MapZones
-          sessionId={sessionId}
-          role={data.self?.role ?? null}
-          participants={data.participants}
-        />
-      )}
-    </main>
+    <GameBentoShell
+      sessionId={sessionId}
+      activeZone="map"
+      guidanceContext={{
+        screen: "map",
+        status: data.status,
+        phase: data.phase,
+        role,
+        autoHost: data.autoHost,
+      }}
+    >
+      <div className="flex flex-col gap-4">
+        <MapPhaseHint status={data.status} phase={data.phase} role={role} />
+        {data.phase === "RECAP" && recapRound ? (
+          <RoundRecapCard sessionId={sessionId} round={recapRound} />
+        ) : (
+          <MapZones
+            sessionId={sessionId}
+            role={role}
+            participants={data.participants}
+            interactive={mapInteractive}
+          />
+        )}
+      </div>
+    </GameBentoShell>
   );
 }

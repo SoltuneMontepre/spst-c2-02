@@ -180,7 +180,25 @@ export async function runBotMarket(sessionId: string): Promise<void> {
           status: { in: ["AVAILABLE", "CARRIED"] },
         },
       });
+      // Retail first so consumers always see listings even if wholesale stalls.
       for (const lot of lots) {
+        const retailQty = Math.min(lot.availableQuantity, Math.max(1, Math.ceil(lot.availableQuantity / 2)));
+        if (retailQty > 0) {
+          await listForSale(tx, botCtx(seller, session), {
+            inventoryLotId: lot.id,
+            quantity: retailQty,
+            askPriceVnd: ask,
+          });
+        }
+      }
+      const lotsAfterRetail = await tx.inventoryLot.findMany({
+        where: {
+          ownerParticipantId: seller.id,
+          availableQuantity: { gt: 0 },
+          status: { in: ["AVAILABLE", "CARRIED"] },
+        },
+      });
+      for (const lot of lotsAfterRetail) {
         const qty = Math.min(lot.availableQuantity, 2);
         if (qty > 0) {
           await createWholesaleOffer(tx, botCtx(seller, session), {
@@ -189,20 +207,6 @@ export async function runBotMarket(sessionId: string): Promise<void> {
             minimumPriceVnd: Math.max(1000, ask - 1000),
           });
         }
-      }
-      const lotsAfter = await tx.inventoryLot.findMany({
-        where: {
-          ownerParticipantId: seller.id,
-          availableQuantity: { gt: 0 },
-          status: { in: ["AVAILABLE", "CARRIED"] },
-        },
-      });
-      for (const lot of lotsAfter) {
-        await listForSale(tx, botCtx(seller, session), {
-          inventoryLotId: lot.id,
-          quantity: lot.availableQuantity,
-          askPriceVnd: ask,
-        });
       }
     }
 
@@ -230,6 +234,26 @@ export async function runBotMarket(sessionId: string): Promise<void> {
           });
         }
       }
+    }
+
+    const countered = await tx.wholesaleOffer.findMany({
+      where: { roundId: round.id, status: "COUNTERED" },
+    });
+    for (const offer of countered) {
+      const seller = producers.find((p) => p.id === offer.producerId);
+      if (!seller) continue;
+      try {
+        await respondWholesale(tx, botCtx(seller, session), {
+          offerId: offer.id,
+          decision: "ACCEPT",
+        });
+      } catch {
+        /* skip if trade cannot complete */
+      }
+    }
+
+    for (const im of intermediaries) {
+      if (!im.wallet) continue;
       const stock = await tx.inventoryLot.findMany({
         where: {
           ownerParticipantId: im.id,

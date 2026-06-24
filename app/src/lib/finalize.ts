@@ -12,6 +12,7 @@ import {
 import type { ConsumerRoundState } from "./role-state";
 import { generateText } from "./ai";
 import { formatThousandDong } from "./money";
+import { generateAiDebriefReview } from "./debrief-ai";
 
 const RETAIL = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"];
 
@@ -106,7 +107,19 @@ export async function finalizeSession(sessionId: string): Promise<void> {
   }
 
   const badges = completed ? await computeBadges(outcomes, sessionId) : [];
-  const narration = await buildNarration(snapshots).catch(() => null);
+  const marketLines = snapshots.map(
+    (s) =>
+      `Vòng ${s.round.number}: giá trị ${formatThousandDong(s.unitValueVnd)}, giá thị trường ${
+        s.marketPriceVnd === null ? "không hình thành" : formatThousandDong(s.marketPriceVnd)
+      }`,
+  );
+  const aiDebrief = await generateAiDebriefReview({
+    outcomes,
+    badges,
+    marketLines,
+    sessionCompleted: completed,
+  }).catch(() => null);
+  const narration = aiDebrief?.overall.comment ?? (await buildNarration(snapshots).catch(() => null));
 
   await db.$transaction(async (tx) => {
     await tx.badge.deleteMany({ where: { sessionId } });
@@ -125,12 +138,14 @@ export async function finalizeSession(sessionId: string): Promise<void> {
         participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
         badges: badges as unknown as Prisma.InputJsonValue,
         narration,
+        aiDebrief: aiDebrief as unknown as Prisma.InputJsonValue,
       },
       update: {
         status: session.status,
         participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
         badges: badges as unknown as Prisma.InputJsonValue,
         narration,
+        aiDebrief: aiDebrief as unknown as Prisma.InputJsonValue,
       },
     });
   });

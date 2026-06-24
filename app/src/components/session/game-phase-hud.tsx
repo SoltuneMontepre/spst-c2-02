@@ -1,11 +1,18 @@
 "use client";
 
-"use client";
-
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { PhaseBanner } from "@/components/session/phase-banner";
 import { PhaseReadyButton } from "@/components/session/phase-ready-button";
 import type { SessionSnapshot } from "@/lib/session-service";
+
+/** Phases where players should finish tasks before skipping (not intro/event read time). */
+function canFastForwardPhase(
+  status: string,
+  phase: string | null,
+): boolean {
+  if (status === "INTRO" || status === "DEBRIEF") return false;
+  return phase === "DECISION" || phase === "MARKET_OPEN" || phase === "RECAP";
+}
 
 /** Shared phase HUD: timer, AI narration, TFT-style phase-ready. */
 export function GamePhaseHud({
@@ -31,6 +38,7 @@ export function GamePhaseHud({
     data.autoHost &&
     data.status !== "LOBBY" &&
     data.phase !== "SETTLEMENT" &&
+    canFastForwardPhase(data.status, data.phase) &&
     !!self &&
     !self.isBot;
 
@@ -54,7 +62,7 @@ export function GamePhaseHud({
           />
           {tutorialOn ? (
             <p className="text-center text-xs text-muted-foreground">
-              Khi cả nhóm xong việc, mọi người bấm sẵn sàng để chuyển giai đoạn sớm.
+              Chỉ bấm khi bạn đã xong việc trong giai đoạn này.
             </p>
           ) : null}
         </div>

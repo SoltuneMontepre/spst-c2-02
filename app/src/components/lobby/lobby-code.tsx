@@ -23,22 +23,24 @@ export function LobbyCode({ code }: { code: string }) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+    <div className="flex w-full flex-col items-center gap-4">
       {qrDataUrl ? (
         <img
           src={qrDataUrl}
           alt={`QR tham gia phòng ${code}`}
-          className="rounded-lg border bg-white p-2"
-          width={160}
-          height={160}
+          className="rounded-xl border bg-white p-3 shadow-sm"
+          width={180}
+          height={180}
         />
-      ) : null}
-      <div className="flex flex-col gap-2">
-        <span className="font-mono text-2xl font-bold tracking-[0.3em]">{code}</span>
-        <p className="max-w-xs text-xs text-muted-foreground">
+      ) : (
+        <div className="size-[180px] animate-pulse rounded-xl bg-muted" />
+      )}
+      <div className="flex w-full flex-col items-center gap-2 text-center">
+        <span className="font-mono text-3xl font-bold tracking-[0.35em]">{code}</span>
+        <p className="max-w-xs text-sm text-muted-foreground">
           Quét QR hoặc nhập mã trên trang chủ để tham gia.
         </p>
-        <Button variant="outline" size="sm" onClick={copy} className="w-fit">
+        <Button variant="outline" size="sm" onClick={copy}>
           {copied ? "Đã sao chép" : "Sao chép mã"}
         </Button>
       </div>

@@ -2,6 +2,7 @@ import type { Role, RoundPhase, SessionStatus, ProductivityProfile } from "@/gen
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
 import { ApiError } from "./api";
+import { ensureHostParticipant } from "./lobby-seat";
 import { publish } from "./events";
 import {
   START_MIN_HUMANS,
@@ -750,6 +751,7 @@ export async function hostSetAutoHost(
 ): Promise<void> {
   const s = await assertHost(hostUserId, sessionId);
   if (s.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
+  if (autoHost) await ensureHostParticipant(sessionId, hostUserId);
   await db.gameSession.update({ where: { id: sessionId }, data: { autoHost } });
   await touch(sessionId, "session:auto_host", { autoHost });
 }

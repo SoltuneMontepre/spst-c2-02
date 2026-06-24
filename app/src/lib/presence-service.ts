@@ -2,6 +2,7 @@
 
 import { db } from "./db";
 import { publish } from "./events";
+import { ApiError } from "./api";
 import {
   DISCONNECT_BOT_TAKEOVER_SEC,
   HOST_RECONNECT_WINDOW_SEC,
@@ -29,7 +30,7 @@ export async function heartbeat(
   const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
   });
-  if (!participant) throw new Error("FORBIDDEN");
+  if (!participant) throw new ApiError("FORBIDDEN", 403);
 
   const key = `${sessionId}:${participant.id}`;
   const existing = disconnectTimers.get(key);

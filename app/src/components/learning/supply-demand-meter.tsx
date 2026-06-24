@@ -5,10 +5,12 @@ export function SupplyDemandMeter({
   supply,
   demand,
   theoryTrend,
+  embedded,
 }: {
   supply: number;
   demand: number;
   theoryTrend?: "down" | "up" | "neutral";
+  embedded?: boolean;
 }) {
   const relation = supply > demand ? ">" : supply < demand ? "<" : "=";
   const relationLabel =
@@ -19,8 +21,8 @@ export function SupplyDemandMeter({
         : "Cung cân bằng cầu — giá có thể xấp xỉ giá trị";
 
   return (
-    <div className="rounded-xl border bg-card p-4 text-sm">
-      <p className="mb-2 font-semibold">Cung – Cầu</p>
+    <div className={embedded ? "text-sm" : "rounded-xl border bg-card p-4 text-sm"}>
+      {!embedded ? <p className="mb-2 font-semibold">Cung – Cầu</p> : null}
       <div className="flex items-center justify-center gap-3 font-mono text-lg">
         <span>Cung {supply}</span>
         <span className="text-2xl font-bold text-primary">{relation}</span>

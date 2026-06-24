@@ -2,8 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   useSessionSnapshot,
   useSetReady,
@@ -11,19 +9,31 @@ import {
 } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { useHostControl } from "@/hooks/use-host-control";
+import { SessionNav } from "@/components/session/session-nav";
+import { BentoTile } from "@/components/ui/bento-tile";
 import { LobbyCode } from "./lobby-code";
 import { LobbyRoster } from "./lobby-roster";
 import { LobbySetup } from "./lobby-setup";
-import { START_MIN_HUMANS } from "@/lib/scenario";
-import { GameGuidance } from "@/components/learning/game-guidance";
+import { LobbyControls, lobbyMinHumans } from "./lobby-controls";
+import { GuidancePanel } from "@/components/learning/guidance-panel";
+import { getGuidance } from "@/lib/game-guidance";
+import { useTutorial } from "@/components/learning/tutorial-provider";
+import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 
-export function LobbyView({ sessionId }: { sessionId: string }) {
+export function LobbyView({
+  sessionId,
+  displayName,
+}: {
+  sessionId: string;
+  displayName: string;
+}) {
   const router = useRouter();
   useSessionStream(sessionId);
   const { data, isLoading } = useSessionSnapshot(sessionId);
   const setReady = useSetReady(sessionId);
   const leave = useLeaveRoom(sessionId);
   const host = useHostControl(sessionId);
+  const { enabled: tutorialOn } = useTutorial();
 
   useEffect(() => {
     if (!data || data.status === "LOBBY") return;
@@ -39,7 +49,12 @@ export function LobbyView({ sessionId }: { sessionId: string }) {
   }, [data, router, sessionId]);
 
   if (isLoading || !data) {
-    return <p className="p-6 text-muted-foreground">Đang tải phòng…</p>;
+    return (
+      <div className="flex min-h-full flex-col">
+        <SessionNav displayName={displayName} sessionLabel="Phòng chờ" />
+        <p className="p-8 text-muted-foreground">Đang tải phòng…</p>
+      </div>
+    );
   }
 
   const self = data.participants.find((p) => p.isSelf);
@@ -51,103 +66,114 @@ export function LobbyView({ sessionId }: { sessionId: string }) {
     !manualMode ||
     (humans.every((p) => p.role) &&
       data.participants.filter((p) => p.isBot).every((p) => p.role));
-  const minHumans = data.autoHost ? 1 : START_MIN_HUMANS;
+  const minHumans = lobbyMinHumans(data.autoHost);
+  const guidance = getGuidance({ screen: "lobby", autoHost: data.autoHost });
+
+  const headerSubtitle = data.isHost
+    ? `Bạn là host · ${humans.length}/${data.maxPlayers} người`
+    : `Bạn là người chơi · ${humans.length}/${data.maxPlayers} người`;
+
+  const readyDescription = data.isHost
+    ? data.autoHost
+      ? "Bật AI và báo sẵn sàng để bắt đầu."
+      : "Bạn quyết định khi bắt đầu phiên."
+    : data.autoHost
+      ? "Báo sẵn sàng — AI sẽ tự bắt đầu."
+      : "Báo host khi bạn sẵn sàng chơi.";
 
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader className="gap-3">
-        <CardTitle className="flex items-center justify-between">
-          <span>Phòng chờ</span>
-          <span className="text-sm font-normal text-muted-foreground">
-            {humans.length}/{data.maxPlayers} người
-          </span>
-        </CardTitle>
-        <LobbyCode code={data.code} />
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <GameGuidance context={{ screen: "lobby", autoHost: data.autoHost }} />
-        {data.autoHost ? (
-          <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-            <span className="font-medium text-primary">Điều phối viên AI</span> sẽ tự
-            bắt đầu phiên khi đủ {minHumans}+ người sẵn sàng, điều hành timer và lời dẫn.
-          </p>
-        ) : null}
+    <div className="flex min-h-full flex-col bg-background">
+      <SessionNav
+        displayName={displayName}
+        sessionLabel="Phòng chờ"
+        sessionCode={data.code}
+        onLeave={() => leave.mutate()}
+        leavePending={leave.isPending}
+      />
 
-        {data.isHost ? (
-          <LobbySetup
-            participants={data.participants}
-            humanCount={humans.length}
-            pending={host.isPending}
-            onAction={(action) => host.mutate(action)}
-          />
-        ) : (
-          <LobbyRoster participants={data.participants} />
-        )}
+      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Phòng chờ</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{headerSubtitle}</p>
+          </div>
+          <TutorialToggle className="sm:hidden" />
+        </div>
 
-        {data.isHost ? (
-          <div className="flex flex-col gap-3">
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={data.autoHost}
-                disabled={host.isPending}
-                onChange={(e) =>
-                  host.mutate({ action: "setAutoHost", autoHost: e.target.checked })
-                }
+        <div className="grid grid-cols-12 gap-4 lg:items-start">
+          {/* Trái — mời tham gia (+ hướng dẫn nếu bật) */}
+          <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:col-start-1 lg:sticky lg:top-20 lg:self-start">
+            <BentoTile
+              title="Mời tham gia"
+              description={
+                data.isHost
+                  ? "Chia sẻ mã hoặc QR để mời người chơi."
+                  : "Mã phòng để mời thêm bạn bè (nếu host cho phép)."
+              }
+            >
+              <LobbyCode code={data.code} />
+            </BentoTile>
+
+            {tutorialOn ? (
+              <BentoTile title="Hướng dẫn">
+                <GuidancePanel content={guidance} />
+              </BentoTile>
+            ) : null}
+          </div>
+
+          {/* Giữa — danh sách / gán vai / bot */}
+          <BentoTile
+            colSpan="col-span-12 lg:col-span-6 lg:col-start-4"
+            title={data.isHost ? "Người chơi & vai trò" : "Danh sách người chơi"}
+            description={
+              data.isHost
+                ? "Gán vai và thêm bot trước khi bắt đầu."
+                : "Theo dõi ai đã vào phòng và sẵn sàng."
+            }
+            className="lg:min-h-[min(520px,72vh)]"
+          >
+            {data.isHost ? (
+              <LobbySetup
+                participants={data.participants}
+                humanCount={humans.length}
+                pending={host.isPending}
+                onAction={(action) => host.mutate(action)}
               />
-              <span>
-                <span className="font-medium">AI điều phối</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Tự bắt đầu, timer, fast-forward khi mọi người sẵn sàng, và lời dẫn
-                  từng giai đoạn.
-                </span>
-              </span>
-            </label>
-            {data.autoHost ? (
-              <p className="text-center text-sm text-muted-foreground">
-                {allReady && manualComplete && humans.length >= minHumans
-                  ? "AI đang khởi động phiên…"
-                  : `Chờ ${minHumans}+ người sẵn sàng để AI bắt đầu.`}
-              </p>
             ) : (
-              <div className="flex flex-col gap-1">
-                <Button
-                  disabled={!allReady || !manualComplete || humans.length < minHumans || host.isPending}
-                  size="lg"
-                  onClick={() => host.mutate("start")}
-                >
-                  Bắt đầu phiên
-                </Button>
-                {humans.length < minHumans ? (
-                  <p className="text-xs text-muted-foreground">
-                    Cần ít nhất {minHumans} người chơi.
-                  </p>
-                ) : !allReady ? (
-                  <p className="text-xs text-muted-foreground">Chờ mọi người sẵn sàng.</p>
-                ) : null}
+              <div className="max-h-[min(480px,60vh)] overflow-y-auto pr-0.5">
+                <LobbyRoster participants={data.participants} />
               </div>
             )}
-          </div>
-        ) : (
-          <Button
-            size="lg"
-            variant={self?.ready ? "secondary" : "primary"}
-            disabled={setReady.isPending}
-            onClick={() => setReady.mutate(!self?.ready)}
-          >
-            {self?.ready ? "Bỏ sẵn sàng" : "Tôi đã sẵn sàng"}
-          </Button>
-        )}
+          </BentoTile>
 
-        <button
-          type="button"
-          className="text-xs text-muted-foreground underline"
-          onClick={() => leave.mutate()}
-        >
-          Rời phòng
-        </button>
-      </CardContent>
-    </Card>
+          {/* Phải — sẵn sàng / điều khiển */}
+          <BentoTile
+            colSpan="col-span-12 lg:col-span-3 lg:col-start-10"
+            title="Sẵn sàng"
+            description={readyDescription}
+            className="lg:sticky lg:top-20 lg:self-start"
+          >
+            <LobbyControls
+              isHost={data.isHost}
+              autoHost={data.autoHost}
+              autoHostPending={host.isPending}
+              hostPending={host.isPending}
+              allReady={allReady}
+              manualComplete={manualComplete}
+              humanCount={humans.length}
+              minHumans={minHumans}
+              selfReady={self?.ready ?? false}
+              isParticipant={!!self}
+              readyPending={setReady.isPending}
+              onSetReady={(ready) => setReady.mutate(ready)}
+              onSetAutoHost={(enabled) =>
+                host.mutate({ action: "setAutoHost", autoHost: enabled })
+              }
+              onStart={() => host.mutate("start")}
+            />
+          </BentoTile>
+        </div>
+      </div>
+    </div>
   );
 }

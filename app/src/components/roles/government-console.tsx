@@ -1,15 +1,10 @@
 "use client";
 
 import { useSessionSnapshot } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
 import { useCommand } from "@/hooks/use-command";
-import { GamePhaseHud } from "@/components/session/game-phase-hud";
-import { PlayerStatusBar } from "@/components/session/player-status-bar";
-import { BackToMap } from "@/components/session/back-to-map";
-import { GameGuidance } from "@/components/learning/game-guidance";
+import { GameBentoShell } from "@/components/session/game-bento-shell";
 import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { POLICIES } from "@/lib/scenario";
 import { formatThousandDong } from "@/lib/money";
 import type { GovernmentRoundState } from "@/lib/role-state";
@@ -50,7 +45,6 @@ const DECISION_POLICIES: {
 ];
 
 export function GovernmentConsole({ sessionId }: { sessionId: string }) {
-  useSessionStream(sessionId);
   const { data } = useSessionSnapshot(sessionId);
   const command = useCommand(sessionId, data?.stateVersion);
   if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
@@ -62,49 +56,28 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
   const exportOpen = data.phase === "MARKET_OPEN" && data.currentRound >= 2 && !used;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 p-4">
-      <BackToMap sessionId={sessionId} />
-      <GameGuidance
-        context={{
-          screen: "government",
-          phase: data.phase,
-          round: data.currentRound,
-        }}
-      />
-      <GamePhaseHud sessionId={sessionId} data={data} />
-      <PlayerStatusBar self={data.self} />
-
-      {latest ? (
-        <SupplyDemandMeter
-          supply={latest.supplyQuantity}
-          demand={latest.demandQuantity}
-          theoryTrend={
-            data.currentRound === 2 ? "down" : data.currentRound === 3 ? "up" : "neutral"
-          }
-        />
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ngân sách Nhà nước</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
-          <p>
-            Còn lại:{" "}
-            <span className="font-semibold">
-              {formatThousandDong(data.self.balanceVnd ?? 0)}
-            </span>
-          </p>
-          {state?.policySpendVnd ? (
-            <p className="text-muted-foreground">
-              Đã chi chính sách vòng này: {formatThousandDong(state.policySpendVnd)}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
-
+    <GameBentoShell
+      sessionId={sessionId}
+      activeZone="task"
+      guidanceContext={{
+        screen: "government",
+        phase: data.phase,
+        round: data.currentRound,
+      }}
+    >
+      <div className="flex flex-col gap-4">
+        {latest ? (
+          <SupplyDemandMeter
+            embedded
+            supply={latest.supplyQuantity}
+            demand={latest.demandQuantity}
+            theoryTrend={
+              data.currentRound === 2 ? "down" : data.currentRound === 3 ? "up" : "neutral"
+            }
+          />
+        ) : null}
       {used ? (
-        <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm">
+        <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm">
           Đã áp dụng chính sách vòng này.
         </p>
       ) : data.currentRound < 2 ? (
@@ -112,37 +85,36 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
           Chính sách Nhà nước có hiệu lực từ vòng 2.
         </p>
       ) : exportOpen ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Xúc tiến xuất khẩu</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 text-sm">
-            <p className="text-muted-foreground">
-              15 giây đầu chợ mở: mua ~25% cung bán lẻ, giá tối đa bằng giá trị xã hội.
-            </p>
-            <Button
-              size="sm"
-              disabled={command.isPending}
-              onClick={() =>
-                command.mutate({ action: "applyPolicy", policyType: "EXPORT_PROMOTION" })
-              }
-            >
-              Kích hoạt xuất khẩu
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-border bg-muted/10 p-4 text-sm">
+          <p className="font-medium">Xúc tiến xuất khẩu</p>
+          <p className="mt-1 text-muted-foreground">
+            15 giây đầu chợ mở: mua ~25% cung bán lẻ, giá tối đa bằng giá trị xã hội.
+          </p>
+          <Button
+            className="mt-3"
+            size="sm"
+            disabled={command.isPending}
+            onClick={() =>
+              command.mutate({ action: "applyPolicy", policyType: "EXPORT_PROMOTION" })
+            }
+          >
+            Kích hoạt xuất khẩu
+          </Button>
+        </div>
       ) : decisionOpen ? (
-        DECISION_POLICIES.filter(
-          (p) => !p.rounds || p.rounds.includes(data.currentRound),
-        ).map((p) => (
-          <Card key={p.type}>
-            <CardHeader>
-              <CardTitle className="text-base">{p.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              <p className="text-muted-foreground">{p.description}</p>
-              <p className="font-medium">Chi phí: {p.costLabel}</p>
+        <ul className="flex flex-col gap-2">
+          {DECISION_POLICIES.filter(
+            (p) => !p.rounds || p.rounds.includes(data.currentRound),
+          ).map((p) => (
+            <li
+              key={p.type}
+              className="rounded-xl border border-border bg-muted/10 p-4 text-sm"
+            >
+              <p className="font-medium">{p.title}</p>
+              <p className="mt-1 text-muted-foreground">{p.description}</p>
+              <p className="mt-1 font-medium">Chi phí: {p.costLabel}</p>
               <Button
+                className="mt-2"
                 size="sm"
                 disabled={command.isPending}
                 onClick={() =>
@@ -161,14 +133,15 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
               >
                 Áp dụng
               </Button>
-            </CardContent>
-          </Card>
-        ))
+            </li>
+          ))}
+        </ul>
       ) : (
-        <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
           Chờ giai đoạn ra quyết định hoặc 15 giây đầu chợ mở (xuất khẩu).
         </p>
       )}
-    </main>
+      </div>
+    </GameBentoShell>
   );
 }

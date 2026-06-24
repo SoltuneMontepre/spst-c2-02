@@ -531,6 +531,7 @@ model SessionResult {
   participantOutcomes Json
   badges              Json
   narration           String?
+  aiDebrief           Json?
   completedAt         DateTime      @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

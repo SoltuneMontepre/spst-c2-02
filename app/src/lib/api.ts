@@ -40,6 +40,22 @@ export function unauthorized() {
   return jsonError("UNAUTHORIZED", 401);
 }
 
+/** Map thrown service-layer errors to HTTP responses. */
+export function mapServiceError(err: unknown): ApiError | null {
+  if (err instanceof ApiError) return err;
+  const msg = err instanceof Error ? err.message : String(err);
+  switch (msg) {
+    case "FORBIDDEN":
+      return new ApiError("FORBIDDEN", 403);
+    case "ROOM_NOT_FOUND":
+      return new ApiError("ROOM_NOT_FOUND", 404);
+    case "INVALID_STATE":
+      return new ApiError("INVALID_STATE", 409);
+    default:
+      return null;
+  }
+}
+
 /** Wrap a handler, mapping zod and known errors to JSON responses. */
 export async function handle<T>(
   fn: () => Promise<T>,
@@ -54,8 +70,9 @@ export async function handle<T>(
         { status: 422 },
       );
     }
-    if (err instanceof ApiError) {
-      return jsonError(err.code, err.status, err.message);
+    const mapped = mapServiceError(err);
+    if (mapped) {
+      return jsonError(mapped.code, mapped.status, mapped.message);
     }
     console.error("Unhandled API error:", err);
     return jsonError("INTERNAL_ERROR", 500);

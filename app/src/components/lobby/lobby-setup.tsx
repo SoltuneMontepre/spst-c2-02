@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Role, ProductivityProfile } from "@/generated/prisma/enums";
 import type { ParticipantView } from "@/lib/session-service";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
@@ -7,13 +8,54 @@ import { PRODUCTIVITY_PROFILES, compositionTarget } from "@/lib/scenario";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { X, Bot } from "lucide-react";
+import {
+  SetupParticipantRow,
+  SetupSelectField,
+  ProfilePlaceholder,
+  selectClass,
+} from "./participant-row";
 import type { HostLobbyAction } from "@/hooks/use-host-control";
 
 const ROLES: Role[] = ["PRODUCER", "CONSUMER", "INTERMEDIARY", "GOVERNMENT"];
 const PROFILES: ProductivityProfile[] = ["TRADITIONAL", "SOCIAL_AVERAGE", "PIONEER"];
 
-const selectClass =
-  "rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring";
+function CompositionSummary({
+  humanCount,
+  counts,
+}: {
+  humanCount: number;
+  counts: Record<Role, number>;
+}) {
+  const target = compositionTarget(humanCount);
+
+  return (
+    <section className="shrink-0 rounded-xl border border-border bg-muted/20 p-3 sm:p-4">
+      <p className="text-sm font-medium">
+        Cơ cấu mục tiêu · {humanCount} người
+      </p>
+      <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {ROLES.map((role) => (
+          <div key={role} className="min-w-0 rounded-lg bg-background px-2.5 py-2 sm:px-3">
+            <dt className="truncate text-xs text-muted-foreground">
+              {ROLE_LABELS[role]}
+            </dt>
+            <dd
+              className={cn(
+                "font-mono text-base font-semibold sm:text-lg",
+                counts[role] >= target[role] ? "text-success" : "text-foreground",
+              )}
+            >
+              {counts[role]}/{target[role]}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        Gán vai cho từng người/bot. Hồ sơ sản xuất chỉ dành cho vai người sản xuất.
+      </p>
+    </section>
+  );
+}
 
 export function LobbySetup({
   participants,
@@ -26,7 +68,6 @@ export function LobbySetup({
   pending: boolean;
   onAction: (action: HostLobbyAction) => void;
 }) {
-  const target = compositionTarget(humanCount);
   const counts = ROLES.reduce(
     (acc, role) => {
       acc[role] = participants.filter((p) => p.role === role).length;
@@ -36,122 +77,101 @@ export function LobbySetup({
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <p className="mb-1 font-medium text-foreground">Cơ cấu mục tiêu ({humanCount} người)</p>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-          {ROLES.map((role) => (
-            <span key={role}>
-              {ROLE_LABELS[role]}:{" "}
-              <span
-                className={cn(
-                  "font-mono",
-                  counts[role] >= target[role] ? "text-success" : "text-foreground",
-                )}
-              >
-                {counts[role]}/{target[role]}
-              </span>
-            </span>
-          ))}
-        </div>
-        <p className="mt-1.5">
-          Gán vai cho từng người/bot. Khi bắt đầu, bot sẽ tự lấp các vai còn thiếu.
-        </p>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <CompositionSummary humanCount={humanCount} counts={counts} />
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+        {participants.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Chưa có người chơi. Thêm bot hoặc chờ người vào phòng.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {participants.map((p) => {
+              const roleId = `role-${p.id}`;
+              const profileId = `profile-${p.id}`;
+
+              return (
+                <SetupParticipantRow
+                  key={p.id}
+                  p={p}
+                  roleSelectId={roleId}
+                  profileSelectId={profileId}
+                  trailing={
+                    p.isBot ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        disabled={pending}
+                        aria-label="Xóa bot"
+                        onClick={() =>
+                          onAction({ action: "removeBot", participantId: p.id })
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    ) : undefined
+                  }
+                  roleSelect={
+                    <select
+                      id={roleId}
+                      className={selectClass}
+                      disabled={pending}
+                      value={p.role ?? ""}
+                      onChange={(e) => {
+                        const role = (e.target.value || null) as Role | null;
+                        onAction({
+                          action: "setRole",
+                          participantId: p.id,
+                          role,
+                          productivityProfile:
+                            role === "PRODUCER"
+                              ? (p.productivityProfile as ProductivityProfile) ??
+                                "SOCIAL_AVERAGE"
+                              : null,
+                        });
+                      }}
+                    >
+                      <option value="">Chọn vai</option>
+                      {ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {ROLE_LABELS[role]}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                  profileSelect={
+                    <select
+                      id={profileId}
+                      className={selectClass}
+                      disabled={pending}
+                      value={p.productivityProfile ?? "SOCIAL_AVERAGE"}
+                      onChange={(e) =>
+                        onAction({
+                          action: "setRole",
+                          participantId: p.id,
+                          role: "PRODUCER",
+                          productivityProfile: e.target.value as ProductivityProfile,
+                        })
+                      }
+                    >
+                      {PROFILES.map((profile) => (
+                        <option key={profile} value={profile}>
+                          {PRODUCTIVITY_PROFILES[profile].label}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                />
+              );
+            })}
+          </ul>
+        )}
       </div>
 
-      <ul className="flex flex-col divide-y divide-border">
-        {participants.map((p) => (
-          <li key={p.id} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <ParticipantName p={p} />
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className={selectClass}
-                disabled={pending}
-                value={p.role ?? ""}
-                onChange={(e) => {
-                  const role = (e.target.value || null) as Role | null;
-                  onAction({
-                    action: "setRole",
-                    participantId: p.id,
-                    role,
-                    productivityProfile:
-                      role === "PRODUCER"
-                        ? (p.productivityProfile as ProductivityProfile) ?? "SOCIAL_AVERAGE"
-                        : null,
-                  });
-                }}
-              >
-                <option value="">Chọn vai</option>
-                {ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABELS[role]}
-                  </option>
-                ))}
-              </select>
-              {p.role === "PRODUCER" ? (
-                <select
-                  className={selectClass}
-                  disabled={pending}
-                  value={p.productivityProfile ?? "SOCIAL_AVERAGE"}
-                  onChange={(e) =>
-                    onAction({
-                      action: "setRole",
-                      participantId: p.id,
-                      role: "PRODUCER",
-                      productivityProfile: e.target.value as ProductivityProfile,
-                    })
-                  }
-                >
-                  {PROFILES.map((profile) => (
-                    <option key={profile} value={profile}>
-                      {PRODUCTIVITY_PROFILES[profile].label}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {p.isBot ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={pending}
-                  aria-label="Xóa bot"
-                  onClick={() =>
-                    onAction({ action: "removeBot", participantId: p.id })
-                  }
-                >
-                  <X className="size-4" />
-                </Button>
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {p.ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
-                </span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-
       <AddBotForm pending={pending} onAction={onAction} />
-    </div>
-  );
-}
-
-function ParticipantName({ p }: { p: ParticipantView }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span
-        className={cn(
-          "size-2 shrink-0 rounded-full",
-          p.isBot || p.presence === "ONLINE" ? "bg-success" : "bg-muted-foreground/40",
-        )}
-        aria-hidden
-      />
-      <span className="truncate font-medium">
-        {p.displayName}
-        {p.isSelf ? " (bạn)" : ""}
-      </span>
-      {p.isBot ? <span className="text-xs text-muted-foreground">Bot</span> : null}
     </div>
   );
 }
@@ -163,55 +183,69 @@ function AddBotForm({
   pending: boolean;
   onAction: (action: HostLobbyAction) => void;
 }) {
+  const [role, setRole] = useState<Role>("CONSUMER");
+  const showProfile = role === "PRODUCER";
+
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-md border border-dashed p-3"
+      className="shrink-0 rounded-xl border border-dashed border-border bg-muted/5 p-3 sm:p-4"
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
-        const role = fd.get("role") as Role;
+        const pickedRole = fd.get("role") as Role;
         const profile = fd.get("profile") as ProductivityProfile;
-        if (!role) return;
+        if (!pickedRole) return;
         onAction({
           action: "addBot",
-          role,
-          productivityProfile: role === "PRODUCER" ? profile : undefined,
+          role: pickedRole,
+          productivityProfile: pickedRole === "PRODUCER" ? profile : undefined,
         });
         e.currentTarget.reset();
+        setRole("CONSUMER");
       }}
     >
-      <div className="flex flex-col gap-1">
-        <label htmlFor="add-bot-role" className="text-xs text-muted-foreground">
-          Thêm bot
-        </label>
-        <select id="add-bot-role" name="role" className={selectClass} required defaultValue="CONSUMER">
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
+      <p className="mb-2 text-xs font-medium text-muted-foreground">Thêm bot</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <SetupSelectField label="Vai trò" htmlFor="add-bot-role">
+          <select
+            id="add-bot-role"
+            name="role"
+            className={selectClass}
+            required
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        </SetupSelectField>
+
+        <SetupSelectField label="Hồ sơ sản xuất" htmlFor={showProfile ? "add-bot-profile" : undefined}>
+          {showProfile ? (
+            <select
+              id="add-bot-profile"
+              name="profile"
+              className={selectClass}
+              defaultValue="SOCIAL_AVERAGE"
+            >
+              {PROFILES.map((profile) => (
+                <option key={profile} value={profile}>
+                  {PRODUCTIVITY_PROFILES[profile].label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <ProfilePlaceholder />
+          )}
+        </SetupSelectField>
+
+        <Button type="submit" variant="outline" size="sm" disabled={pending}>
+          <Bot className="size-4" /> Thêm
+        </Button>
       </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="add-bot-profile" className="text-xs text-muted-foreground">
-          Hồ sơ SX
-        </label>
-        <select
-          id="add-bot-profile"
-          name="profile"
-          className={selectClass}
-          defaultValue="SOCIAL_AVERAGE"
-        >
-          {PROFILES.map((profile) => (
-            <option key={profile} value={profile}>
-              {PRODUCTIVITY_PROFILES[profile].label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <Button type="submit" variant="outline" size="sm" disabled={pending}>
-        <Bot className="size-4" /> Thêm
-      </Button>
     </form>
   );
 }

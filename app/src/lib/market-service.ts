@@ -18,8 +18,9 @@ function requireRole(ctx: CommandContext, role: Role): void {
   if (ctx.participant.role !== role) throw new ApiError("WRONG_ROLE", 403);
 }
 
-/** First 15s of DECISION locks producer input (SRS §5.10). */
+/** First 15s of DECISION locks producer input (SRS §5.10). Bots skip the lock. */
 export function isProducerInputLocked(ctx: CommandContext): boolean {
+  if (ctx.participant.isBot) return false;
   if (ctx.session.phase !== "DECISION" || !ctx.session.phaseEndsAt) return false;
   const lockEndsAt =
     ctx.session.phaseEndsAt.getTime() -

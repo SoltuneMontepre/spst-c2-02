@@ -1,11 +1,17 @@
-import type { Role, ControlMode, Presence } from "@/generated/prisma/enums";
+import type { Role, ControlMode, Presence, BadgeType } from "@/generated/prisma/enums";
 import type { Presence as PresenceEnum } from "@/generated/prisma/enums";
 import { db } from "./db";
 import { ApiError, generateRoomCode } from "./api";
 import { MAX_PLAYERS, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS } from "./scenario";
 import { maybeAutoAdvance } from "./game-service";
+import { ensureHostParticipant } from "./lobby-seat";
 import { publish } from "./events";
 import type { ParticipantOutcome } from "./finalize";
+export type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
+import {
+  ensureAiDebriefReview,
+} from "./debrief-ai";
+import type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
 
 /** Bump stateVersion and broadcast so all members refresh immediately. */
 async function bumpAndPublish(
@@ -82,6 +88,7 @@ export async function createSession(hostUserId: string): Promise<CreatedSession>
       },
       select: { id: true, code: true },
     });
+    await ensureHostParticipant(created.id, hostUserId);
     return created;
   }
   throw new ApiError("CODE_GENERATION_FAILED", 500);
@@ -265,6 +272,9 @@ export interface SessionResultView {
   analytics: RoundAnalytics[];
   selfOutcome: ParticipantOutcome | null;
   selfBadges: BadgeView[];
+  /** AI pedagogical grades + comments (overall + per participant), one generation pass. */
+  aiDebrief: AiDebriefReview | null;
+  selfAiReview: AiDebriefParticipantReview | null;
 }
 
 /** Role-filtered snapshot (FR-MARKET-07, TECH-PRIVACY). */
@@ -283,11 +293,22 @@ export async function getSnapshot(
   if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
 
   const isHost = session.hostUserId === userId;
-  const selfParticipant = session.participants.find((p) => p.userId === userId);
+  let participants = session.participants;
+  if (isHost && session.status === "LOBBY") {
+    const created = await ensureHostParticipant(session.id, userId);
+    if (created) {
+      participants = await db.participant.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+  }
+
+  const selfParticipant = participants.find((p) => p.userId === userId);
   if (!isHost && !selfParticipant) throw new ApiError("FORBIDDEN", 403);
 
   const nameById = new Map(
-    session.participants.map((p) => [p.id, p.displayNameSnapshot]),
+    participants.map((p) => [p.id, p.displayNameSnapshot]),
   );
   const self = await buildSelfState(
     selfParticipant?.id,
@@ -319,7 +340,7 @@ export async function getSnapshot(
     self,
     market,
     analytics,
-    participants: session.participants.map((p) => ({
+    participants: participants.map((p) => ({
       id: p.id,
       displayName: p.displayNameSnapshot,
       avatarUrl: p.avatarSnapshot,
@@ -577,15 +598,35 @@ export async function getSessionResult(
   const outcomes = result.participantOutcomes as unknown as ParticipantOutcome[];
   const selfId = selfParticipant?.id;
   const analytics = await buildAnalytics(sessionId);
+  const sessionCompleted = session.status === "COMPLETED";
+
+  const aiDebrief = await ensureAiDebriefReview({
+    sessionId,
+    outcomes,
+    badges: dbBadges.map((b) => ({
+      participantId: b.participantId,
+      type: b.type as BadgeType,
+    })),
+    analytics,
+    sessionCompleted,
+    existing: result.aiDebrief,
+  }).catch((e) => {
+    console.error("ensureAiDebriefReview:", e);
+    return null;
+  });
 
   return {
     status: session.status,
-    narration: result.narration,
+    narration: aiDebrief?.overall.comment ?? result.narration,
     outcomes,
     badges,
     analytics,
     selfOutcome: selfId ? outcomes.find((o) => o.participantId === selfId) ?? null : null,
     selfBadges: selfId ? badges.filter((b) => b.participantId === selfId) : [],
+    aiDebrief,
+    selfAiReview: selfId
+      ? aiDebrief?.participants.find((p) => p.participantId === selfId) ?? null
+      : null,
   };
 }
 

@@ -10,5 +10,10 @@ export default async function HostSessionPage({
   const session = await auth();
   if (!session?.user) redirect("/auth");
   const { id } = await params;
-  return <HostControl sessionId={id} />;
+  return (
+    <HostControl
+      sessionId={id}
+      displayName={session.user.name ?? "Người chơi"}
+    />
+  );
 }

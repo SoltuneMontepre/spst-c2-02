@@ -24,6 +24,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   UPGRADE_NOT_AVAILABLE: "Nâng cấp không khả dụng cho hồ sơ hoặc vòng hiện tại.",
   UNDER_MIN_PLAYERS: "Cần ít nhất 4 người chơi để bắt đầu.",
   NOT_ALL_READY: "Mọi người chơi cần sẵn sàng trước khi bắt đầu.",
+  FORBIDDEN: "Bạn không có quyền thực hiện thao tác này.",
+  INVALID_STATE: "Thao tác không khả dụng trong trạng thái phiên hiện tại.",
+  INTERNAL_ERROR: "Đã xảy ra lỗi máy chủ. Vui lòng thử lại.",
 };
 
 export function errorMessage(code: string, fallback?: string): string {
