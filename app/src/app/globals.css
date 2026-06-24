@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Thanh Long Market — dragonfruit palette. Pink skin (#e93970) as the
+   value anchor, leaf-green accent, charcoal seeds for text. */
+:root {
+  --background: #fdf4f7;
+  --foreground: #2b1f25;
+  --surface: #ffffff;
+  --muted: #f7e6ec;
+  --muted-foreground: #7d6470;
+  --border: #f0d4de;
+  --ring: #e93970;
+  --primary: #e93970;
+  --primary-foreground: #ffffff;
+  --secondary: #f7e6ec;
+  --secondary-foreground: #2b1f25;
+  --accent: #3aa76d;
+  --accent-foreground: #ffffff;
+  --value: #e93970;
+  --price: #2563eb;
+  --success: #3aa76d;
+  --danger: #c0362c;
+}
+
+/* Optional dark variant, opt-in via a `.dark` class on <html>. The app
+   defaults to the white dragonfruit-flesh theme above. */
+.dark {
+  --background: #1a1015;
+  --foreground: #f6e9ef;
+  --surface: #241620;
+  --muted: #2f1d27;
+  --muted-foreground: #c0a3b1;
+  --border: #3b2530;
+  --secondary: #2f1d27;
+  --secondary-foreground: #f6e9ef;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-value: var(--value);
+  --color-price: var(--price);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

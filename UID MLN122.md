@@ -8,17 +8,17 @@
 
 ## 0. Quản lý tài liệu
 
-| Thuộc tính | Giá trị |
-|---|---|
-| Mã dự án | SPST-C2-02 |
-| Tên chủ đề | Phiên chợ giá trị |
-| Phiên bản UID | 1.0.0 |
-| Ngày cập nhật | 24/06/2026 |
-| Trạng thái | Baseline - sẵn sàng cho wireflow/prototype |
-| Tài liệu nguồn | `SRS MLN122.md`, phiên bản 1.0.0 |
-| Ngôn ngữ giao diện | Tiếng Việt |
-| Tiền tệ | Đồng Việt Nam, hiển thị theo nghìn Đồng |
-| Đầu ra | Một tài liệu Markdown gồm user flow, interaction matrix, ASCII wireframe và Mermaid |
+| Thuộc tính         | Giá trị                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| Mã dự án           | SPST-C2-02                                                                          |
+| Tên chủ đề         | Phiên chợ giá trị                                                                   |
+| Phiên bản UID      | 1.0.0                                                                               |
+| Ngày cập nhật      | 24/06/2026                                                                          |
+| Trạng thái         | Baseline - sẵn sàng cho wireflow/prototype                                          |
+| Tài liệu nguồn     | `SRS MLN122.md`, phiên bản 1.0.0                                                    |
+| Ngôn ngữ giao diện | Tiếng Việt                                                                          |
+| Tiền tệ            | Đồng Việt Nam, hiển thị theo nghìn Đồng                                             |
+| Đầu ra             | Một tài liệu Markdown gồm user flow, interaction matrix, ASCII wireframe và Mermaid |
 
 ### 0.1 Mục đích
 
@@ -63,32 +63,32 @@ UID không khóa:
 
 ### 0.4 Quy ước định danh
 
-| Tiền tố | Ý nghĩa | Ví dụ |
-|---|---|---|
-| `UF` | User flow end-to-end hoặc theo nhiệm vụ | `UF-CONSUMER-02` |
-| `IX` | Interaction có trigger và phản hồi cụ thể | `IX-CONSUMER-BUY` |
-| `WF` | ASCII wireframe | `WF-05` |
-| `NAV` | Quy tắc điều hướng | `NAV-04` |
-| `COPY` | Microcopy đã khóa | `COPY-PHASE-02` |
-| `STATE` | Trạng thái UI dùng chung | `STATE-RECONNECTING` |
-| `DELTA` | Bổ sung cần đồng bộ ngược về SRS | `DELTA-SRS-01` |
-| `UITC` | User interaction test case | `UITC-CONSUMER-01` |
+| Tiền tố | Ý nghĩa                                   | Ví dụ                |
+| ------- | ----------------------------------------- | -------------------- |
+| `UF`    | User flow end-to-end hoặc theo nhiệm vụ   | `UF-CONSUMER-02`     |
+| `IX`    | Interaction có trigger và phản hồi cụ thể | `IX-CONSUMER-BUY`    |
+| `WF`    | ASCII wireframe                           | `WF-05`              |
+| `NAV`   | Quy tắc điều hướng                        | `NAV-04`             |
+| `COPY`  | Microcopy đã khóa                         | `COPY-PHASE-02`      |
+| `STATE` | Trạng thái UI dùng chung                  | `STATE-RECONNECTING` |
+| `DELTA` | Bổ sung cần đồng bộ ngược về SRS          | `DELTA-SRS-01`       |
+| `UITC`  | User interaction test case                | `UITC-CONSUMER-01`   |
 
 ### 0.5 Thuật ngữ UI bắt buộc
 
-| Thuật ngữ | Cách dùng |
-|---|---|
-| Chợ | Bản đồ 2D và các khu chức năng; không đồng nghĩa toàn bộ khái niệm thị trường. |
-| Nhiệm vụ | Dashboard hành động riêng theo role và phase. |
-| Quan sát | Tháp quan sát cung-cầu, giá trị và giá thị trường. |
-| Giá trị | Giá trị xã hội của hàng hóa theo TGLĐXHCT. |
-| Giá niêm yết | Giá người bán công bố, chưa phải giá thị trường. |
-| Giá giao dịch | Giá hai bên thực sự thanh toán. |
-| Giá thị trường | Giá bình quân gia quyền của giao dịch bán lẻ hoàn tất trong vòng. |
-| Số dư | Số Đồng người chơi đang có; UI chính hiển thị theo nghìn Đồng. |
-| Offer/Trả giá | Đề nghị giá chưa hoàn tất giao dịch. Trên UI ưu tiên từ “Trả giá”. |
-| Counter/Trả giá lại | Giá phản hồi từ phía còn lại. Trên UI ưu tiên từ “Trả giá lại”. |
-| Host | Người điều phối phiên, không phải Nhà nước. |
+| Thuật ngữ           | Cách dùng                                                                      |
+| ------------------- | ------------------------------------------------------------------------------ |
+| Chợ                 | Bản đồ 2D và các khu chức năng; không đồng nghĩa toàn bộ khái niệm thị trường. |
+| Nhiệm vụ            | Dashboard hành động riêng theo role và phase.                                  |
+| Quan sát            | Tháp quan sát cung-cầu, giá trị và giá thị trường.                             |
+| Giá trị             | Giá trị xã hội của hàng hóa theo TGLĐXHCT.                                     |
+| Giá niêm yết        | Giá người bán công bố, chưa phải giá thị trường.                               |
+| Giá giao dịch       | Giá hai bên thực sự thanh toán.                                                |
+| Giá thị trường      | Giá bình quân gia quyền của giao dịch bán lẻ hoàn tất trong vòng.              |
+| Số dư               | Số Đồng người chơi đang có; UI chính hiển thị theo nghìn Đồng.                 |
+| Offer/Trả giá       | Đề nghị giá chưa hoàn tất giao dịch. Trên UI ưu tiên từ “Trả giá”.             |
+| Counter/Trả giá lại | Giá phản hồi từ phía còn lại. Trên UI ưu tiên từ “Trả giá lại”.                |
+| Host                | Người điều phối phiên, không phải Nhà nước.                                    |
 
 ---
 
@@ -154,19 +154,21 @@ Không dùng toast thành công để thay cho thay đổi trạng thái chính.
 
 ## 2. Tác nhân và thiết bị
 
-| Tác nhân | Thiết bị ưu tiên | Mục tiêu tương tác | Shell |
-|---|---|---|---|
-| Người dùng chưa đăng nhập | Mobile/desktop | Đăng nhập hoặc tạo tài khoản. | Auth shell |
-| Player | Mobile portrait từ 360px | Hoàn thành nhiệm vụ theo role, giao dịch và quan sát. | Player shell: Chợ/Nhiệm vụ/Quan sát |
-| Host | Desktop/projector từ 1280x720 | Tạo phòng, điều phối timer/phase và trình chiếu. | Host control shell |
-| Producer | Mobile | Sản xuất, bán trực tiếp/sỉ, phản hồi offer, đầu tư. | Player shell + producer task |
-| Consumer | Mobile | Xem need, so sánh listing, mua/trả giá. | Player shell + market task |
-| Intermediary | Mobile/tablet | Mua sỉ, quản lý kho, bán lẻ. | Player shell + distribution task |
-| Government | Mobile/tablet | Xem aggregate, chọn policy và theo dõi social score. | Player shell + policy task |
+| Tác nhân                  | Thiết bị ưu tiên              | Mục tiêu tương tác                                    | Shell                               |
+| ------------------------- | ----------------------------- | ----------------------------------------------------- | ----------------------------------- |
+| Người dùng chưa đăng nhập | Mobile/desktop                | Đăng nhập hoặc tạo tài khoản.                         | Auth shell                          |
+| Player                    | Mobile portrait từ 360px      | Hoàn thành nhiệm vụ theo role, giao dịch và quan sát. | Player shell: Chợ/Nhiệm vụ/Quan sát |
+| Host                      | Desktop/projector từ 1280x720 | Tạo phòng, điều phối timer/phase và trình chiếu.      | Host control shell                  |
+| Producer                  | Mobile                        | Sản xuất, bán trực tiếp/sỉ, phản hồi offer, đầu tư.   | Player shell + producer task        |
+| Consumer                  | Mobile                        | Xem need, so sánh listing, mua/trả giá.               | Player shell + market task          |
+| Intermediary              | Mobile/tablet                 | Mua sỉ, quản lý kho, bán lẻ.                          | Player shell + distribution task    |
+| Government                | Mobile/tablet                 | Xem aggregate, chọn policy và theo dõi social score.  | Player shell + policy task          |
 
 ---
 
 ## 3. Kiến trúc thông tin và điều hướng
+
+~
 
 ### 3.1 Sitemap
 
@@ -197,47 +199,47 @@ flowchart TD
 
 Routes là tên logic; framework có thể thay đổi cấu trúc URL nhưng phải giữ hành vi.
 
-| Route logic | UI nguồn | Quyền | Back destination |
-|---|---|---|---|
-| `/auth` | `UI-AUTH-01` | Public | Không có |
-| `/home` | `UI-HOME-01` | Authenticated | Auth sau logout |
-| `/profile` | `UI-PROFILE-01` | Authenticated | Home |
-| `/history/:sessionId` | `UI-DEBRIEF-01`, `UI-PROFILE-01` | Member/host | Profile |
-| `/session/:id/lobby` | `UI-LOBBY-01` | Member/host | Home với confirm leave |
-| `/session/:id/tutorial` | Tutorial extension | Player | Lobby hoặc map sau hoàn tất |
-| `/session/:id/map` | `UI-MAP-01` | Member/host read-only | Không thoát session bằng browser back |
-| `/session/:id/task` | Role dashboard | Player | Map |
-| `/session/:id/market` | `UI-CONSUMER-01`, `UI-TRADE-01` | Player theo quyền | Map |
-| `/session/:id/observatory` | `UI-OBSERVATORY-01` | Member/host | Map |
-| `/session/:id/recap/:round` | `UI-RECAP-01` | Member/host | Map/next round |
-| `/session/:id/debrief` | `UI-DEBRIEF-01` | Member/host | Home/history |
-| `/host/session/:id` | `UI-HOST-01` | Host | Home với confirm end/cancel |
+| Route logic                 | UI nguồn                         | Quyền                 | Back destination                      |
+| --------------------------- | -------------------------------- | --------------------- | ------------------------------------- |
+| `/auth`                     | `UI-AUTH-01`                     | Public                | Không có                              |
+| `/home`                     | `UI-HOME-01`                     | Authenticated         | Auth sau logout                       |
+| `/profile`                  | `UI-PROFILE-01`                  | Authenticated         | Home                                  |
+| `/history/:sessionId`       | `UI-DEBRIEF-01`, `UI-PROFILE-01` | Member/host           | Profile                               |
+| `/session/:id/lobby`        | `UI-LOBBY-01`                    | Member/host           | Home với confirm leave                |
+| `/session/:id/tutorial`     | Tutorial extension               | Player                | Lobby hoặc map sau hoàn tất           |
+| `/session/:id/map`          | `UI-MAP-01`                      | Member/host read-only | Không thoát session bằng browser back |
+| `/session/:id/task`         | Role dashboard                   | Player                | Map                                   |
+| `/session/:id/market`       | `UI-CONSUMER-01`, `UI-TRADE-01`  | Player theo quyền     | Map                                   |
+| `/session/:id/observatory`  | `UI-OBSERVATORY-01`              | Member/host           | Map                                   |
+| `/session/:id/recap/:round` | `UI-RECAP-01`                    | Member/host           | Map/next round                        |
+| `/session/:id/debrief`      | `UI-DEBRIEF-01`                  | Member/host           | Home/history                          |
+| `/host/session/:id`         | `UI-HOST-01`                     | Host                  | Home với confirm end/cancel           |
 
 ### 3.3 Navigation rules
 
-| ID | Quy tắc |
-|---|---|
-| `NAV-01` | Sau auth thành công, về Home; nếu có pending join code hợp lệ thì tiếp tục join sau khi xác thực. |
-| `NAV-02` | Player shell mặc định mở tab Chợ; reload giữ route hiện tại nếu route còn hợp lệ trong phase. |
-| `NAV-03` | Mọi dashboard role có “Về bản đồ”; mobile hardware/browser back đóng sheet/dialog trước, sau đó về map. |
+| ID       | Quy tắc                                                                                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NAV-01` | Sau auth thành công, về Home; nếu có pending join code hợp lệ thì tiếp tục join sau khi xác thực.                                                                                                  |
+| `NAV-02` | Player shell mặc định mở tab Chợ; reload giữ route hiện tại nếu route còn hợp lệ trong phase.                                                                                                      |
+| `NAV-03` | Mọi dashboard role có “Về bản đồ”; mobile hardware/browser back đóng sheet/dialog trước, sau đó về map.                                                                                            |
 | `NAV-04` | Browser back từ map trong active session không rời phiên; mở confirm “Bạn muốn rời màn hình phiên chợ?”. Sau `INTRO`, không có action rời ghế, chỉ về Home ở chế độ phiên vẫn hoạt động/reconnect. |
-| `NAV-05` | Phase đổi không tự đổi route player; banner và CTA đưa tới route phù hợp. |
-| `NAV-06` | Route không hợp lệ với role trả về map và hiện `ROLE_FORBIDDEN`, không để blank/403 page. |
-| `NAV-07` | Route action không hợp lệ với phase vẫn hiển thị nội dung read-only và lý do khóa. |
-| `NAV-08` | Session kết thúc đưa CTA tới debrief; không tự đẩy player khỏi nội dung đang đọc cho tới khi họ chọn CTA. |
-| `NAV-09` | Host/projector tự cập nhật view theo phase nhưng host controls luôn cố định. |
-| `NAV-10` | Deep link vào session yêu cầu auth; sau auth phải quay lại đúng deep link nếu user là member. |
+| `NAV-05` | Phase đổi không tự đổi route player; banner và CTA đưa tới route phù hợp.                                                                                                                          |
+| `NAV-06` | Route không hợp lệ với role trả về map và hiện `ROLE_FORBIDDEN`, không để blank/403 page.                                                                                                          |
+| `NAV-07` | Route action không hợp lệ với phase vẫn hiển thị nội dung read-only và lý do khóa.                                                                                                                 |
+| `NAV-08` | Session kết thúc đưa CTA tới debrief; không tự đẩy player khỏi nội dung đang đọc cho tới khi họ chọn CTA.                                                                                          |
+| `NAV-09` | Host/projector tự cập nhật view theo phase nhưng host controls luôn cố định.                                                                                                                       |
+| `NAV-10` | Deep link vào session yêu cầu auth; sau auth phải quay lại đúng deep link nếu user là member.                                                                                                      |
 
 ### 3.4 Ma trận phase và CTA
 
-| Phase | Player giữ route? | Mutation | Banner | CTA “Đi tới nhiệm vụ” | Host/projector |
-|---|---|---|---|---|---|
-| `EVENT` | Có | Khóa | Tên vòng + biến cố + 15 giây | Xem event detail/map | Tự hiện event card |
-| `DECISION` | Có | Chỉ action quyết định/policy hợp lệ | “Đã tới lúc ra quyết định” | Producer/State tới task; Consumer/Intermediary xem chuẩn bị | Tự hiện roster progress + aggregate không riêng tư |
-| `MARKET_OPEN` | Có | Giao dịch hợp lệ | “Chợ đã mở” | Tới market hoặc role trade task | Tự hiện market + observatory |
-| `SETTLEMENT` | Có | Khóa toàn bộ | “Đang chốt sổ” | Không có | Tự hiện settlement animation/status |
-| `RECAP` | Có | Khóa gameplay | “Vòng đã kết thúc” | Xem tổng kết | Tự hiện recap |
-| `PAUSED` | Có | Khóa | “Host đã tạm dừng phiên” | Không có | Hiện resume control |
+| Phase         | Player giữ route? | Mutation                            | Banner                       | CTA “Đi tới nhiệm vụ”                                       | Host/projector                                     |
+| ------------- | ----------------- | ----------------------------------- | ---------------------------- | ----------------------------------------------------------- | -------------------------------------------------- |
+| `EVENT`       | Có                | Khóa                                | Tên vòng + biến cố + 15 giây | Xem event detail/map                                        | Tự hiện event card                                 |
+| `DECISION`    | Có                | Chỉ action quyết định/policy hợp lệ | “Đã tới lúc ra quyết định”   | Producer/State tới task; Consumer/Intermediary xem chuẩn bị | Tự hiện roster progress + aggregate không riêng tư |
+| `MARKET_OPEN` | Có                | Giao dịch hợp lệ                    | “Chợ đã mở”                  | Tới market hoặc role trade task                             | Tự hiện market + observatory                       |
+| `SETTLEMENT`  | Có                | Khóa toàn bộ                        | “Đang chốt sổ”               | Không có                                                    | Tự hiện settlement animation/status                |
+| `RECAP`       | Có                | Khóa gameplay                       | “Vòng đã kết thúc”           | Xem tổng kết                                                | Tự hiện recap                                      |
+| `PAUSED`      | Có                | Khóa                                | “Host đã tạm dừng phiên”     | Không có                                                    | Hiện resume control                                |
 
 ---
 
@@ -408,12 +410,12 @@ Mỗi flow dưới đây dùng cấu trúc: **Entry → Preconditions → Happy 
 
 Nội dung ba bước:
 
-| Role | Bước 1 - Mục tiêu | Bước 2 - Hành động chính | Bước 3 - Cần quan sát |
-|---|---|---|---|
-| Producer | Bán hàng để thực hiện giá trị và quản lý chi phí. | Sản xuất; bán trực tiếp/sỉ; đầu tư/phản hồi offer. | Hao phí cá biệt so với TGLĐXHCT; tồn kho; lợi nhuận. |
-| Consumer | Đáp ứng nhu cầu với ngân sách hợp lý. | So sánh; mua ngay/trả giá; phản hồi counter. | Need; cung-cầu; giá niêm yết và giá giao dịch. |
-| Intermediary | Kết nối sản xuất-tiêu dùng và chịu rủi ro lưu thông. | Mua sỉ; niêm yết bán lẻ; phản hồi offer. | Biên lợi nhuận; hàng tồn; số bên được kết nối. |
-| Government | Cải thiện kết quả xã hội bằng ngân sách hữu hạn. | Đọc aggregate; chọn policy/mục tiêu; xác nhận chi phí. | Cung-cầu; lãng phí; fulfillment; social score. |
+| Role         | Bước 1 - Mục tiêu                                    | Bước 2 - Hành động chính                               | Bước 3 - Cần quan sát                                |
+| ------------ | ---------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------- |
+| Producer     | Bán hàng để thực hiện giá trị và quản lý chi phí.    | Sản xuất; bán trực tiếp/sỉ; đầu tư/phản hồi offer.     | Hao phí cá biệt so với TGLĐXHCT; tồn kho; lợi nhuận. |
+| Consumer     | Đáp ứng nhu cầu với ngân sách hợp lý.                | So sánh; mua ngay/trả giá; phản hồi counter.           | Need; cung-cầu; giá niêm yết và giá giao dịch.       |
+| Intermediary | Kết nối sản xuất-tiêu dùng và chịu rủi ro lưu thông. | Mua sỉ; niêm yết bán lẻ; phản hồi offer.               | Biên lợi nhuận; hàng tồn; số bên được kết nối.       |
+| Government   | Cải thiện kết quả xã hội bằng ngân sách hữu hạn.     | Đọc aggregate; chọn policy/mục tiêu; xác nhận chi phí. | Cung-cầu; lãng phí; fulfillment; social score.       |
 
 ### 5.4 Host live flow
 
@@ -682,36 +684,36 @@ sequenceDiagram
 
 ### 7.1 Ma trận màn hình
 
-| UI | Entry | Actor/Phase | Primary action | Secondary action | Exit/Back | State bắt buộc | Traceability |
-|---|---|---|---|---|---|---|---|
-| `UI-AUTH-01` | Public/deep link | Guest | Google hoặc email login | Register/reset | Home/deep link | Loading, invalid, unverified, conflict | `FR-AUTH-01` đến `06` |
-| `UI-HOME-01` | Sau auth | User | Tạo phòng/Tham gia | History/profile | Auth sau logout | Empty history, invalid code, active session | `FR-ROOM-01`, `02`, `FR-PROFILE-02` |
-| `UI-LOBBY-01` | Create/join | Host/Player, Lobby | Ready hoặc Start | Share QR/role preview | Home với confirm | Under-min, full, disconnect, all-ready | `FR-ROOM-*`, `FR-HOST-01` |
-| `UI-HOST-01` | Host session | Host, active | Pause/resume/next | Extend/end | Home với confirm | Paused, reconnecting, settlement, incomplete | `FR-HOST-*` |
-| `UI-MAP-01` | Tutorial/player shell | Member, active | Mở khu/Đi tới nhiệm vụ | Quan sát | Không rời active session | Phase lock, offline, bot, ended | `FR-GAME-*`, `LT-07`, `LT-13` |
-| `UI-PRODUCER-01` | Nhiệm vụ/Nông trại | Producer | Sản xuất/list/wholesale | Upgrade | Map | Cap, funds, phase lock, bot | `FR-PRODUCER-*` |
-| `UI-CONSUMER-01` | Market zone | Consumer | Mua ngay/Trả giá | Sort/filter | Map | Empty, sold-out, insufficient, offer-open | `FR-CONSUMER-*` |
-| `UI-INTERMEDIARY-01` | Distribution zone | Intermediary | Mua sỉ/Niêm yết | Counter | Map | Empty inbox, funds, stock, spoilage | `FR-INTERMEDIARY-*` |
-| `UI-STATE-01` | Government zone | Government | Áp dụng policy | Không can thiệp | Map/Observe | Window lock, budget, policy-used, bot | `FR-STATE-*` |
-| `UI-TRADE-01` | Listing/offer card | Buyer/Seller, Market | Confirm action | Cancel/counter | Trigger screen | Pending, stale, expired, success, failure | `FR-MARKET-*` |
-| `UI-OBSERVATORY-01` | Tab/Tower | Member, all active phases | Xem giải thích | Chọn vòng/metric | Map | No-price, delayed, round transition | `FR-ANALYTICS-01` đến `03` |
-| `UI-RECAP-01` | Recap CTA | Member, Recap | Xem outcome | Về bản đồ | Map/next | No-price, aligned, not-aligned | `FR-ANALYTICS-04` đến `06` |
-| `UI-DEBRIEF-01` | End session/history | Member/Host | Xem history | Về Home | Home/Profile | Completed, incomplete, no badge | `FR-ANALYTICS-05` đến `07`, `FR-HISTORY-*` |
-| `UI-PROFILE-01` | Home menu | User | Sửa profile/Mở history | Xóa account | Home | Empty, loading, deletion pending | `FR-PROFILE-*`, `FR-HISTORY-*` |
+| UI                   | Entry                 | Actor/Phase               | Primary action          | Secondary action      | Exit/Back                | State bắt buộc                               | Traceability                               |
+| -------------------- | --------------------- | ------------------------- | ----------------------- | --------------------- | ------------------------ | -------------------------------------------- | ------------------------------------------ |
+| `UI-AUTH-01`         | Public/deep link      | Guest                     | Google hoặc email login | Register/reset        | Home/deep link           | Loading, invalid, unverified, conflict       | `FR-AUTH-01` đến `06`                      |
+| `UI-HOME-01`         | Sau auth              | User                      | Tạo phòng/Tham gia      | History/profile       | Auth sau logout          | Empty history, invalid code, active session  | `FR-ROOM-01`, `02`, `FR-PROFILE-02`        |
+| `UI-LOBBY-01`        | Create/join           | Host/Player, Lobby        | Ready hoặc Start        | Share QR/role preview | Home với confirm         | Under-min, full, disconnect, all-ready       | `FR-ROOM-*`, `FR-HOST-01`                  |
+| `UI-HOST-01`         | Host session          | Host, active              | Pause/resume/next       | Extend/end            | Home với confirm         | Paused, reconnecting, settlement, incomplete | `FR-HOST-*`                                |
+| `UI-MAP-01`          | Tutorial/player shell | Member, active            | Mở khu/Đi tới nhiệm vụ  | Quan sát              | Không rời active session | Phase lock, offline, bot, ended              | `FR-GAME-*`, `LT-07`, `LT-13`              |
+| `UI-PRODUCER-01`     | Nhiệm vụ/Nông trại    | Producer                  | Sản xuất/list/wholesale | Upgrade               | Map                      | Cap, funds, phase lock, bot                  | `FR-PRODUCER-*`                            |
+| `UI-CONSUMER-01`     | Market zone           | Consumer                  | Mua ngay/Trả giá        | Sort/filter           | Map                      | Empty, sold-out, insufficient, offer-open    | `FR-CONSUMER-*`                            |
+| `UI-INTERMEDIARY-01` | Distribution zone     | Intermediary              | Mua sỉ/Niêm yết         | Counter               | Map                      | Empty inbox, funds, stock, spoilage          | `FR-INTERMEDIARY-*`                        |
+| `UI-STATE-01`        | Government zone       | Government                | Áp dụng policy          | Không can thiệp       | Map/Observe              | Window lock, budget, policy-used, bot        | `FR-STATE-*`                               |
+| `UI-TRADE-01`        | Listing/offer card    | Buyer/Seller, Market      | Confirm action          | Cancel/counter        | Trigger screen           | Pending, stale, expired, success, failure    | `FR-MARKET-*`                              |
+| `UI-OBSERVATORY-01`  | Tab/Tower             | Member, all active phases | Xem giải thích          | Chọn vòng/metric      | Map                      | No-price, delayed, round transition          | `FR-ANALYTICS-01` đến `03`                 |
+| `UI-RECAP-01`        | Recap CTA             | Member, Recap             | Xem outcome             | Về bản đồ             | Map/next                 | No-price, aligned, not-aligned               | `FR-ANALYTICS-04` đến `06`                 |
+| `UI-DEBRIEF-01`      | End session/history   | Member/Host               | Xem history             | Về Home               | Home/Profile             | Completed, incomplete, no badge              | `FR-ANALYTICS-05` đến `07`, `FR-HISTORY-*` |
+| `UI-PROFILE-01`      | Home menu             | User                      | Sửa profile/Mở history  | Xóa account           | Home                     | Empty, loading, deletion pending             | `FR-PROFILE-*`, `FR-HISTORY-*`             |
 
 ### 7.2 State behavior theo màn hình
 
-| State | Màn hình áp dụng | Hành vi |
-|---|---|---|
-| Loading | Tất cả data screen | Skeleton giữ layout; primary mutation disabled; không dùng spinner toàn trang nếu đã có stale data. |
-| Empty | Home/history/market/inbox/listing | Nêu lý do và next action; không chỉ ghi “Không có dữ liệu”. |
-| Locked by phase | Role/market/policy | Giữ thông tin read-only, hiện phase hiện tại và CTA hợp lệ. |
-| Pending action | Dialog/action card | Disable cùng action; giữ cancel nếu server cho phép; liên kết với `clientActionId`. |
-| Error | Tất cả | Lỗi gần action; global error chỉ cho session/auth/network. |
-| Reconnecting | Player/host shell | Persistent banner, controls disabled; giữ route/draft local chưa gửi. |
-| Bot takeover | Role screens | Read-only + banner + trạng thái bot; không ẩn action history. |
-| Duplicate tab | Active session | Read-only overlay; giải thích tab khác đang điều khiển. |
-| Ended | Session screens | Khóa action; CTA debrief/history. |
+| State           | Màn hình áp dụng                  | Hành vi                                                                                             |
+| --------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Loading         | Tất cả data screen                | Skeleton giữ layout; primary mutation disabled; không dùng spinner toàn trang nếu đã có stale data. |
+| Empty           | Home/history/market/inbox/listing | Nêu lý do và next action; không chỉ ghi “Không có dữ liệu”.                                         |
+| Locked by phase | Role/market/policy                | Giữ thông tin read-only, hiện phase hiện tại và CTA hợp lệ.                                         |
+| Pending action  | Dialog/action card                | Disable cùng action; giữ cancel nếu server cho phép; liên kết với `clientActionId`.                 |
+| Error           | Tất cả                            | Lỗi gần action; global error chỉ cho session/auth/network.                                          |
+| Reconnecting    | Player/host shell                 | Persistent banner, controls disabled; giữ route/draft local chưa gửi.                               |
+| Bot takeover    | Role screens                      | Read-only + banner + trạng thái bot; không ẩn action history.                                       |
+| Duplicate tab   | Active session                    | Read-only overlay; giải thích tab khác đang điều khiển.                                             |
+| Ended           | Session screens                   | Khóa action; CTA debrief/history.                                                                   |
 
 ---
 
@@ -993,76 +995,76 @@ Wireframe chỉ khóa hierarchy, CTA và vùng điều hướng; không biểu d
 
 ### 9.1 Session và host
 
-| ID | Trigger | Phản hồi tức thời | Command/API | Success event/result | Failure state |
-|---|---|---|---|---|---|
-| `IX-ROOM-CREATE` | “Tạo phòng” | CTA loading | `POST /sessions` | Host lobby + code/QR | Active session/network |
-| `IX-ROOM-JOIN` | Nhập code + “Tham gia” | Normalize code, loading | `POST /sessions/join` | Player lobby | Not found/expired/full/late |
-| `IX-ROOM-READY` | “Tôi đã sẵn sàng” | Toggle pending | `participant:ready` | `participant:presence`/session state | Disconnected/session locked |
-| `IX-HOST-START` | “Bắt đầu” | Confirm + lock CTA | `host:start` | `session:state`, `role:assigned` | Start guard/stale roster |
-| `IX-HOST-PAUSE` | Pause/Resume | Control pending | `host:pause` / `host:resume` | `session:state` | Forbidden/stale |
-| `IX-HOST-EXTEND` | “+30s” | Pending, increment preview | `host:extend` | `round:phase_changed`/state | Limit reached/settlement |
-| `IX-HOST-NEXT` | “Vòng tiếp theo” | Lock CTA | `host:next` | `session:state` | Too early/invalid transition |
-| `IX-HOST-END` | “Kết thúc” | Destructive confirm | `host:end` | `session:ended` | Settlement pending/network |
+| ID               | Trigger                | Phản hồi tức thời          | Command/API                  | Success event/result                 | Failure state                |
+| ---------------- | ---------------------- | -------------------------- | ---------------------------- | ------------------------------------ | ---------------------------- |
+| `IX-ROOM-CREATE` | “Tạo phòng”            | CTA loading                | `POST /sessions`             | Host lobby + code/QR                 | Active session/network       |
+| `IX-ROOM-JOIN`   | Nhập code + “Tham gia” | Normalize code, loading    | `POST /sessions/join`        | Player lobby                         | Not found/expired/full/late  |
+| `IX-ROOM-READY`  | “Tôi đã sẵn sàng”      | Toggle pending             | `participant:ready`          | `participant:presence`/session state | Disconnected/session locked  |
+| `IX-HOST-START`  | “Bắt đầu”              | Confirm + lock CTA         | `host:start`                 | `session:state`, `role:assigned`     | Start guard/stale roster     |
+| `IX-HOST-PAUSE`  | Pause/Resume           | Control pending            | `host:pause` / `host:resume` | `session:state`                      | Forbidden/stale              |
+| `IX-HOST-EXTEND` | “+30s”                 | Pending, increment preview | `host:extend`                | `round:phase_changed`/state          | Limit reached/settlement     |
+| `IX-HOST-NEXT`   | “Vòng tiếp theo”       | Lock CTA                   | `host:next`                  | `session:state`                      | Too early/invalid transition |
+| `IX-HOST-END`    | “Kết thúc”             | Destructive confirm        | `host:end`                   | `session:ended`                      | Settlement pending/network   |
 
 ### 9.2 Tutorial delta
 
-| ID | Trigger | Phản hồi tức thời | Command/event | Success | Failure |
-|---|---|---|---|---|---|
-| `IX-TUTORIAL-NEXT` | “Tiếp theo” | Chuyển local step | Local state | Step 2/3 | Không áp dụng |
-| `IX-TUTORIAL-COMPLETE` | Hoàn tất bước 3 | CTA pending | `participant:tutorial_completed` | `participant:tutorial_progress` | Giữ step 3, retry |
-| `IX-TUTORIAL-SKIP` | “Bỏ qua” | Về map | Chỉ hiện nếu progress đã tồn tại | Map | Không hiện cho first-time |
+| ID                     | Trigger         | Phản hồi tức thời | Command/event                    | Success                         | Failure                   |
+| ---------------------- | --------------- | ----------------- | -------------------------------- | ------------------------------- | ------------------------- |
+| `IX-TUTORIAL-NEXT`     | “Tiếp theo”     | Chuyển local step | Local state                      | Step 2/3                        | Không áp dụng             |
+| `IX-TUTORIAL-COMPLETE` | Hoàn tất bước 3 | CTA pending       | `participant:tutorial_completed` | `participant:tutorial_progress` | Giữ step 3, retry         |
+| `IX-TUTORIAL-SKIP`     | “Bỏ qua”        | Về map            | Chỉ hiện nếu progress đã tồn tại | Map                             | Không hiện cho first-time |
 
 ### 9.3 Producer và intermediary
 
-| ID | Trigger | Phản hồi tức thời | Command | Success event | Failure state |
-|---|---|---|---|---|---|
-| `IX-PRODUCER-PRODUCE` | “Sản xuất” | Confirm cost → pending | `producer:produce` | `session:state`/role snapshot | Funds/cap/phase/stale |
-| `IX-PRODUCER-LIST` | “Đưa ra chợ” | Listing draft → pending | `producer:list` | `market:listing_updated` | Inventory/price/phase |
-| `IX-PRODUCER-WHOLESALE` | “Bán sỉ” | Offer pending | `producer:wholesale` | `market:offer_updated` | Inventory/intermediary/phase |
-| `IX-PRODUCER-INVEST` | “Nâng cấp” | Confirm before/after | `producer:invest` | Role state update | Funds/round/already Pioneer |
-| `IX-SELLER-RESPOND` | Accept/Reject/Counter | Disable offer controls | `seller:respond_offer` | `market:offer_updated` hoặc `market:trade_completed` | Expired/stale/sold |
-| `IX-INTERMEDIARY-ACCEPT` | “Chấp nhận mua sỉ” | Pending total debit | `intermediary:accept_wholesale` | `market:trade_completed` | Funds/stale/expired |
-| `IX-INTERMEDIARY-COUNTER` | “Trả giá lại” | Counter pending | `intermediary:counter_wholesale` | `market:offer_updated` | Invalid/expired |
-| `IX-INTERMEDIARY-LIST` | “Niêm yết bán lẻ” | Draft → pending | `intermediary:list` | `market:listing_updated` | Ownership/price/phase |
+| ID                        | Trigger               | Phản hồi tức thời       | Command                          | Success event                                        | Failure state                |
+| ------------------------- | --------------------- | ----------------------- | -------------------------------- | ---------------------------------------------------- | ---------------------------- |
+| `IX-PRODUCER-PRODUCE`     | “Sản xuất”            | Confirm cost → pending  | `producer:produce`               | `session:state`/role snapshot                        | Funds/cap/phase/stale        |
+| `IX-PRODUCER-LIST`        | “Đưa ra chợ”          | Listing draft → pending | `producer:list`                  | `market:listing_updated`                             | Inventory/price/phase        |
+| `IX-PRODUCER-WHOLESALE`   | “Bán sỉ”              | Offer pending           | `producer:wholesale`             | `market:offer_updated`                               | Inventory/intermediary/phase |
+| `IX-PRODUCER-INVEST`      | “Nâng cấp”            | Confirm before/after    | `producer:invest`                | Role state update                                    | Funds/round/already Pioneer  |
+| `IX-SELLER-RESPOND`       | Accept/Reject/Counter | Disable offer controls  | `seller:respond_offer`           | `market:offer_updated` hoặc `market:trade_completed` | Expired/stale/sold           |
+| `IX-INTERMEDIARY-ACCEPT`  | “Chấp nhận mua sỉ”    | Pending total debit     | `intermediary:accept_wholesale`  | `market:trade_completed`                             | Funds/stale/expired          |
+| `IX-INTERMEDIARY-COUNTER` | “Trả giá lại”         | Counter pending         | `intermediary:counter_wholesale` | `market:offer_updated`                               | Invalid/expired              |
+| `IX-INTERMEDIARY-LIST`    | “Niêm yết bán lẻ”     | Draft → pending         | `intermediary:list`              | `market:listing_updated`                             | Ownership/price/phase        |
 
 ### 9.4 Consumer và Government
 
-| ID | Trigger | Phản hồi tức thời | Command | Success event | Failure state |
-|---|---|---|---|---|---|
-| `IX-CONSUMER-BUY` | “Mua ngay” | Confirm → CTA loading | `consumer:buy` | `market:trade_completed` | Sold-out/balance/stale/phase |
-| `IX-CONSUMER-OFFER` | “Gửi trả giá” | Reserve preview → pending | `consumer:offer` | `market:offer_updated` | Price/reservation/duplicate |
-| `IX-CONSUMER-ACCEPT-COUNTER` | “Chấp nhận” | Pending | `consumer:accept_counter` | `market:trade_completed` | Balance/expired/stale |
-| `IX-STATE-APPLY` | “Áp dụng chính sách” | Confirm cost → pending | `government:apply_policy` | `government:policy_applied` | Budget/window/target/used |
+| ID                           | Trigger              | Phản hồi tức thời         | Command                   | Success event               | Failure state                |
+| ---------------------------- | -------------------- | ------------------------- | ------------------------- | --------------------------- | ---------------------------- |
+| `IX-CONSUMER-BUY`            | “Mua ngay”           | Confirm → CTA loading     | `consumer:buy`            | `market:trade_completed`    | Sold-out/balance/stale/phase |
+| `IX-CONSUMER-OFFER`          | “Gửi trả giá”        | Reserve preview → pending | `consumer:offer`          | `market:offer_updated`      | Price/reservation/duplicate  |
+| `IX-CONSUMER-ACCEPT-COUNTER` | “Chấp nhận”          | Pending                   | `consumer:accept_counter` | `market:trade_completed`    | Balance/expired/stale        |
+| `IX-STATE-APPLY`             | “Áp dụng chính sách” | Confirm cost → pending    | `government:apply_policy` | `government:policy_applied` | Budget/window/target/used    |
 
 ### 9.5 Local navigation và observatory
 
-| ID | Trigger | UI response | Server dependency | Failure/locked behavior |
-|---|---|---|---|---|
-| `IX-NAV-MAP` | Tab Chợ/“Về bản đồ” | Route map, giữ global HUD | Current session state | Nếu ended, map read-only + debrief CTA |
-| `IX-NAV-TASK` | Tab Nhiệm vụ/phase CTA | Route role task | Role/phase snapshot | Role/phase invalid → map + lý do |
-| `IX-NAV-OBSERVE` | Tab Quan sát/Tower | Route observatory | `market:snapshot` | Delayed/no-price state |
-| `IX-RECAP-OPEN` | “Xem tổng kết” | Route recap | Final round snapshot | Result not ready → settlement status |
+| ID               | Trigger                | UI response               | Server dependency     | Failure/locked behavior                |
+| ---------------- | ---------------------- | ------------------------- | --------------------- | -------------------------------------- |
+| `IX-NAV-MAP`     | Tab Chợ/“Về bản đồ”    | Route map, giữ global HUD | Current session state | Nếu ended, map read-only + debrief CTA |
+| `IX-NAV-TASK`    | Tab Nhiệm vụ/phase CTA | Route role task           | Role/phase snapshot   | Role/phase invalid → map + lý do       |
+| `IX-NAV-OBSERVE` | Tab Quan sát/Tower     | Route observatory         | `market:snapshot`     | Delayed/no-price state                 |
+| `IX-RECAP-OPEN`  | “Xem tổng kết”         | Route recap               | Final round snapshot  | Result not ready → settlement status   |
 
 ---
 
 ## 10. Screen transition matrix
 
-| From | Trigger | Guard | Destination | Back behavior | Error fallback |
-|---|---|---|---|---|---|
-| Auth | Login success | Authenticated | Home/pending deep link | Không quay lại form khi session còn hiệu lực | Auth error tại form |
-| Home | Tạo phòng | Không active host session | Host Lobby | Confirm cancel room | Giữ Home + error |
-| Home | Join code | Lobby, còn ghế | Player Lobby | Leave lobby | Giữ code + lỗi |
-| Player Lobby | Host start | Role locked | Tutorial | Về Lobby chỉ khi session chưa active | Session state refresh |
-| Tutorial | Complete/Skip hợp lệ | Progress rule | Map | Xem lại từ Task help | Giữ step hiện tại |
-| Map | Click Nông trại/Task | Producer | Producer dashboard | Map | Map + role error |
-| Map | Click Quầy chợ | Consumer hoặc market participant | Marketplace | Map | Map + phase/role explanation |
-| Map | Click Trung tâm PP | Intermediary hoặc public read-only | Intermediary dashboard/read-only | Map | Map + role explanation |
-| Map | Click Nhà nước | Government hoặc public read-only | State dashboard/read-only | Map | Map + role explanation |
-| Map | Click Tháp | Member | Observatory | Map | Delayed state |
-| Role screen | Action cần detail | Phase/ownership hợp lệ | Dialog/bottom sheet | Trả focus về trigger | Inline error |
-| Any active screen | Phase banner CTA | New phase | Relevant task/recap | Map | Locked read-only state |
-| Active screen | Session ended CTA | Result available | Debrief | Home/history | Result-not-ready status |
-| Profile | Open history | Member/host | Debrief history | Profile | Not found/forbidden |
+| From              | Trigger              | Guard                              | Destination                      | Back behavior                                | Error fallback               |
+| ----------------- | -------------------- | ---------------------------------- | -------------------------------- | -------------------------------------------- | ---------------------------- |
+| Auth              | Login success        | Authenticated                      | Home/pending deep link           | Không quay lại form khi session còn hiệu lực | Auth error tại form          |
+| Home              | Tạo phòng            | Không active host session          | Host Lobby                       | Confirm cancel room                          | Giữ Home + error             |
+| Home              | Join code            | Lobby, còn ghế                     | Player Lobby                     | Leave lobby                                  | Giữ code + lỗi               |
+| Player Lobby      | Host start           | Role locked                        | Tutorial                         | Về Lobby chỉ khi session chưa active         | Session state refresh        |
+| Tutorial          | Complete/Skip hợp lệ | Progress rule                      | Map                              | Xem lại từ Task help                         | Giữ step hiện tại            |
+| Map               | Click Nông trại/Task | Producer                           | Producer dashboard               | Map                                          | Map + role error             |
+| Map               | Click Quầy chợ       | Consumer hoặc market participant   | Marketplace                      | Map                                          | Map + phase/role explanation |
+| Map               | Click Trung tâm PP   | Intermediary hoặc public read-only | Intermediary dashboard/read-only | Map                                          | Map + role explanation       |
+| Map               | Click Nhà nước       | Government hoặc public read-only   | State dashboard/read-only        | Map                                          | Map + role explanation       |
+| Map               | Click Tháp           | Member                             | Observatory                      | Map                                          | Delayed state                |
+| Role screen       | Action cần detail    | Phase/ownership hợp lệ             | Dialog/bottom sheet              | Trả focus về trigger                         | Inline error                 |
+| Any active screen | Phase banner CTA     | New phase                          | Relevant task/recap              | Map                                          | Locked read-only state       |
+| Active screen     | Session ended CTA    | Result available                   | Debrief                          | Home/history                                 | Result-not-ready status      |
+| Profile           | Open history         | Member/host                        | Debrief history                  | Profile                                      | Not found/forbidden          |
 
 ---
 
@@ -1070,78 +1072,78 @@ Wireframe chỉ khóa hierarchy, CTA và vùng điều hướng; không biểu d
 
 ### 11.1 Primary CTA
 
-| ID | Copy | Ngữ cảnh |
-|---|---|---|
-| `COPY-CTA-01` | “Tạo phòng” | Home host entry |
-| `COPY-CTA-02` | “Tham gia phiên chợ” | Join code |
-| `COPY-CTA-03` | “Tôi đã sẵn sàng” | Player lobby |
-| `COPY-CTA-04` | “Đi tới nhiệm vụ” | Phase banner |
-| `COPY-CTA-05` | “Sản xuất” | Producer decision |
-| `COPY-CTA-06` | “Đưa ra chợ” | Direct listing |
-| `COPY-CTA-07` | “Bán sỉ” | Wholesale |
-| `COPY-CTA-08` | “Mua ngay” | Consumer listing |
-| `COPY-CTA-09` | “Trả giá” | Open offer form |
-| `COPY-CTA-10` | “Chấp nhận” | Offer/counter/policy confirm context |
-| `COPY-CTA-11` | “Trả giá lại” | Seller/intermediary counter |
-| `COPY-CTA-12` | “Áp dụng chính sách” | Government confirmation |
-| `COPY-CTA-13` | “Xem tổng kết” | Recap prompt |
-| `COPY-CTA-14` | “Về bản đồ” | Role/market/observe/recap |
+| ID            | Copy                 | Ngữ cảnh                             |
+| ------------- | -------------------- | ------------------------------------ |
+| `COPY-CTA-01` | “Tạo phòng”          | Home host entry                      |
+| `COPY-CTA-02` | “Tham gia phiên chợ” | Join code                            |
+| `COPY-CTA-03` | “Tôi đã sẵn sàng”    | Player lobby                         |
+| `COPY-CTA-04` | “Đi tới nhiệm vụ”    | Phase banner                         |
+| `COPY-CTA-05` | “Sản xuất”           | Producer decision                    |
+| `COPY-CTA-06` | “Đưa ra chợ”         | Direct listing                       |
+| `COPY-CTA-07` | “Bán sỉ”             | Wholesale                            |
+| `COPY-CTA-08` | “Mua ngay”           | Consumer listing                     |
+| `COPY-CTA-09` | “Trả giá”            | Open offer form                      |
+| `COPY-CTA-10` | “Chấp nhận”          | Offer/counter/policy confirm context |
+| `COPY-CTA-11` | “Trả giá lại”        | Seller/intermediary counter          |
+| `COPY-CTA-12` | “Áp dụng chính sách” | Government confirmation              |
+| `COPY-CTA-13` | “Xem tổng kết”       | Recap prompt                         |
+| `COPY-CTA-14` | “Về bản đồ”          | Role/market/observe/recap            |
 
 ### 11.2 Phase copy
 
-| ID | Copy |
-|---|---|
+| ID              | Copy                                                                        |
+| --------------- | --------------------------------------------------------------------------- |
 | `COPY-PHASE-01` | “Vòng {round}: {eventName}. Xem điều kiện thị trường trước khi quyết định.” |
-| `COPY-PHASE-02` | “Đã tới lúc ra quyết định. Hành động của bạn sẽ ảnh hưởng tới phiên chợ.” |
-| `COPY-PHASE-03` | “Chợ đã mở. Giá thị trường chỉ hình thành khi có giao dịch hoàn tất.” |
-| `COPY-PHASE-04` | “Đang chốt sổ. Các hành động mua bán tạm thời bị khóa.” |
-| `COPY-PHASE-05` | “Vòng đã kết thúc. Hãy so sánh giá trị với giá thị trường vừa hình thành.” |
-| `COPY-PHASE-06` | “Host đã tạm dừng phiên. Dữ liệu của bạn vẫn được giữ nguyên.” |
+| `COPY-PHASE-02` | “Đã tới lúc ra quyết định. Hành động của bạn sẽ ảnh hưởng tới phiên chợ.”   |
+| `COPY-PHASE-03` | “Chợ đã mở. Giá thị trường chỉ hình thành khi có giao dịch hoàn tất.”       |
+| `COPY-PHASE-04` | “Đang chốt sổ. Các hành động mua bán tạm thời bị khóa.”                     |
+| `COPY-PHASE-05` | “Vòng đã kết thúc. Hãy so sánh giá trị với giá thị trường vừa hình thành.”  |
+| `COPY-PHASE-06` | “Host đã tạm dừng phiên. Dữ liệu của bạn vẫn được giữ nguyên.”              |
 
 ### 11.3 Theory copy quan trọng
 
-| ID | Copy | Cơ sở |
-|---|---|---|
-| `COPY-THEORY-01` | “Giá trị dựa trên thời gian lao động xã hội cần thiết; hao phí riêng của một người không tự quyết định giá trị xã hội.” | `LT-04` |
-| `COPY-THEORY-02` | “Cung-cầu tác động trực tiếp tới giá cả, không tạo ra giá trị của hàng hóa.” | `LT-09`, `LT-11` |
-| `COPY-THEORY-03` | “Giá niêm yết chưa phải giá thị trường. Giá thị trường được tính từ các giao dịch đã hoàn tất.” | `LT-07`, `LT-09` |
-| `COPY-THEORY-04` | “Năng suất xã hội tăng làm giá trị một đơn vị hàng hóa giảm.” | `LT-05` |
-| `COPY-THEORY-05` | “Hàng không bán được cho thấy lao động cá biệt chưa được thị trường thừa nhận.” | `LT-03` |
-| `COPY-THEORY-06` | “Giá cao thu hút nguồn lực; giá thấp khiến sản xuất có xu hướng thu hẹp.” | `LT-10` |
+| ID               | Copy                                                                                                                    | Cơ sở            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `COPY-THEORY-01` | “Giá trị dựa trên thời gian lao động xã hội cần thiết; hao phí riêng của một người không tự quyết định giá trị xã hội.” | `LT-04`          |
+| `COPY-THEORY-02` | “Cung-cầu tác động trực tiếp tới giá cả, không tạo ra giá trị của hàng hóa.”                                            | `LT-09`, `LT-11` |
+| `COPY-THEORY-03` | “Giá niêm yết chưa phải giá thị trường. Giá thị trường được tính từ các giao dịch đã hoàn tất.”                         | `LT-07`, `LT-09` |
+| `COPY-THEORY-04` | “Năng suất xã hội tăng làm giá trị một đơn vị hàng hóa giảm.”                                                           | `LT-05`          |
+| `COPY-THEORY-05` | “Hàng không bán được cho thấy lao động cá biệt chưa được thị trường thừa nhận.”                                         | `LT-03`          |
+| `COPY-THEORY-06` | “Giá cao thu hút nguồn lực; giá thấp khiến sản xuất có xu hướng thu hẹp.”                                               | `LT-10`          |
 
 ### 11.4 Empty, no-price và result copy
 
-| ID | Copy |
-|---|---|
-| `COPY-EMPTY-01` | “Chưa có hàng được đưa ra chợ. Hãy chờ người bán niêm yết.” |
-| `COPY-EMPTY-02` | “Bạn chưa nhận được đề nghị bán sỉ nào.” |
-| `COPY-EMPTY-03` | “Bạn chưa tham gia phiên nào. Hãy nhập mã phòng để bắt đầu.” |
-| `COPY-NOPRICE-01` | “Không hình thành giá thị trường trong vòng này vì không có giao dịch bán lẻ hoàn tất.” |
-| `COPY-RESULT-01` | “Dữ liệu thực tế khác xu hướng lý thuyết. Hãy xem số lượng giao dịch và quyết định của người chơi để giải thích.” |
-| `COPY-INCOMPLETE-01` | “Phiên kết thúc trước khi hoàn tất bốn vòng. Kết quả chỉ gồm các vòng đã được chốt và không cấp danh hiệu.” |
+| ID                   | Copy                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `COPY-EMPTY-01`      | “Chưa có hàng được đưa ra chợ. Hãy chờ người bán niêm yết.”                                                       |
+| `COPY-EMPTY-02`      | “Bạn chưa nhận được đề nghị bán sỉ nào.”                                                                          |
+| `COPY-EMPTY-03`      | “Bạn chưa tham gia phiên nào. Hãy nhập mã phòng để bắt đầu.”                                                      |
+| `COPY-NOPRICE-01`    | “Không hình thành giá thị trường trong vòng này vì không có giao dịch bán lẻ hoàn tất.”                           |
+| `COPY-RESULT-01`     | “Dữ liệu thực tế khác xu hướng lý thuyết. Hãy xem số lượng giao dịch và quyết định của người chơi để giải thích.” |
+| `COPY-INCOMPLETE-01` | “Phiên kết thúc trước khi hoàn tất bốn vòng. Kết quả chỉ gồm các vòng đã được chốt và không cấp danh hiệu.”       |
 
 ### 11.5 Network và bot copy
 
-| ID | Copy |
-|---|---|
+| ID                | Copy                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------- |
 | `COPY-NETWORK-01` | “Kết nối không ổn định. Hệ thống đang thử kết nối lại; chưa có hành động mới được gửi.” |
-| `COPY-NETWORK-02` | “Bot đang tạm điều khiển vai của bạn để phiên không bị gián đoạn.” |
+| `COPY-NETWORK-02` | “Bot đang tạm điều khiển vai của bạn để phiên không bị gián đoạn.”                      |
 | `COPY-NETWORK-03` | “Bạn đã kết nối lại. Quyền điều khiển sẽ được trả sau khi hành động hiện tại hoàn tất.” |
-| `COPY-NETWORK-04` | “Phiên đang được điều khiển ở một tab khác. Tab này chỉ có thể xem.” |
+| `COPY-NETWORK-04` | “Phiên đang được điều khiển ở một tab khác. Tab này chỉ có thể xem.”                    |
 
 ### 11.6 Error copy
 
-| Error code | Copy |
-|---|---|
-| `INSUFFICIENT_BALANCE` | “Số dư không đủ cho giao dịch này.” |
-| `INSUFFICIENT_INVENTORY` | “Hàng đã được bán hoặc không còn đủ số lượng.” |
-| `OFFER_EXPIRED` | “Lượt chợ đã đóng; đề nghị này không còn hiệu lực.” |
-| `STALE_STATE` | “Thị trường vừa thay đổi. Dữ liệu đang được cập nhật.” |
-| `ROLE_FORBIDDEN` | “Vai của bạn không có quyền thực hiện thao tác này.” |
-| `PHASE_FORBIDDEN` | “Thao tác không khả dụng trong giai đoạn hiện tại.” |
-| `INVALID_MONEY_STEP` | “Giá phải là bội số của 1 nghìn Đồng.” |
-| `SESSION_FULL` | “Phòng đã đủ 10 người chơi.” |
-| `LATE_JOIN_FORBIDDEN` | “Phiên đã bắt đầu; chỉ thành viên cũ có thể kết nối lại.” |
+| Error code               | Copy                                                      |
+| ------------------------ | --------------------------------------------------------- |
+| `INSUFFICIENT_BALANCE`   | “Số dư không đủ cho giao dịch này.”                       |
+| `INSUFFICIENT_INVENTORY` | “Hàng đã được bán hoặc không còn đủ số lượng.”            |
+| `OFFER_EXPIRED`          | “Lượt chợ đã đóng; đề nghị này không còn hiệu lực.”       |
+| `STALE_STATE`            | “Thị trường vừa thay đổi. Dữ liệu đang được cập nhật.”    |
+| `ROLE_FORBIDDEN`         | “Vai của bạn không có quyền thực hiện thao tác này.”      |
+| `PHASE_FORBIDDEN`        | “Thao tác không khả dụng trong giai đoạn hiện tại.”       |
+| `INVALID_MONEY_STEP`     | “Giá phải là bội số của 1 nghìn Đồng.”                    |
+| `SESSION_FULL`           | “Phòng đã đủ 10 người chơi.”                              |
+| `LATE_JOIN_FORBIDDEN`    | “Phiên đã bắt đầu; chỉ thành viên cũ có thể kết nối lại.” |
 
 ---
 
@@ -1149,20 +1151,20 @@ Wireframe chỉ khóa hierarchy, CTA và vùng điều hướng; không biểu d
 
 ### 12.1 Shared states
 
-| ID | Trigger | Presentation | Interaction rule | Exit |
-|---|---|---|---|---|
-| `STATE-LOADING` | Initial fetch | Skeleton theo layout | Disable mutation | Data/error |
-| `STATE-PENDING` | Mutation sent | Action spinner + controls liên quan disabled | Không gửi ID mới | Success/failure |
-| `STATE-EMPTY` | Data hợp lệ nhưng rỗng | Empty copy + next action | Cho navigation | Data xuất hiện |
-| `STATE-LOCKED` | Sai phase/role | Read-only + lý do + CTA hợp lệ | Không mutation | Phase/role đổi |
-| `STATE-RECONNECTING` | Socket offline <15s | Persistent top banner | Disable mutation, giữ route | Reconnected/takeover |
-| `STATE-BOT-TAKEOVER` | Offline >=15s | Persistent banner + bot badge | Read-only | Reclaim/end |
-| `STATE-DUPLICATE-TAB` | Tab khác control | Blocking read-only notice | Không mutation | Tab control đổi |
-| `STATE-STALE` | Version conflict | Inline notice + refresh highlight | Retry sau refresh | Snapshot applied |
-| `STATE-PAUSED` | Host pause | Global banner + frozen timer | Không gameplay mutation | Resume/end |
-| `STATE-SETTLEMENT` | Round settlement | Blocking status layer | Không mutation/navigation action có hậu quả | Recap |
-| `STATE-COMPLETED` | Session complete | Ended banner + debrief CTA | Read-only | Debrief/home |
-| `STATE-INCOMPLETE` | Session ends early | Warning banner + partial result CTA | Read-only | History/home |
+| ID                    | Trigger                | Presentation                                 | Interaction rule                            | Exit                 |
+| --------------------- | ---------------------- | -------------------------------------------- | ------------------------------------------- | -------------------- |
+| `STATE-LOADING`       | Initial fetch          | Skeleton theo layout                         | Disable mutation                            | Data/error           |
+| `STATE-PENDING`       | Mutation sent          | Action spinner + controls liên quan disabled | Không gửi ID mới                            | Success/failure      |
+| `STATE-EMPTY`         | Data hợp lệ nhưng rỗng | Empty copy + next action                     | Cho navigation                              | Data xuất hiện       |
+| `STATE-LOCKED`        | Sai phase/role         | Read-only + lý do + CTA hợp lệ               | Không mutation                              | Phase/role đổi       |
+| `STATE-RECONNECTING`  | Socket offline <15s    | Persistent top banner                        | Disable mutation, giữ route                 | Reconnected/takeover |
+| `STATE-BOT-TAKEOVER`  | Offline >=15s          | Persistent banner + bot badge                | Read-only                                   | Reclaim/end          |
+| `STATE-DUPLICATE-TAB` | Tab khác control       | Blocking read-only notice                    | Không mutation                              | Tab control đổi      |
+| `STATE-STALE`         | Version conflict       | Inline notice + refresh highlight            | Retry sau refresh                           | Snapshot applied     |
+| `STATE-PAUSED`        | Host pause             | Global banner + frozen timer                 | Không gameplay mutation                     | Resume/end           |
+| `STATE-SETTLEMENT`    | Round settlement       | Blocking status layer                        | Không mutation/navigation action có hậu quả | Recap                |
+| `STATE-COMPLETED`     | Session complete       | Ended banner + debrief CTA                   | Read-only                                   | Debrief/home         |
+| `STATE-INCOMPLETE`    | Session ends early     | Warning banner + partial result CTA          | Read-only                                   | History/home         |
 
 ### 12.2 Notification priority
 
@@ -1275,22 +1277,22 @@ participant:tutorial_progress {
 
 ## 15. Traceability matrix
 
-| Flow | UI | FR/BR | Theory | Interface chính |
-|---|---|---|---|---|
-| `UF-AUTH-01` đến `03` | `UI-AUTH-01` | `FR-AUTH-01` đến `06` | Không áp dụng | REST auth |
-| `UF-HOME-01`, `02` | `UI-HOME-01`, `UI-LOBBY-01` | `FR-ROOM-01`, `02`, `08` | Không áp dụng | REST session/join |
-| `UF-PLAYER-01` | `UI-LOBBY-01` | `FR-ROOM-03` đến `05`, `BR-ROLE-01` | `LT-13` | `participant:ready`, `role:assigned` |
-| `UF-TUTORIAL-01` | Tutorial extension | `DELTA-SRS-01` | `LT-04`, `LT-08`, `LT-11`, `LT-13` | Tutorial command/event |
-| `UF-HOST-01` đến `03` | `UI-HOST-01` | `FR-HOST-01` đến `06` | Không áp dụng | `host:*`, `session:state` |
-| `UF-PRODUCER-01` đến `04` | `UI-PRODUCER-01`, `UI-COMMODITY-01`, `UI-LABOR-01`, `UI-WALLET-01` | `FR-PRODUCER-01` đến `08`, `BR-VALUE-*` | `LT-01`, `LT-03`, `LT-04`, `LT-05`, `LT-10` | `producer:*`, seller respond |
-| `UF-CONSUMER-01`, `02` | `UI-CONSUMER-01`, `UI-TRADE-01`, `UI-WALLET-01` | `FR-CONSUMER-01` đến `06`, `BR-TRADE-*` | `LT-02`, `LT-06`, `LT-07`, `LT-11`, `LT-12` | `consumer:*` |
-| `UF-INTERMEDIARY-01`, `02` | `UI-INTERMEDIARY-01`, `UI-TRADE-01` | `FR-INTERMEDIARY-01` đến `05` | `LT-13`, `LT-14` | `intermediary:*` |
-| `UF-STATE-01` | `UI-STATE-01` | `FR-STATE-01` đến `06`, `BR-STATE-*` | `LT-08`, `LT-13`, `LT-14` | `government:apply_policy` |
-| `UF-OBSERVATORY-01` | `UI-OBSERVATORY-01` đến `03` | `FR-ANALYTICS-01` đến `03`, `BR-PRICE-*` | `LT-05`, `LT-09`, `LT-11` | `market:snapshot` |
-| `UF-RECAP-01` | `UI-RECAP-01` đến `04` | `FR-ANALYTICS-04` đến `06` | `LT-03`, `LT-09` đến `LT-14` | Final round snapshot |
-| `UF-DEBRIEF-01` | `UI-DEBRIEF-01` | `FR-ANALYTICS-05` đến `07`, `FR-HISTORY-*` | `LT-10`, `LT-13` | Result REST/event |
-| `UF-PROFILE-01`, `02` | `UI-PROFILE-01` | `FR-PROFILE-*`, `FR-HISTORY-*` | Không áp dụng | REST profile/history |
-| `UF-RECOVERY-01`, `02` | Shared shell | `FR-GAME-03`, `FR-MARKET-05`, `07` | Không áp dụng | Reconnect/snapshot/bot events |
+| Flow                       | UI                                                                 | FR/BR                                      | Theory                                      | Interface chính                      |
+| -------------------------- | ------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------- | ------------------------------------ |
+| `UF-AUTH-01` đến `03`      | `UI-AUTH-01`                                                       | `FR-AUTH-01` đến `06`                      | Không áp dụng                               | REST auth                            |
+| `UF-HOME-01`, `02`         | `UI-HOME-01`, `UI-LOBBY-01`                                        | `FR-ROOM-01`, `02`, `08`                   | Không áp dụng                               | REST session/join                    |
+| `UF-PLAYER-01`             | `UI-LOBBY-01`                                                      | `FR-ROOM-03` đến `05`, `BR-ROLE-01`        | `LT-13`                                     | `participant:ready`, `role:assigned` |
+| `UF-TUTORIAL-01`           | Tutorial extension                                                 | `DELTA-SRS-01`                             | `LT-04`, `LT-08`, `LT-11`, `LT-13`          | Tutorial command/event               |
+| `UF-HOST-01` đến `03`      | `UI-HOST-01`                                                       | `FR-HOST-01` đến `06`                      | Không áp dụng                               | `host:*`, `session:state`            |
+| `UF-PRODUCER-01` đến `04`  | `UI-PRODUCER-01`, `UI-COMMODITY-01`, `UI-LABOR-01`, `UI-WALLET-01` | `FR-PRODUCER-01` đến `08`, `BR-VALUE-*`    | `LT-01`, `LT-03`, `LT-04`, `LT-05`, `LT-10` | `producer:*`, seller respond         |
+| `UF-CONSUMER-01`, `02`     | `UI-CONSUMER-01`, `UI-TRADE-01`, `UI-WALLET-01`                    | `FR-CONSUMER-01` đến `06`, `BR-TRADE-*`    | `LT-02`, `LT-06`, `LT-07`, `LT-11`, `LT-12` | `consumer:*`                         |
+| `UF-INTERMEDIARY-01`, `02` | `UI-INTERMEDIARY-01`, `UI-TRADE-01`                                | `FR-INTERMEDIARY-01` đến `05`              | `LT-13`, `LT-14`                            | `intermediary:*`                     |
+| `UF-STATE-01`              | `UI-STATE-01`                                                      | `FR-STATE-01` đến `06`, `BR-STATE-*`       | `LT-08`, `LT-13`, `LT-14`                   | `government:apply_policy`            |
+| `UF-OBSERVATORY-01`        | `UI-OBSERVATORY-01` đến `03`                                       | `FR-ANALYTICS-01` đến `03`, `BR-PRICE-*`   | `LT-05`, `LT-09`, `LT-11`                   | `market:snapshot`                    |
+| `UF-RECAP-01`              | `UI-RECAP-01` đến `04`                                             | `FR-ANALYTICS-04` đến `06`                 | `LT-03`, `LT-09` đến `LT-14`                | Final round snapshot                 |
+| `UF-DEBRIEF-01`            | `UI-DEBRIEF-01`                                                    | `FR-ANALYTICS-05` đến `07`, `FR-HISTORY-*` | `LT-10`, `LT-13`                            | Result REST/event                    |
+| `UF-PROFILE-01`, `02`      | `UI-PROFILE-01`                                                    | `FR-PROFILE-*`, `FR-HISTORY-*`             | Không áp dụng                               | REST profile/history                 |
+| `UF-RECOVERY-01`, `02`     | Shared shell                                                       | `FR-GAME-03`, `FR-MARKET-05`, `07`         | Không áp dụng                               | Reconnect/snapshot/bot events        |
 
 ---
 
@@ -1298,48 +1300,48 @@ participant:tutorial_progress {
 
 ### 16.1 Auth và entry
 
-| ID | Scenario | Expected interaction result |
-|---|---|---|
-| `UITC-AUTH-01` | Google login thành công từ QR deep link. | Sau auth quay lại đúng room join, không về Home chung. |
-| `UITC-AUTH-02` | User cancel Google. | Trở lại Auth, không hiện lỗi nghiêm trọng và không tạo account. |
-| `UITC-AUTH-03` | Email chưa verify. | Login bị chặn, có CTA gửi lại verification. |
-| `UITC-ROOM-01` | Join room full/expired/started. | Copy đúng từng lỗi, code vẫn ở input để sửa. |
-| `UITC-ROOM-02` | Host chưa đủ 4 hoặc có player chưa ready. | Start disabled và nói rõ guard chưa đạt. |
+| ID             | Scenario                                  | Expected interaction result                                     |
+| -------------- | ----------------------------------------- | --------------------------------------------------------------- |
+| `UITC-AUTH-01` | Google login thành công từ QR deep link.  | Sau auth quay lại đúng room join, không về Home chung.          |
+| `UITC-AUTH-02` | User cancel Google.                       | Trở lại Auth, không hiện lỗi nghiêm trọng và không tạo account. |
+| `UITC-AUTH-03` | Email chưa verify.                        | Login bị chặn, có CTA gửi lại verification.                     |
+| `UITC-ROOM-01` | Join room full/expired/started.           | Copy đúng từng lỗi, code vẫn ở input để sửa.                    |
+| `UITC-ROOM-02` | Host chưa đủ 4 hoặc có player chưa ready. | Start disabled và nói rõ guard chưa đạt.                        |
 
 ### 16.2 Tutorial và navigation
 
-| ID | Scenario | Expected interaction result |
-|---|---|---|
-| `UITC-TUTORIAL-01` | Lần đầu với role. | Không có Skip; phải qua đủ ba bước; server lưu progress; host không thể mở vòng 1 khi còn người chưa hoàn tất. |
-| `UITC-TUTORIAL-02` | Lần sau cùng role/scenario. | Có Skip và Xem lại; host thấy completed. |
-| `UITC-NAV-01` | Phase đổi khi đang đọc Observatory. | Không đổi route/focus; action cũ khóa; banner + CTA xuất hiện. |
-| `UITC-NAV-02` | Back trong dialog rồi role screen. | Lần đầu đóng dialog, lần sau về map; không rời session. |
-| `UITC-NAV-03` | Deep link route sai role. | Về map và hiện lý do, không có blank/403 page. |
+| ID                 | Scenario                            | Expected interaction result                                                                                    |
+| ------------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `UITC-TUTORIAL-01` | Lần đầu với role.                   | Không có Skip; phải qua đủ ba bước; server lưu progress; host không thể mở vòng 1 khi còn người chưa hoàn tất. |
+| `UITC-TUTORIAL-02` | Lần sau cùng role/scenario.         | Có Skip và Xem lại; host thấy completed.                                                                       |
+| `UITC-NAV-01`      | Phase đổi khi đang đọc Observatory. | Không đổi route/focus; action cũ khóa; banner + CTA xuất hiện.                                                 |
+| `UITC-NAV-02`      | Back trong dialog rồi role screen.  | Lần đầu đóng dialog, lần sau về map; không rời session.                                                        |
+| `UITC-NAV-03`      | Deep link route sai role.           | Về map và hiện lý do, không có blank/403 page.                                                                 |
 
 ### 16.3 Role flows
 
-| ID | Scenario | Expected interaction result |
-|---|---|---|
-| `UITC-PRODUCER-01` | Quantity vượt cap/thiếu vốn. | Control chặn ở max, CTA disabled, hiện lý do và cost. |
-| `UITC-PRODUCER-02` | Hủy sản xuất trước và sau listing. | Trước listing được phép/refund; sau listing bị khóa và giải thích. |
-| `UITC-PRODUCER-03` | Upgrade có hỗ trợ Nhà nước. | Hiện giá gốc, trợ cấp, số tiền thực trả và hiệu lực vòng sau. |
-| `UITC-CONSUMER-01` | Hai người mua unit cuối. | Một success; người còn lại thấy sold-out/stale và listing refresh. |
-| `UITC-CONSUMER-02` | Offer nhận counter khi phase sắp đóng. | Countdown rõ; hết giờ không accept được và trạng thái expired. |
-| `UITC-INTERMEDIARY-01` | Accept wholesale thành công. | Tiền giảm, inventory tăng, CTA niêm yết xuất hiện. |
-| `UITC-STATE-01` | Policy thiếu ngân sách/quá cửa sổ. | CTA disabled, lý do cụ thể; policy slot chưa bị dùng nếu server reject. |
-| `UITC-STATE-02` | Chọn Không can thiệp. | Confirm chi phí 0, card locked và recap ghi nhận. |
+| ID                     | Scenario                               | Expected interaction result                                             |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| `UITC-PRODUCER-01`     | Quantity vượt cap/thiếu vốn.           | Control chặn ở max, CTA disabled, hiện lý do và cost.                   |
+| `UITC-PRODUCER-02`     | Hủy sản xuất trước và sau listing.     | Trước listing được phép/refund; sau listing bị khóa và giải thích.      |
+| `UITC-PRODUCER-03`     | Upgrade có hỗ trợ Nhà nước.            | Hiện giá gốc, trợ cấp, số tiền thực trả và hiệu lực vòng sau.           |
+| `UITC-CONSUMER-01`     | Hai người mua unit cuối.               | Một success; người còn lại thấy sold-out/stale và listing refresh.      |
+| `UITC-CONSUMER-02`     | Offer nhận counter khi phase sắp đóng. | Countdown rõ; hết giờ không accept được và trạng thái expired.          |
+| `UITC-INTERMEDIARY-01` | Accept wholesale thành công.           | Tiền giảm, inventory tăng, CTA niêm yết xuất hiện.                      |
+| `UITC-STATE-01`        | Policy thiếu ngân sách/quá cửa sổ.     | CTA disabled, lý do cụ thể; policy slot chưa bị dùng nếu server reject. |
+| `UITC-STATE-02`        | Chọn Không can thiệp.                  | Confirm chi phí 0, card locked và recap ghi nhận.                       |
 
 ### 16.4 Realtime và result
 
-| ID | Scenario | Expected interaction result |
-|---|---|---|
-| `UITC-RT-01` | Offline 10 giây. | Reconnecting banner; không bot takeover; route giữ nguyên. |
-| `UITC-RT-02` | Offline 20 giây rồi reconnect. | Bot takeover, snapshot mới, read-only cho tới action boundary, sau đó reclaim. |
-| `UITC-RT-03` | Duplicate tab. | Tab cũ read-only và có copy giải thích. |
-| `UITC-RT-04` | Stale state khi confirm buy. | Pending kết thúc, data refresh, lỗi cụ thể; không tạo success toast. |
-| `UITC-RESULT-01` | Không có giao dịch vòng. | Chart gap và `COPY-NOPRICE-01`; không dùng listing price. |
-| `UITC-RESULT-02` | Actual ngược xu hướng. | Giữ actual data và dùng `COPY-RESULT-01`. |
-| `UITC-RESULT-03` | Session incomplete. | Chỉ vòng đã chốt, không badge, có `COPY-INCOMPLETE-01`. |
+| ID               | Scenario                       | Expected interaction result                                                    |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `UITC-RT-01`     | Offline 10 giây.               | Reconnecting banner; không bot takeover; route giữ nguyên.                     |
+| `UITC-RT-02`     | Offline 20 giây rồi reconnect. | Bot takeover, snapshot mới, read-only cho tới action boundary, sau đó reclaim. |
+| `UITC-RT-03`     | Duplicate tab.                 | Tab cũ read-only và có copy giải thích.                                        |
+| `UITC-RT-04`     | Stale state khi confirm buy.   | Pending kết thúc, data refresh, lỗi cụ thể; không tạo success toast.           |
+| `UITC-RESULT-01` | Không có giao dịch vòng.       | Chart gap và `COPY-NOPRICE-01`; không dùng listing price.                      |
+| `UITC-RESULT-02` | Actual ngược xu hướng.         | Giữ actual data và dùng `COPY-RESULT-01`.                                      |
+| `UITC-RESULT-03` | Session incomplete.            | Chỉ vòng đã chốt, không badge, có `COPY-INCOMPLETE-01`.                        |
 
 ### 16.5 Accessibility và responsive
 

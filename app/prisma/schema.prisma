@@ -1,0 +1,562 @@
+// Phiên chợ giá trị Online — data model (SRS MLN122 §10).
+// Money fields are integer VND (TECH-MONEY). IDs are UUIDs.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum AuthProvider {
+  GOOGLE
+  EMAIL
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum SessionStatus {
+  CREATED
+  LOBBY
+  INTRO
+  ROUND_1
+  ROUND_2
+  ROUND_3
+  ROUND_4
+  DEBRIEF
+  COMPLETED
+  INCOMPLETE
+  CANCELLED
+}
+
+enum RoundPhase {
+  EVENT
+  DECISION
+  MARKET_OPEN
+  SETTLEMENT
+  RECAP
+}
+
+enum Role {
+  PRODUCER
+  CONSUMER
+  INTERMEDIARY
+  GOVERNMENT
+}
+
+enum ControlMode {
+  HUMAN
+  BOT_TAKEOVER
+  BOT_PERMANENT
+  READ_ONLY_DUPLICATE_TAB
+}
+
+enum Presence {
+  ONLINE
+  OFFLINE
+}
+
+enum ProductivityProfile {
+  TRADITIONAL
+  SOCIAL_AVERAGE
+  PIONEER
+}
+
+enum EventType {
+  BASELINE
+  BUMPER_HARVEST
+  VIRAL
+  TECH_DIFFUSION
+}
+
+enum OwnerType {
+  PARTICIPANT
+}
+
+enum LedgerEntryType {
+  INITIAL_CAPITAL
+  PRODUCTION_COST
+  UPGRADE_COST
+  SALE_REVENUE
+  PURCHASE_COST
+  WHOLESALE_REVENUE
+  WHOLESALE_COST
+  SUBSIDY
+  POLICY_COST
+  EXPORT_REVENUE
+}
+
+enum InventoryStatus {
+  AVAILABLE
+  RESERVED_LISTING
+  RESERVED_WHOLESALE
+  AT_RISK
+  SPOILED
+  CARRIED
+  SOLD
+}
+
+enum ProtectionState {
+  NONE
+  PROTECTED
+}
+
+enum ListingStatus {
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CLOSED
+  EXPIRED
+}
+
+enum SellerType {
+  PRODUCER
+  INTERMEDIARY
+}
+
+enum BuyerType {
+  CONSUMER
+  INTERMEDIARY
+  SYSTEM_EXPORT
+}
+
+enum OfferStatus {
+  OPEN
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum WholesaleStatus {
+  OPEN
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransactionChannel {
+  RETAIL_DIRECT
+  RETAIL_INTERMEDIARY
+  WHOLESALE
+  SYSTEM_EXPORT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum PolicyType {
+  INFO_DISCLOSURE
+  COLD_STORAGE
+  EXPORT_PROMOTION
+  TECH_SUPPORT
+  NONE
+}
+
+enum PolicyStatus {
+  PENDING
+  APPLIED
+  FAILED
+}
+
+enum BadgeType {
+  EFFICIENT_PRODUCER
+  WISE_CONSUMER
+  MARKET_CONNECTOR
+  BALANCED_REGULATOR
+}
+
+// ───────────────────────── Identity ─────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime?
+  displayName   String
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  authIdentities     AuthIdentity[]
+  verificationTokens VerificationToken[]
+  hostedSessions     GameSession[]       @relation("HostSessions")
+  participants       Participant[]
+}
+
+model AuthIdentity {
+  id              String       @id @default(uuid())
+  userId          String
+  provider        AuthProvider
+  providerSubject String
+  passwordHash    String?
+  verifiedAt      DateTime?
+  createdAt       DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+}
+
+model VerificationToken {
+  id        String                @id @default(uuid())
+  userId    String
+  type      VerificationTokenType
+  tokenHash String                @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ───────────────────────── Session core ─────────────────────────
+
+model GameSession {
+  id              String        @id @default(uuid())
+  code            String        @unique
+  hostUserId      String
+  status          SessionStatus @default(CREATED)
+  scenarioVersion String        @default("dragon-fruit-v1")
+  maxPlayers      Int           @default(10)
+  currentRound    Int           @default(0)
+  phase            RoundPhase?
+  phaseEndsAt      DateTime?
+  phaseExtensions  Int          @default(0)
+  paused           Boolean      @default(false)
+  pausedRemainingMs Int?
+  stateVersion     Int          @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  startedAt       DateTime?
+  endedAt         DateTime?
+
+  host            User             @relation("HostSessions", fields: [hostUserId], references: [id])
+  participants    Participant[]
+  rounds          Round[]
+  wallets         Wallet[]
+  ledgerEntries   LedgerEntry[]
+  inventoryLots   InventoryLot[]
+  transactions    Transaction[]
+  result          SessionResult?
+  badges          Badge[]
+  idempotency     IdempotencyRecord[]
+
+  @@index([hostUserId])
+  @@index([status])
+}
+
+model Participant {
+  id                  String               @id @default(uuid())
+  sessionId           String
+  userId              String?
+  displayNameSnapshot String
+  avatarSnapshot      String?
+  role                Role?
+  productivityProfile ProductivityProfile?
+  isBot               Boolean              @default(false)
+  controlMode         ControlMode          @default(HUMAN)
+  presence            Presence             @default(OFFLINE)
+  ready               Boolean              @default(false)
+  tutorialCompleted   Boolean              @default(false)
+  lastSeenAt          DateTime?
+  createdAt           DateTime             @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  roleStates    RoleState[]
+  wallet        Wallet?
+  inventoryLots InventoryLot[]
+  badges        Badge[]
+  idempotency   IdempotencyRecord[]
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+}
+
+model ScenarioConfig {
+  version   String   @id
+  config    Json
+  createdAt DateTime @default(now())
+}
+
+model Round {
+  id              String     @id @default(uuid())
+  sessionId       String
+  number          Int
+  eventType       EventType
+  socialLaborTime Int
+  unitValueVnd    Int
+  phase           RoundPhase @default(EVENT)
+  startedAt       DateTime?
+  settledAt       DateTime?
+  createdAt       DateTime   @default(now())
+
+  session         GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roleStates      RoleState[]
+  listings        Listing[]
+  wholesaleOffers WholesaleOffer[]
+  transactions    Transaction[]
+  policyActions   PolicyAction[]
+  snapshots       MarketSnapshot[]
+  ledgerEntries   LedgerEntry[]
+
+  @@unique([sessionId, number])
+  @@index([sessionId])
+}
+
+model RoleState {
+  id            String   @id @default(uuid())
+  participantId String
+  roundId       String
+  role          Role
+  state         Json
+  version       Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  round       Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, roundId])
+}
+
+// ───────────────────────── Money & inventory ─────────────────────────
+
+model Wallet {
+  id            String    @id @default(uuid())
+  ownerType     OwnerType @default(PARTICIPANT)
+  participantId String    @unique
+  sessionId     String
+  balanceVnd    Int       @default(0)
+  version       Int       @default(0)
+
+  participant   Participant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  session       GameSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+
+  @@index([sessionId])
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  sessionId     String
+  roundId       String?
+  walletId      String
+  type          LedgerEntryType
+  amountVnd     Int
+  referenceType String?
+  referenceId   String?
+  createdAt     DateTime        @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  round   Round?      @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  wallet  Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([sessionId])
+}
+
+model InventoryLot {
+  id                String          @id @default(uuid())
+  sessionId         String
+  roundIdProduced   String
+  ownerParticipantId String
+  quantity          Int
+  availableQuantity Int
+  status            InventoryStatus @default(AVAILABLE)
+  unitCostVnd       Int
+  protectionState   ProtectionState @default(NONE)
+  createdAt         DateTime        @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  owner   Participant @relation(fields: [ownerParticipantId], references: [id], onDelete: Cascade)
+
+  listings        Listing[]
+  wholesaleOffers WholesaleOffer[]
+
+  @@index([sessionId])
+  @@index([ownerParticipantId])
+}
+
+// ───────────────────────── Market ─────────────────────────
+
+model Listing {
+  id                 String        @id @default(uuid())
+  roundId            String
+  sellerParticipantId String
+  sellerType         SellerType
+  inventoryLotId     String
+  quantity           Int
+  availableQuantity  Int
+  askPriceVnd        Int
+  status             ListingStatus @default(OPEN)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  round        Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  inventoryLot InventoryLot @relation(fields: [inventoryLotId], references: [id], onDelete: Cascade)
+  offers       Offer[]
+
+  @@index([roundId])
+}
+
+model Offer {
+  id                String      @id @default(uuid())
+  listingId         String?
+  fromParticipantId String
+  toParticipantId   String
+  quantity          Int
+  offerPriceVnd     Int
+  status            OfferStatus @default(OPEN)
+  parentOfferId     String?
+  expiresAt         DateTime
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  listing     Listing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  parentOffer Offer?   @relation("OfferChain", fields: [parentOfferId], references: [id], onDelete: SetNull)
+  childOffers Offer[]  @relation("OfferChain")
+
+  @@index([listingId])
+}
+
+model WholesaleOffer {
+  id              String          @id @default(uuid())
+  roundId         String
+  producerId      String
+  intermediaryId  String?
+  inventoryLotId  String
+  quantity        Int
+  minimumPriceVnd Int
+  counterPriceVnd Int?
+  status          WholesaleStatus @default(OPEN)
+  expiresAt       DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  round        Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  inventoryLot InventoryLot @relation(fields: [inventoryLotId], references: [id], onDelete: Cascade)
+
+  @@index([roundId])
+}
+
+model Transaction {
+  id             String             @id @default(uuid())
+  sessionId      String
+  roundId        String
+  channel        TransactionChannel
+  buyerType      BuyerType
+  buyerId        String?
+  sellerId       String
+  quantity       Int
+  unitPriceVnd   Int
+  totalPriceVnd  Int
+  status         TransactionStatus  @default(COMPLETED)
+  clientActionId String?
+  completedAt    DateTime           @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  round   Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([roundId])
+}
+
+model PolicyAction {
+  id                 String       @id @default(uuid())
+  roundId            String
+  stateParticipantId String
+  policyType         PolicyType
+  targetIds          String[]
+  fixedCostVnd       Int          @default(0)
+  variableCostVnd    Int          @default(0)
+  status             PolicyStatus @default(PENDING)
+  appliedAt          DateTime?
+  createdAt          DateTime     @default(now())
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId])
+}
+
+// ───────────────────────── Analytics & results ─────────────────────────
+
+model MarketSnapshot {
+  id                           String   @id @default(uuid())
+  roundId                      String
+  stateVersion                 Int
+  supplyQuantity               Int      @default(0)
+  demandQuantity               Int      @default(0)
+  retailSoldQuantity           Int      @default(0)
+  wholesaleQuantity            Int      @default(0)
+  spoiledQuantity              Int      @default(0)
+  unitValueVnd                 Int
+  marketPriceNumeratorVndUnits Int      @default(0)
+  marketPriceDenominatorUnits  Int      @default(0)
+  marketPriceVnd               Int?
+  isFinal                      Boolean  @default(false)
+  capturedAt                   DateTime @default(now())
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId])
+}
+
+model SessionResult {
+  sessionId           String        @id
+  scenarioVersion     String
+  status              SessionStatus
+  roundSnapshotIds    String[]
+  participantOutcomes Json
+  badges              Json
+  completedAt         DateTime      @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Badge {
+  id            String    @id @default(uuid())
+  sessionId     String
+  participantId String
+  type          BadgeType
+  metrics       Json
+  awardedAt     DateTime  @default(now())
+
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  participantId  String
+  sessionId      String
+  clientActionId String
+  requestHash    String
+  response       Json?
+  createdAt      DateTime @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  session     GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, clientActionId])
+}
