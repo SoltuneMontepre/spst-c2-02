@@ -27,17 +27,14 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN apk add --no-cache openssl \
-    && npm install -g prisma@7.8.0 \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x docker-entrypoint.sh && chown nextjs:nodejs prisma prisma.config.ts docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh && chown nextjs:nodejs docker-entrypoint.sh
 
 USER nextjs
 EXPOSE 3000
