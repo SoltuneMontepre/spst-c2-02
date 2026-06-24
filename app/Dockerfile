@@ -1,19 +1,26 @@
+# syntax=docker/dockerfile:1
 # Phiên chợ giá trị — production image
 FROM oven/bun:1.2 AS deps
 WORKDIR /app
 COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=locked \
+    bun install --frozen-lockfile
 
 FROM oven/bun:1.2 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY package.json bun.lock* ./
+# Prisma layer caches when schema/config unchanged (src/generated is not in git).
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 ENV NEXT_TELEMETRY_DISABLED=1
-# prisma.config.ts loads DIRECT_URL at generate time; no real DB needed in build.
 ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
 ENV DIRECT_URL="postgresql://build:build@127.0.0.1:5432/build"
 RUN bunx prisma generate
-RUN bun run build
+
+COPY . .
+RUN --mount=type=cache,target=/app/.next/cache,sharing=locked \
+    bun run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

@@ -60,8 +60,14 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
+          provenance: false
+          sbom: false
 
       - name: Check out medifab (FluxCD manifests)
         uses: actions/checkout@v4
@@ -72,9 +78,7 @@ jobs:
           path: medifab
 
       - name: Install yq
-        run: |
-          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod +x /usr/local/bin/yq
+        uses: mikefarah/yq@v4.47.1
 
       - name: Update image tag in Flux overlay
         env:

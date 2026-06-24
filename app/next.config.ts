@@ -3,9 +3,16 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactCompiler: true,
   output: "standalone",
-  // Prisma 7 client lives outside node_modules — include in standalone trace.
   outputFileTracingIncludes: {
     "/*": ["./src/generated/prisma/**/*"],
+  },
+  // Faster builds + smaller bundles (tree-shake icon packs).
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "react-icons",
+      "@tanstack/react-query",
+    ],
   },
 };
 
