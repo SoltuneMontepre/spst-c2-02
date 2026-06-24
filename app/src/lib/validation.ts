@@ -59,15 +59,33 @@ const priceVndSchema = z
 
 const quantitySchema = z.number().int().min(1).max(20);
 const clientActionId = z.string().uuid();
+const expectedStateVersion = z.number().int().min(0).optional();
 
-// WebSocket / command payloads
 export const produceSchema = z.object({
   clientActionId,
+  expectedStateVersion,
   quantity: z.number().int().min(0).max(20),
+});
+
+export const cancelProductionSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+});
+
+export const investSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+});
+
+export const closeListingSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+  listingId: z.string().uuid(),
 });
 
 export const listSchema = z.object({
   clientActionId,
+  expectedStateVersion,
   inventoryLotId: z.string().uuid(),
   quantity: quantitySchema,
   askPriceVnd: priceVndSchema,
@@ -75,12 +93,14 @@ export const listSchema = z.object({
 
 export const buySchema = z.object({
   clientActionId,
+  expectedStateVersion,
   listingId: z.string().uuid(),
   quantity: quantitySchema,
 });
 
 export const offerSchema = z.object({
   clientActionId,
+  expectedStateVersion,
   listingId: z.string().uuid(),
   quantity: quantitySchema,
   offerPriceVnd: priceVndSchema,
@@ -88,13 +108,31 @@ export const offerSchema = z.object({
 
 export const respondOfferSchema = z.object({
   clientActionId,
+  expectedStateVersion,
   offerId: z.string().uuid(),
-  action: z.enum(["ACCEPT", "REJECT", "COUNTER"]),
+  decision: z.enum(["ACCEPT", "REJECT", "COUNTER"]),
   counterPriceVnd: priceVndSchema.optional(),
+});
+
+export const respondWholesaleSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+  offerId: z.string().uuid(),
+  decision: z.enum(["ACCEPT", "REJECT", "COUNTER"]),
+  counterPriceVnd: priceVndSchema.optional(),
+});
+
+export const wholesaleCreateSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+  inventoryLotId: z.string().uuid(),
+  quantity: quantitySchema,
+  minimumPriceVnd: priceVndSchema,
 });
 
 export const applyPolicySchema = z.object({
   clientActionId,
+  expectedStateVersion,
   policyType: z.enum([
     "INFO_DISCLOSURE",
     "COLD_STORAGE",

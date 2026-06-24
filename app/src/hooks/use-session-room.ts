@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "./use-api";
-import type { SessionSnapshot } from "@/lib/session-service";
+import type { SessionSnapshot, SessionResultView } from "@/lib/session-service";
 
 interface CreatedSession {
   id: string;
@@ -36,6 +36,16 @@ export function useSessionSnapshot(sessionId: string) {
     queryKey: ["session", sessionId],
     queryFn: () => apiFetch<SessionSnapshot>(`/api/sessions/${sessionId}`),
     refetchInterval: 15000, // backup; SSE drives most updates
+  });
+}
+
+export function useSessionResult(sessionId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["session", sessionId, "result"],
+    queryFn: () => apiFetch<SessionResultView>(`/api/sessions/${sessionId}/result`),
+    enabled,
+    refetchInterval: (q) =>
+      q.state.data?.status === "DEBRIEF" ? 5000 : false,
   });
 }
 

@@ -1,0 +1,102 @@
+# Builds the app image from this repo, pushes to Docker Hub, then commits the
+# image tag update to SoltuneMontepre/medifab (FluxCD GitOps on k3s).
+#
+# Required GitHub secrets (org or repo):
+#   DOPPLER_TOKEN          — Doppler service token (ci config: Docker Hub creds)
+#   MEDIFAB_DEPLOY_TOKEN   — PAT or GitHub App token with contents:write on medifab
+name: "thanh-long-market-cd"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thanh-long-market-cd
+  cancel-in-progress: false
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/cd.yml"
+  workflow_dispatch:
+
+env:
+  WORKING_DIRECTORY: app
+  IMAGE: docker.io/soltunemontepre/thanh-long-market
+  MEDIFAB_REPO: SoltuneMontepre/medifab
+  MEDIFAB_OVERLAY: src/infra/clusters/environments/lims/apps/thanh-long
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out app repository
+        uses: actions/checkout@v4
+
+      - name: Fetch secrets from Doppler (ci — Docker Hub)
+        uses: dopplerhq/secrets-fetch-action@v2.0.0
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN }}
+          inject-env-vars: true
+          doppler-config: ci
+          doppler-project: medifab
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.WORKING_DIRECTORY }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check out medifab (FluxCD manifests)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIFAB_REPO }}
+          token: ${{ secrets.MEDIFAB_DEPLOY_TOKEN }}
+          ref: main
+          path: medifab
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Update image tag in Flux overlay
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          OVERLAY="medifab/${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml"
+          test -f "$OVERLAY" || { echo "Missing $OVERLAY — merge thanh-long Flux manifests into medifab main first."; exit 1; }
+          yq -i '(.images[] | select(.name == "${{ env.IMAGE }}") | .newTag) = strenv(SHA)' "$OVERLAY"
+
+      - name: Commit and push manifest update to medifab
+        working-directory: medifab
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_REPO: ${{ github.repository }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml"
+          if git diff --cached --quiet; then
+            echo "Image tag already at $SOURCE_SHA — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(cd): update thanh-long-market image to ${SOURCE_SHA} (from ${SOURCE_REPO})"
+          git pull --rebase origin main
+          git push

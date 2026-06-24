@@ -2,9 +2,10 @@ import type { Role, ControlMode, Presence } from "@/generated/prisma/enums";
 import type { Presence as PresenceEnum } from "@/generated/prisma/enums";
 import { db } from "./db";
 import { ApiError, generateRoomCode } from "./api";
-import { MAX_PLAYERS, SCENARIO_VERSION } from "./scenario";
+import { MAX_PLAYERS, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS } from "./scenario";
 import { maybeAutoAdvance } from "./game-service";
 import { publish } from "./events";
+import type { ParticipantOutcome } from "./finalize";
 
 /** Bump stateVersion and broadcast so all members refresh immediately. */
 async function bumpAndPublish(
@@ -72,7 +73,13 @@ export async function createSession(hostUserId: string): Promise<CreatedSession>
     });
     if (clash) continue;
     const created = await db.gameSession.create({
-      data: { code, hostUserId, status: "LOBBY", scenarioVersion: SCENARIO_VERSION },
+      data: {
+        code,
+        hostUserId,
+        status: "LOBBY",
+        scenarioVersion: SCENARIO_VERSION,
+        autoHost: true,
+      },
       select: { id: true, code: true },
     });
     return created;
@@ -96,6 +103,24 @@ export async function joinSession(
     orderBy: { createdAt: "desc" },
   });
   if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
+
+  const expiredAt = new Date(
+    (session.endedAt ?? session.createdAt).getTime() +
+      ROOM_CODE_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
+  if (
+    Date.now() > expiredAt.getTime() &&
+    ["COMPLETED", "INCOMPLETE", "CANCELLED"].includes(session.status)
+  ) {
+    throw new ApiError("ROOM_EXPIRED", 410);
+  }
+  if (
+    session.status === "LOBBY" &&
+    Date.now() - session.createdAt.getTime() > ROOM_CODE_EXPIRY_HOURS * 60 * 60 * 1000
+  ) {
+    throw new ApiError("ROOM_EXPIRED", 410);
+  }
+
   if (session.hostUserId === userId) {
     throw new ApiError("HOST_CANNOT_JOIN", 409, "Host không chiếm ghế người chơi");
   }
@@ -134,11 +159,50 @@ export interface ParticipantView {
   displayName: string;
   avatarUrl: string | null;
   role: Role | null;
+  productivityProfile: string | null;
   isBot: boolean;
   presence: Presence;
   ready: boolean;
+  phaseReady: boolean;
   controlMode: ControlMode;
   isSelf: boolean;
+}
+
+export interface InventoryView {
+  id: string;
+  availableQuantity: number;
+  unitCostVnd: number;
+  status: string;
+}
+
+export interface ListingView {
+  id: string;
+  sellerName: string;
+  sellerType: string;
+  askPriceVnd: number;
+  availableQuantity: number;
+  isOwn: boolean;
+}
+
+export interface OfferView {
+  id: string;
+  listingId: string | null;
+  fromName: string;
+  toName: string;
+  quantity: number;
+  offerPriceVnd: number;
+  status: string;
+  isIncoming: boolean;
+}
+
+export interface WholesaleView {
+  id: string;
+  producerName: string;
+  quantity: number;
+  minimumPriceVnd: number;
+  counterPriceVnd: number | null;
+  status: string;
+  isOwn: boolean;
 }
 
 export interface SelfState {
@@ -147,6 +211,25 @@ export interface SelfState {
   isBot: boolean;
   balanceVnd: number | null;
   roleState: unknown;
+  inventory: InventoryView[];
+  listings: ListingView[];
+  incomingOffers: OfferView[];
+  outgoingOffers: OfferView[];
+}
+
+export interface MarketView {
+  listings: ListingView[];
+  wholesaleOffers: WholesaleView[];
+}
+
+export interface RoundAnalytics {
+  number: number;
+  unitValueVnd: number;
+  marketPriceVnd: number | null;
+  supplyQuantity: number;
+  demandQuantity: number;
+  retailSoldQuantity: number;
+  spoiledQuantity: number;
 }
 
 export interface SessionSnapshot {
@@ -159,9 +242,29 @@ export interface SessionSnapshot {
   currentRound: number;
   stateVersion: number;
   maxPlayers: number;
+  autoHost: boolean;
+  aiNarration: string | null;
   isHost: boolean;
   participants: ParticipantView[];
   self: SelfState | null;
+  market: MarketView | null;
+  analytics: RoundAnalytics[];
+}
+
+export interface BadgeView {
+  participantId: string;
+  displayName: string;
+  type: string;
+}
+
+export interface SessionResultView {
+  status: string;
+  narration: string | null;
+  outcomes: ParticipantOutcome[];
+  badges: BadgeView[];
+  analytics: RoundAnalytics[];
+  selfOutcome: ParticipantOutcome | null;
+  selfBadges: BadgeView[];
 }
 
 /** Role-filtered snapshot (FR-MARKET-07, TECH-PRIVACY). */
@@ -171,6 +274,7 @@ export async function getSnapshot(
 ): Promise<SessionSnapshot> {
   // Serverless-safe: advance the phase machine if a timer elapsed.
   await maybeAutoAdvance(sessionId);
+  void import("./ai-host").then((m) => m.maybeFastForwardPhase(sessionId));
 
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
@@ -182,7 +286,22 @@ export async function getSnapshot(
   const selfParticipant = session.participants.find((p) => p.userId === userId);
   if (!isHost && !selfParticipant) throw new ApiError("FORBIDDEN", 403);
 
-  const self = await buildSelfState(selfParticipant?.id, session.currentRound);
+  const nameById = new Map(
+    session.participants.map((p) => [p.id, p.displayNameSnapshot]),
+  );
+  const self = await buildSelfState(
+    selfParticipant?.id,
+    session.currentRound,
+    nameById,
+  );
+  const market = await buildMarket(
+    session.id,
+    session.currentRound,
+    session.phase,
+    selfParticipant?.id,
+    nameById,
+  );
+  const analytics = await buildAnalytics(session.id);
 
   return {
     id: session.id,
@@ -194,16 +313,22 @@ export async function getSnapshot(
     currentRound: session.currentRound,
     stateVersion: session.stateVersion,
     maxPlayers: session.maxPlayers,
+    autoHost: session.autoHost,
+    aiNarration: session.aiNarration,
     isHost,
     self,
+    market,
+    analytics,
     participants: session.participants.map((p) => ({
       id: p.id,
       displayName: p.displayNameSnapshot,
       avatarUrl: p.avatarSnapshot,
       role: p.role,
+      productivityProfile: p.productivityProfile,
       isBot: p.isBot,
       presence: p.presence,
       ready: p.ready,
+      phaseReady: p.phaseReady,
       controlMode: p.controlMode,
       isSelf: p.userId === userId,
     })),
@@ -213,6 +338,7 @@ export async function getSnapshot(
 async function buildSelfState(
   participantId: string | undefined,
   currentRound: number,
+  nameById: Map<string, string>,
 ): Promise<SelfState | null> {
   if (!participantId) return null;
   const participant = await db.participant.findUnique({
@@ -223,12 +349,115 @@ async function buildSelfState(
     },
   });
   if (!participant) return null;
+
+  const lots = await db.inventoryLot.findMany({
+    where: {
+      ownerParticipantId: participantId,
+      availableQuantity: { gt: 0 },
+      status: { in: ["AVAILABLE", "CARRIED"] },
+    },
+  });
+  const ownListings = currentRound
+    ? await db.listing.findMany({
+        where: {
+          sellerParticipantId: participantId,
+          round: { number: currentRound },
+          status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+        },
+      })
+    : [];
+
+  const offers =
+    currentRound && participantId
+      ? await db.offer.findMany({
+          where: {
+            status: { in: ["OPEN"] },
+            OR: [{ fromParticipantId: participantId }, { toParticipantId: participantId }],
+            listing: { round: { sessionId: participant.sessionId, number: currentRound } },
+          },
+          include: {
+            listing: { select: { id: true } },
+          },
+        })
+      : [];
+
+  const mapOffer = (o: (typeof offers)[0]): OfferView => ({
+    id: o.id,
+    listingId: o.listingId,
+    fromName: nameById.get(o.fromParticipantId) ?? "?",
+    toName: nameById.get(o.toParticipantId) ?? "?",
+    quantity: o.quantity,
+    offerPriceVnd: o.offerPriceVnd,
+    status: o.status,
+    isIncoming: o.toParticipantId === participantId,
+  });
+
   return {
     participantId: participant.id,
     role: participant.role,
     isBot: participant.isBot,
     balanceVnd: participant.wallet?.balanceVnd ?? null,
     roleState: participant.roleStates[0]?.state ?? null,
+    inventory: lots.map((l) => ({
+      id: l.id,
+      availableQuantity: l.availableQuantity,
+      unitCostVnd: l.unitCostVnd,
+      status: l.status,
+    })),
+    listings: ownListings.map((l) => ({
+      id: l.id,
+      sellerName: nameById.get(l.sellerParticipantId) ?? "?",
+      sellerType: l.sellerType,
+      askPriceVnd: l.askPriceVnd,
+      availableQuantity: l.availableQuantity,
+      isOwn: true,
+    })),
+    incomingOffers: offers.filter((o) => o.toParticipantId === participantId).map(mapOffer),
+    outgoingOffers: offers.filter((o) => o.fromParticipantId === participantId).map(mapOffer),
+  };
+}
+
+async function buildMarket(
+  sessionId: string,
+  currentRound: number,
+  phase: string | null,
+  selfId: string | undefined,
+  nameById: Map<string, string>,
+): Promise<MarketView | null> {
+  if (!currentRound || (phase !== "MARKET_OPEN" && phase !== "SETTLEMENT")) return null;
+  const listings = await db.listing.findMany({
+    where: {
+      round: { sessionId, number: currentRound },
+      status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+      availableQuantity: { gt: 0 },
+    },
+    orderBy: { askPriceVnd: "asc" },
+  });
+  const wholesaleOffers = await db.wholesaleOffer.findMany({
+    where: {
+      round: { sessionId, number: currentRound },
+      status: { in: ["OPEN", "COUNTERED"] },
+    },
+    orderBy: { minimumPriceVnd: "asc" },
+  });
+  return {
+    listings: listings.map((l) => ({
+      id: l.id,
+      sellerName: nameById.get(l.sellerParticipantId) ?? "?",
+      sellerType: l.sellerType,
+      askPriceVnd: l.askPriceVnd,
+      availableQuantity: l.availableQuantity,
+      isOwn: l.sellerParticipantId === selfId,
+    })),
+    wholesaleOffers: wholesaleOffers.map((w) => ({
+      id: w.id,
+      producerName: nameById.get(w.producerId) ?? "?",
+      quantity: w.quantity,
+      minimumPriceVnd: w.minimumPriceVnd,
+      counterPriceVnd: w.counterPriceVnd,
+      status: w.status,
+      isOwn: w.producerId === selfId,
+    })),
   };
 }
 
@@ -288,6 +517,76 @@ export async function setReady(
   });
   if (updated.count === 0) throw new ApiError("FORBIDDEN", 403);
   await bumpAndPublish(sessionId, "participant:ready", { userId, ready });
+  void import("./ai-host").then((m) => m.maybeAutoStartLobby(sessionId));
+}
+
+/** Final per-round market snapshots for the observatory/recap (FR-ANALYTICS). */
+async function buildAnalytics(sessionId: string): Promise<RoundAnalytics[]> {
+  const snapshots = await db.marketSnapshot.findMany({
+    where: { isFinal: true, round: { sessionId } },
+    include: { round: { select: { number: true } } },
+    orderBy: { round: { number: "asc" } },
+  });
+  return snapshots.map((s) => ({
+    number: s.round.number,
+    unitValueVnd: s.unitValueVnd,
+    marketPriceVnd: s.marketPriceVnd,
+    supplyQuantity: s.supplyQuantity,
+    demandQuantity: s.demandQuantity,
+    retailSoldQuantity: s.retailSoldQuantity,
+    spoiledQuantity: s.spoiledQuantity,
+  }));
+}
+
+const RESULT_STATUSES = ["DEBRIEF", "COMPLETED", "INCOMPLETE"] as const;
+
+/** Final scores, badges, and narration (SRS §5.9). */
+export async function getSessionResult(
+  userId: string,
+  sessionId: string,
+): Promise<SessionResultView> {
+  const session = await db.gameSession.findUnique({
+    where: { id: sessionId },
+    include: { participants: { orderBy: { createdAt: "asc" } } },
+  });
+  if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
+
+  const isHost = session.hostUserId === userId;
+  const selfParticipant = session.participants.find((p) => p.userId === userId);
+  if (!isHost && !selfParticipant) throw new ApiError("FORBIDDEN", 403);
+  if (!RESULT_STATUSES.includes(session.status as (typeof RESULT_STATUSES)[number])) {
+    throw new ApiError("RESULT_NOT_READY", 409);
+  }
+
+  const result = await db.sessionResult.findUnique({ where: { sessionId } });
+  if (!result) throw new ApiError("RESULT_NOT_READY", 404);
+
+  const dbBadges = await db.badge.findMany({
+    where: { sessionId },
+    include: { participant: { select: { displayNameSnapshot: true } } },
+  });
+  const nameById = new Map(
+    session.participants.map((p) => [p.id, p.displayNameSnapshot]),
+  );
+  const badges: BadgeView[] = dbBadges.map((b) => ({
+    participantId: b.participantId,
+    displayName: b.participant.displayNameSnapshot,
+    type: b.type,
+  }));
+
+  const outcomes = result.participantOutcomes as unknown as ParticipantOutcome[];
+  const selfId = selfParticipant?.id;
+  const analytics = await buildAnalytics(sessionId);
+
+  return {
+    status: session.status,
+    narration: result.narration,
+    outcomes,
+    badges,
+    analytics,
+    selfOutcome: selfId ? outcomes.find((o) => o.participantId === selfId) ?? null : null,
+    selfBadges: selfId ? badges.filter((b) => b.participantId === selfId) : [],
+  };
 }
 
 /** Leave a room — only frees a seat while in LOBBY (§4.4). */

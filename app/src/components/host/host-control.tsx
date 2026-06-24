@@ -9,6 +9,8 @@ import { useHostControl } from "@/hooks/use-host-control";
 import { PhaseBanner } from "@/components/session/phase-banner";
 import { LobbyRoster } from "@/components/lobby/lobby-roster";
 import { HostControls } from "./host-controls";
+import { PriceValueChart } from "@/components/observatory/price-value-chart";
+import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { STATUS_LABELS } from "@/lib/labels";
 
 const ENDED = ["COMPLETED", "INCOMPLETE", "CANCELLED"];
@@ -30,7 +32,7 @@ export function HostControl({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 p-6">
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Điều phối phiên · {STATUS_LABELS[data.status]}</CardTitle>
@@ -43,6 +45,8 @@ export function HostControl({ sessionId }: { sessionId: string }) {
               phase={data.phase}
               phaseEndsAt={data.phaseEndsAt}
               paused={data.paused}
+              aiNarration={data.aiNarration}
+              autoHost={data.autoHost}
             />
           ) : null}
           <HostControls
@@ -50,19 +54,37 @@ export function HostControl({ sessionId }: { sessionId: string }) {
             phase={data.phase}
             paused={data.paused}
             pending={host.isPending}
+            autoHost={data.autoHost}
             onAction={(action) => host.mutate(action)}
           />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Người chơi</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LobbyRoster participants={data.participants} />
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Người chơi</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LobbyRoster participants={data.participants} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Tháp quan sát (projector)</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <PriceValueChart rounds={data.analytics} />
+            {data.analytics.length > 0 ? (
+              <SupplyDemandMeter
+                supply={data.analytics[data.analytics.length - 1].supplyQuantity}
+                demand={data.analytics[data.analytics.length - 1].demandQuantity}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

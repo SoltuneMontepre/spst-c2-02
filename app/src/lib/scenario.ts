@@ -2,6 +2,7 @@
 // These live in config, never hard-coded across the client; host/users cannot edit.
 
 import type { ProductivityProfile, EventType } from "@/generated/prisma/enums";
+import type { Role } from "@/generated/prisma/enums";
 
 export const SCENARIO_VERSION = "dragon-fruit-v1";
 
@@ -56,9 +57,37 @@ export const ROLE_DISTRIBUTION: Record<
 
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 10;
-// Minimum humans required to start; bots fill all remaining roles (enables
-// solo testing and small classes). SRS targets 4-10 humans (MIN_PLAYERS).
-export const START_MIN_HUMANS = 1;
+/** Minimum humans to start (SRS FR-HOST-01). Bots fill remaining slots. */
+export const START_MIN_HUMANS = MIN_PLAYERS;
+
+/** Room code expires after 24h if not started, or 24h after completion (FR-ROOM-08). */
+export const ROOM_CODE_EXPIRY_HOURS = 24;
+
+/** Target role counts for a session with `humanCount` humans (SRS §3.2). */
+export function compositionTarget(humanCount: number): Record<Role, number> {
+  const slots = compositionSlots(humanCount);
+  return slots.reduce(
+    (acc, role) => {
+      acc[role]++;
+      return acc;
+    },
+    { PRODUCER: 0, CONSUMER: 0, INTERMEDIARY: 0, GOVERNMENT: 0 } as Record<Role, number>,
+  );
+}
+
+/** Ordered full role slots for a session (producers, consumers, intermediary, government). */
+export function compositionSlots(humanCount: number): Role[] {
+  const dist =
+    humanCount >= MIN_PLAYERS && humanCount <= 10
+      ? ROLE_DISTRIBUTION[humanCount]
+      : { producer: 2, consumer: 2 };
+  return [
+    ...Array<Role>(dist.producer).fill("PRODUCER"),
+    ...Array<Role>(dist.consumer).fill("CONSUMER"),
+    "INTERMEDIARY",
+    "GOVERNMENT",
+  ];
+}
 
 /** Tech upgrade costs (SRS §5.4). */
 export const UPGRADE_COSTS = {
@@ -74,6 +103,10 @@ export const PHASE_DURATIONS_SEC = {
   SETTLEMENT: 0, // server-driven, no fixed timer
   RECAP: 30, // minimum before host may advance
 } as const;
+
+/** AI-host timed intro / debrief (no manual host needed). */
+export const INTRO_DURATION_SEC = 20;
+export const DEBRIEF_DURATION_SEC = 45;
 
 export const PHASE_EXTENSION_SEC = 30;
 export const MAX_PHASE_EXTENSIONS = 2;

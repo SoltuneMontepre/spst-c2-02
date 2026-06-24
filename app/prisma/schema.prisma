@@ -242,6 +242,8 @@ model GameSession {
   phaseExtensions  Int          @default(0)
   paused           Boolean      @default(false)
   pausedRemainingMs Int?
+  autoHost         Boolean      @default(true)
+  aiNarration      String?
   stateVersion     Int          @default(0)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -275,6 +277,7 @@ model Participant {
   controlMode         ControlMode          @default(HUMAN)
   presence            Presence             @default(OFFLINE)
   ready               Boolean              @default(false)
+  phaseReady          Boolean              @default(false)
   tutorialCompleted   Boolean              @default(false)
   lastSeenAt          DateTime?
   createdAt           DateTime             @default(now())
@@ -527,6 +530,7 @@ model SessionResult {
   roundSnapshotIds    String[]
   participantOutcomes Json
   badges              Json
+  narration           String?
   completedAt         DateTime      @default(now())
 
   session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

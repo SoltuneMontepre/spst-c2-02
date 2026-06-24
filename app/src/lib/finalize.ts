@@ -1,0 +1,214 @@
+// Session finalization (SRS §5.9): scores, badges, and an AI debrief narration.
+
+import type { BadgeType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
+import { db } from "./db";
+import {
+  producerProfitVnd,
+  consumerUtilityVnd,
+  intermediaryProfitVnd,
+  socialScore,
+} from "./economy";
+import type { ConsumerRoundState } from "./role-state";
+import { generateText } from "./ai";
+import { formatThousandDong } from "./money";
+
+const RETAIL = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"];
+
+export interface ParticipantOutcome {
+  participantId: string;
+  displayName: string;
+  role: string;
+  isBot: boolean;
+  scoreVnd: number; // profit / utility, or socialScore (points) for government
+  fulfilledUnits?: number;
+  needUnits?: number;
+  avgBuyPriceVnd?: number | null;
+}
+
+/** Compute outcomes + badges, persist SessionResult, generate narration. */
+export async function finalizeSession(sessionId: string): Promise<void> {
+  const session = await db.gameSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    include: { participants: { include: { wallet: true, roleStates: true } } },
+  });
+  const completed = session.status === "COMPLETED";
+
+  const txs = await db.transaction.findMany({
+    where: { sessionId, status: "COMPLETED" },
+  });
+  const retailTxs = txs.filter((t) => RETAIL.includes(t.channel));
+  const snapshots = await db.marketSnapshot.findMany({
+    where: { isFinal: true, round: { sessionId } },
+    include: { round: { select: { number: true } } },
+    orderBy: { round: { number: "asc" } },
+  });
+  const spoiledTotal = snapshots.reduce((s, r) => s + r.spoiledQuantity, 0);
+  const completedRetailQuantity = retailTxs.reduce((s, t) => s + t.quantity, 0);
+
+  const outcomes: ParticipantOutcome[] = [];
+  let totalNeed = 0;
+  let totalFulfilled = 0;
+  let insolventProducers = 0;
+  let policySpendVnd = 0;
+
+  for (const p of session.participants) {
+    if (!p.role) continue;
+    const balance = p.wallet?.balanceVnd ?? 0;
+
+    if (p.role === "PRODUCER") {
+      if (balance <= 0) insolventProducers++;
+      outcomes.push(base(p, producerProfitVnd(balance)));
+    } else if (p.role === "CONSUMER") {
+      const consumerStates = p.roleStates.map((r) => r.state as unknown as ConsumerRoundState);
+      const fulfilled = consumerStates.reduce((s, c) => s + (c?.fulfilledUnits ?? 0), 0);
+      const need = consumerStates.reduce((s, c) => s + (c?.needTarget ?? 0), 0);
+      const spending = consumerStates.reduce((s, c) => s + (c?.retailSpendingVnd ?? 0), 0);
+      const bought = retailTxs
+        .filter((t) => t.buyerId === p.id)
+        .reduce((s, t) => s + t.quantity, 0);
+      totalNeed += need;
+      totalFulfilled += fulfilled;
+      outcomes.push({
+        ...base(p, consumerUtilityVnd(fulfilled, spending)),
+        fulfilledUnits: fulfilled,
+        needUnits: need,
+        avgBuyPriceVnd: bought > 0 ? Math.round(spending / bought) : null,
+      });
+    } else if (p.role === "INTERMEDIARY") {
+      outcomes.push(base(p, intermediaryProfitVnd(balance)));
+    } else {
+      const govStates = p.roleStates.map((r) => r.state as unknown as { policySpendVnd?: number });
+      policySpendVnd = govStates.reduce((s, g) => s + (g?.policySpendVnd ?? 0), 0);
+      const score = socialScore({
+        completedRetailQuantity,
+        consumerFulfillmentRate: 0,
+        spoiledQuantity: spoiledTotal,
+        insolventProducerCount: insolventProducers,
+        policySpendVnd,
+      });
+      outcomes.push(base(p, score));
+    }
+  }
+
+  // Recompute government score now that fulfillment totals are known.
+  const fulfillmentRate = totalNeed > 0 ? Math.min(1, totalFulfilled / totalNeed) : 0;
+  for (const o of outcomes) {
+    if (o.role === "GOVERNMENT") {
+      o.scoreVnd = socialScore({
+        completedRetailQuantity,
+        consumerFulfillmentRate: fulfillmentRate,
+        spoiledQuantity: spoiledTotal,
+        insolventProducerCount: insolventProducers,
+        policySpendVnd,
+      });
+    }
+  }
+
+  const badges = completed ? await computeBadges(outcomes, sessionId) : [];
+  const narration = await buildNarration(snapshots).catch(() => null);
+
+  await db.$transaction(async (tx) => {
+    await tx.badge.deleteMany({ where: { sessionId } });
+    for (const b of badges) {
+      await tx.badge.create({
+        data: { sessionId, participantId: b.participantId, type: b.type, metrics: {} },
+      });
+    }
+    await tx.sessionResult.upsert({
+      where: { sessionId },
+      create: {
+        sessionId,
+        scenarioVersion: session.scenarioVersion,
+        status: session.status,
+        roundSnapshotIds: snapshots.map((s) => s.id),
+        participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
+        badges: badges as unknown as Prisma.InputJsonValue,
+        narration,
+      },
+      update: {
+        status: session.status,
+        participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
+        badges: badges as unknown as Prisma.InputJsonValue,
+        narration,
+      },
+    });
+  });
+}
+
+function base(
+  p: { id: string; displayNameSnapshot: string; role: string | null; isBot: boolean },
+  scoreVnd: number,
+): ParticipantOutcome {
+  return {
+    participantId: p.id,
+    displayName: p.displayNameSnapshot,
+    role: p.role ?? "",
+    isBot: p.isBot,
+    scoreVnd,
+  };
+}
+
+interface AwardedBadge {
+  participantId: string;
+  type: BadgeType;
+}
+
+async function computeBadges(
+  outcomes: ParticipantOutcome[],
+  sessionId: string,
+): Promise<AwardedBadge[]> {
+  const humans = outcomes.filter((o) => !o.isBot);
+  const badges: AwardedBadge[] = [];
+
+  const producers = humans.filter((o) => o.role === "PRODUCER");
+  const topProducer = producers.sort((a, b) => b.scoreVnd - a.scoreVnd)[0];
+  if (topProducer) badges.push({ participantId: topProducer.participantId, type: "EFFICIENT_PRODUCER" });
+
+  const wise = humans
+    .filter((o) => o.role === "CONSUMER" && (o.needUnits ?? 0) > 0 && o.fulfilledUnits! >= o.needUnits!)
+    .sort((a, b) => (a.avgBuyPriceVnd ?? Infinity) - (b.avgBuyPriceVnd ?? Infinity))[0];
+  if (wise) badges.push({ participantId: wise.participantId, type: "WISE_CONSUMER" });
+
+  const gov = humans.find((o) => o.role === "GOVERNMENT" && o.scoreVnd > 0);
+  if (gov) badges.push({ participantId: gov.participantId, type: "BALANCED_REGULATOR" });
+
+  const txs = await db.transaction.findMany({
+    where: { sessionId, status: "COMPLETED" },
+  });
+  for (const o of humans.filter((x) => x.role === "INTERMEDIARY")) {
+    const hasWholesale = txs.some(
+      (t) => t.channel === "WHOLESALE" && (t.buyerId === o.participantId || t.sellerId === o.participantId),
+    );
+    const hasRetail = txs.some(
+      (t) =>
+        (t.channel === "RETAIL_INTERMEDIARY" && t.sellerId === o.participantId) ||
+        (t.channel === "RETAIL_INTERMEDIARY" && t.buyerId === o.participantId),
+    );
+    if (hasWholesale && hasRetail && o.scoreVnd >= 0) {
+      badges.push({ participantId: o.participantId, type: "MARKET_CONNECTOR" });
+    }
+  }
+
+  return badges;
+}
+
+async function buildNarration(
+  snapshots: { round: { number: number }; unitValueVnd: number; marketPriceVnd: number | null }[],
+): Promise<string | null> {
+  if (snapshots.length === 0) return null;
+  const lines = snapshots
+    .map(
+      (s) =>
+        `Vòng ${s.round.number}: giá trị ${formatThousandDong(s.unitValueVnd)}, giá thị trường ${
+          s.marketPriceVnd === null ? "không hình thành" : formatThousandDong(s.marketPriceVnd)
+        }`,
+    )
+    .join("; ");
+  return generateText({
+    systemInstruction:
+      "Bạn là trợ giảng Kinh tế Chính trị Mác-Lênin. Viết 3-4 câu tiếng Việt, " +
+      "không đánh đồng giá trị với giá cả, nhấn mạnh giá cả dao động quanh giá trị và tác động cung-cầu.",
+    prompt: `Tổng kết phiên chợ thanh long từ dữ liệu thật: ${lines}. Giải thích ngắn gọn cho sinh viên.`,
+  });
+}

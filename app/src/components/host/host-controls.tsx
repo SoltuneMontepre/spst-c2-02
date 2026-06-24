@@ -9,13 +9,15 @@ export function HostControls({
   phase,
   paused,
   pending,
+  autoHost,
   onAction,
 }: {
   status: string;
   phase: string | null;
   paused: boolean;
   pending: boolean;
-  onAction: (action: HostAction) => void;
+  autoHost?: boolean;
+  onAction: (action: HostAction | { action: "setAutoHost"; autoHost: boolean }) => void;
 }) {
   const inRound = status.startsWith("ROUND_");
   const canExtend = inRound && phase !== "SETTLEMENT" && phase !== "RECAP";
@@ -23,9 +25,15 @@ export function HostControls({
   return (
     <div className="flex flex-wrap gap-2">
       {status === "INTRO" ? (
-        <Button disabled={pending} onClick={() => onAction("next")}>
-          <Play className="size-4" /> Bắt đầu vòng 1
-        </Button>
+        autoHost ? (
+          <p className="text-sm text-muted-foreground">
+            AI điều phối sẽ tự bắt đầu vòng 1…
+          </p>
+        ) : (
+          <Button disabled={pending} onClick={() => onAction("next")}>
+            <Play className="size-4" /> Bắt đầu vòng 1
+          </Button>
+        )
       ) : null}
 
       {inRound ? (
@@ -49,9 +57,15 @@ export function HostControls({
       ) : null}
 
       {status === "DEBRIEF" ? (
-        <Button disabled={pending} onClick={() => onAction("end")}>
-          <Square className="size-4" /> Hoàn tất & lưu
-        </Button>
+        autoHost ? (
+          <p className="text-sm text-muted-foreground">
+            AI điều phối sẽ tự hoàn tất và lưu kết quả…
+          </p>
+        ) : (
+          <Button disabled={pending} onClick={() => onAction("end")}>
+            <Square className="size-4" /> Hoàn tất & lưu
+          </Button>
+        )
       ) : null}
 
       <Button variant="destructive" disabled={pending} onClick={() => onAction("end")}>

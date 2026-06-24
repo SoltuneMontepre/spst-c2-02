@@ -11,9 +11,11 @@ import {
 } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { useHostControl } from "@/hooks/use-host-control";
-import { MIN_PLAYERS } from "@/lib/scenario";
 import { LobbyCode } from "./lobby-code";
 import { LobbyRoster } from "./lobby-roster";
+import { LobbySetup } from "./lobby-setup";
+import { START_MIN_HUMANS } from "@/lib/scenario";
+import { GameGuidance } from "@/components/learning/game-guidance";
 
 export function LobbyView({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -23,14 +25,13 @@ export function LobbyView({ sessionId }: { sessionId: string }) {
   const leave = useLeaveRoom(sessionId);
   const host = useHostControl(sessionId);
 
-  // Once the session leaves the lobby, move to the right shell.
   useEffect(() => {
     if (!data || data.status === "LOBBY") return;
     if (["CANCELLED", "COMPLETED", "INCOMPLETE"].includes(data.status)) {
       router.replace(`/session/${sessionId}/debrief`);
     } else {
       router.replace(
-        data.isHost
+        data.isHost && !data.autoHost
           ? `/host/session/${sessionId}`
           : `/session/${sessionId}/map`,
       );
@@ -44,6 +45,13 @@ export function LobbyView({ sessionId }: { sessionId: string }) {
   const self = data.participants.find((p) => p.isSelf);
   const humans = data.participants.filter((p) => !p.isBot);
   const allReady = humans.length >= 1 && humans.every((p) => p.ready);
+  const manualMode =
+    data.participants.some((p) => p.role) || data.participants.some((p) => p.isBot);
+  const manualComplete =
+    !manualMode ||
+    (humans.every((p) => p.role) &&
+      data.participants.filter((p) => p.isBot).every((p) => p.role));
+  const minHumans = data.autoHost ? 1 : START_MIN_HUMANS;
 
   return (
     <Card className="w-full max-w-lg">
@@ -57,23 +65,69 @@ export function LobbyView({ sessionId }: { sessionId: string }) {
         <LobbyCode code={data.code} />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <LobbyRoster participants={data.participants} />
+        <GameGuidance context={{ screen: "lobby", autoHost: data.autoHost }} />
+        {data.autoHost ? (
+          <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-primary">Điều phối viên AI</span> sẽ tự
+            bắt đầu phiên khi đủ {minHumans}+ người sẵn sàng, điều hành timer và lời dẫn.
+          </p>
+        ) : null}
 
         {data.isHost ? (
-          <div className="flex flex-col gap-1">
-            <Button
-              disabled={!allReady || host.isPending}
-              size="lg"
-              onClick={() => host.mutate("start")}
-            >
-              Bắt đầu phiên
-            </Button>
-            {!allReady ? (
-              <p className="text-xs text-muted-foreground">
-                Cần ít nhất 1 người sẵn sàng. Bot sẽ lấp các vai còn lại (mục
-                tiêu {MIN_PLAYERS}–10 người).
+          <LobbySetup
+            participants={data.participants}
+            humanCount={humans.length}
+            pending={host.isPending}
+            onAction={(action) => host.mutate(action)}
+          />
+        ) : (
+          <LobbyRoster participants={data.participants} />
+        )}
+
+        {data.isHost ? (
+          <div className="flex flex-col gap-3">
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={data.autoHost}
+                disabled={host.isPending}
+                onChange={(e) =>
+                  host.mutate({ action: "setAutoHost", autoHost: e.target.checked })
+                }
+              />
+              <span>
+                <span className="font-medium">AI điều phối</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Tự bắt đầu, timer, fast-forward khi mọi người sẵn sàng, và lời dẫn
+                  từng giai đoạn.
+                </span>
+              </span>
+            </label>
+            {data.autoHost ? (
+              <p className="text-center text-sm text-muted-foreground">
+                {allReady && manualComplete && humans.length >= minHumans
+                  ? "AI đang khởi động phiên…"
+                  : `Chờ ${minHumans}+ người sẵn sàng để AI bắt đầu.`}
               </p>
-            ) : null}
+            ) : (
+              <div className="flex flex-col gap-1">
+                <Button
+                  disabled={!allReady || !manualComplete || humans.length < minHumans || host.isPending}
+                  size="lg"
+                  onClick={() => host.mutate("start")}
+                >
+                  Bắt đầu phiên
+                </Button>
+                {humans.length < minHumans ? (
+                  <p className="text-xs text-muted-foreground">
+                    Cần ít nhất {minHumans} người chơi.
+                  </p>
+                ) : !allReady ? (
+                  <p className="text-xs text-muted-foreground">Chờ mọi người sẵn sàng.</p>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : (
           <Button

@@ -11,6 +11,7 @@ export interface ProducerRoundState {
   productionCap: number;
   producedQuantity: number;
   pendingUpgrade: ProductivityProfile | null;
+  techSupportActive?: boolean;
 }
 
 export interface ConsumerRoundState {
@@ -18,18 +19,24 @@ export interface ConsumerRoundState {
   needTarget: number;
   fulfilledUnits: number;
   retailSpendingVnd: number;
+  reservedOfferVnd: number;
+  /** Exact total demand when INFO_DISCLOSURE policy applied (SRS §5.10). */
+  exactDemandRevealed?: boolean;
 }
 
 export interface IntermediaryRoundState {
   kind: "INTERMEDIARY";
   connectedProducerIds: string[];
   connectedConsumerIds: string[];
+  spoiledQuantity: number;
 }
 
 export interface GovernmentRoundState {
   kind: "GOVERNMENT";
   policyUsed: boolean;
   policySpendVnd: number;
+  exportPromotion?: boolean;
+  infoDisclosure?: boolean;
 }
 
 export type AnyRoleState =

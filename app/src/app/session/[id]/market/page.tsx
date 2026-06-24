@@ -1,10 +1,14 @@
-import { ComingSoon } from "@/components/session/coming-soon";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { RoleTask } from "@/components/session/role-task";
 
 export default async function MarketPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await auth();
+  if (!session?.user) redirect("/auth");
   const { id } = await params;
-  return <ComingSoon sessionId={id} title="Khu mua bán" />;
+  return <RoleTask sessionId={id} />;
 }

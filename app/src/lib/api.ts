@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { customAlphabet } from "nanoid";
 import { ZodError } from "zod";
 import { auth } from "./auth";
+import { errorMessage } from "./error-messages";
 import { db } from "./db";
 
 // Unambiguous room-code alphabet (no 0/O/1/I) — 6 chars (FR-ROOM-02).
@@ -29,7 +30,10 @@ export async function currentUser(): Promise<AuthedUser | null> {
 }
 
 export function jsonError(code: string, status: number, message?: string) {
-  return NextResponse.json({ error: code, message: message ?? code }, { status });
+  return NextResponse.json(
+    { error: code, message: message ?? errorMessage(code) },
+    { status },
+  );
 }
 
 export function unauthorized() {
