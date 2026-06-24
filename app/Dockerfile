@@ -9,6 +9,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# prisma.config.ts loads DIRECT_URL at generate time; no real DB needed in build.
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build"
+ENV DIRECT_URL="postgresql://build:build@127.0.0.1:5432/build"
 RUN bunx prisma generate
 RUN bun run build
 
