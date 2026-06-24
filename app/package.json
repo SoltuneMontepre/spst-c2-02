@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "db:migrate": "bun --env-file=.env prisma migrate deploy",
+    "db:generate": "bun --env-file=.env prisma generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
