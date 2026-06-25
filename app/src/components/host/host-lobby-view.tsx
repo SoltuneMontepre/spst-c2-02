@@ -6,6 +6,7 @@ import { Play } from "lucide-react";
 import { useSessionSnapshot, useSetReady } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { useHostControl } from "@/hooks/use-host-control";
+import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { HostLobbyHeader } from "@/components/host/host-lobby-header";
 import { HostLobbyRoster } from "@/components/host/host-lobby-roster";
 import { LobbyRefreshButton } from "@/components/lobby/lobby-refresh-button";
@@ -17,6 +18,7 @@ import { LobbySetup } from "@/components/lobby/lobby-setup";
 import { Button } from "@/components/ui/button";
 import { computeLobbyReadiness } from "@/lib/lobby-readiness";
 import { lobbyMinHumans } from "@/components/lobby/lobby-controls";
+import { SoloLobbyCountdown } from "@/components/lobby/solo-lobby-countdown";
 
 export function HostLobbyView({
   sessionId,
@@ -30,11 +32,13 @@ export function HostLobbyView({
   const host = useHostControl(sessionId);
   const setReady = useSetReady(sessionId);
 
+  useSessionCancelledRedirect(data?.status, "solo_timeout");
+
   useEffect(() => {
     if (!data || data.status === "LOBBY") return;
-    if (["CANCELLED", "COMPLETED", "INCOMPLETE"].includes(data.status)) {
+    if (["COMPLETED", "INCOMPLETE"].includes(data.status)) {
       router.replace(`/session/${sessionId}/debrief`);
-    } else {
+    } else if (data.status !== "CANCELLED") {
       router.replace(`/host/session/${sessionId}`);
     }
   }, [data, router, sessionId]);
@@ -47,6 +51,9 @@ export function HostLobbyView({
   const self = data.participants.find((p) => p.isSelf);
   const readiness = computeLobbyReadiness(data);
   const minHumans = lobbyMinHumans(data.autoHost);
+  const showSoloCountdown =
+    humans.length <= 1 && data.lobbySoloSince && data.status === "LOBBY";
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <HostLobbyHeader
@@ -101,10 +108,14 @@ export function HostLobbyView({
                 Cần ít nhất {minHumans} người chơi để bắt đầu.
               </p>
             ) : null}
-            {humans.length <= 1 ? (
-              <p className="text-center text-xs text-muted-foreground">
-                Phòng sẽ tự hủy sau 1 phút nếu không có người tham gia.
-              </p>
+            {showSoloCountdown ? (
+              <SoloLobbyCountdown
+                soloSince={data.lobbySoloSince!}
+                extendUsed={data.lobbySoloExtendUsed}
+                isHost
+                extendPending={host.isPending}
+                onExtend={() => host.mutate("extendSoloLobby")}
+              />
             ) : null}
           </div>
 

@@ -3,10 +3,10 @@
 import { db } from "./db";
 import { publish } from "./events";
 import { ApiError } from "./api";
-import { generateText, NoGeminiKeysError } from "./ai";
-import { START_MIN_HUMANS, ROUND_EVENTS, PHASE_DURATIONS_SEC, INTRO_DURATION_SEC, DEBRIEF_DURATION_SEC } from "./scenario";
+import { generateText, isGeminiQuotaError } from "./ai";
+import { ROUND_EVENTS, PHASE_DURATIONS_SEC, INTRO_DURATION_SEC, DEBRIEF_DURATION_SEC } from "./scenario";
 import { ROUND_NAMES, PHASE_BANNERS } from "./labels";
-import { startSession, requestPhaseTransition } from "./game-service";
+import { canAutoStartLobby, startSession, requestPhaseTransition } from "./game-service";
 
 /** Minimum ms into a phase before all-ready fast-forward (anti-flash). */
 const MIN_PHASE_MS: Record<string, number> = {
@@ -17,10 +17,6 @@ const MIN_PHASE_MS: Record<string, number> = {
   INTRO: 20_000,
 };
 
-function minHumansToStart(autoHost: boolean): number {
-  return autoHost ? 1 : START_MIN_HUMANS;
-}
-
 /** Lobby: auto-start when every human is ready (AI host, no manual Start). */
 export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
   const session = await db.gameSession.findUnique({
@@ -28,18 +24,7 @@ export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
     include: { participants: true },
   });
   if (!session?.autoHost || session.status !== "LOBBY") return;
-
-  const humans = session.participants.filter((p) => !p.isBot);
-  if (humans.length < minHumansToStart(true)) return;
-  if (!humans.every((p) => p.ready)) return;
-
-  const manualMode =
-    session.participants.some((p) => p.isBot) ||
-    session.participants.some((p) => p.role !== null);
-  if (manualMode) {
-    if (!humans.every((p) => p.role)) return;
-    if (session.participants.some((p) => p.isBot && !p.role)) return;
-  }
+  if (!canAutoStartLobby(session)) return;
 
   try {
     await startSession(session.hostUserId, sessionId);
@@ -50,6 +35,7 @@ export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
       "NOT_ALL_READY",
       "INVALID_STATE",
       "NOT_ALL_ROLES_ASSIGNED",
+      "INVALID_COMPOSITION",
     ]);
     if (!expected.has(code ?? "")) {
       console.error("ai-host auto-start:", err);
@@ -194,7 +180,7 @@ export async function announcePhase(sessionId: string): Promise<void> {
         `sự kiện=${eventType ?? "none"}. Viết lời dẫn cho người chơi.`,
     });
   } catch (e) {
-    if (!(e instanceof NoGeminiKeysError)) console.error("ai-host narration:", e);
+    if (!isGeminiQuotaError(e)) console.error("ai-host narration:", e);
   }
 
   await db.gameSession.update({

@@ -64,13 +64,38 @@ export class NoGeminiKeysError extends Error {
   }
 }
 
+/** All keys exhausted (quota / rate limit) — callers should use fallback text. */
+export class GeminiQuotaError extends Error {
+  constructor(message?: string) {
+    super(message ?? "Gemini quota or rate limit exceeded");
+    this.name = "GeminiQuotaError";
+  }
+}
+
+export function isGeminiQuotaError(error: unknown): boolean {
+  if (error instanceof GeminiQuotaError || error instanceof NoGeminiKeysError) {
+    return true;
+  }
+  const message = String((error as { message?: string })?.message ?? error);
+  return /RESOURCE_EXHAUSTED|quota|rate.?limit|\b429\b/i.test(message);
+}
+
+/** Skip API calls after quota exhaustion (free tier is per-day). */
+let quotaBackoffUntil = 0;
+
+function enterQuotaBackoff(retryDelayMs = 60 * 60 * 1000): void {
+  quotaBackoffUntil = Date.now() + retryDelayMs;
+}
+
 /** Generate text, rotating keys on failure with one retry round. */
 export async function generateText(options: GenerateOptions): Promise<string> {
   const keys = collectGeminiKeys();
   if (keys.length === 0) throw new NoGeminiKeysError();
+  if (Date.now() < quotaBackoffUntil) throw new GeminiQuotaError();
 
   const model = options.model ?? DEFAULT_MODEL;
   let lastError: unknown;
+  let sawQuotaError = false;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     for (let step = 0; step < keys.length; step++) {
@@ -92,6 +117,7 @@ export async function generateText(options: GenerateOptions): Promise<string> {
         lastError = new Error("Empty response from model");
       } catch (error) {
         lastError = error;
+        if (isRetriable(error)) sawQuotaError = true;
         if (!isRetriable(error) && round === 0 && step < keys.length - 1) {
           // Non-retriable on this key: still try the next key once.
           continue;
@@ -100,10 +126,16 @@ export async function generateText(options: GenerateOptions): Promise<string> {
     }
   }
 
+  if (sawQuotaError) enterQuotaBackoff();
+
+  const detail =
+    (lastError as { message?: string })?.message ?? String(lastError);
+  if (sawQuotaError || isGeminiQuotaError(lastError)) {
+    throw new GeminiQuotaError(detail);
+  }
+
   throw new Error(
-    `Gemini generation failed after ${MAX_ROUNDS} rounds over ${keys.length} key(s): ${
-      (lastError as { message?: string })?.message ?? String(lastError)
-    }`,
+    `Gemini generation failed after ${MAX_ROUNDS} rounds over ${keys.length} key(s): ${detail}`,
   );
 }
 

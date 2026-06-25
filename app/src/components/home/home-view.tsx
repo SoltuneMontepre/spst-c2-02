@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, User } from "lucide-react";
@@ -10,6 +11,7 @@ import { HomeHeroCards } from "@/components/home/home-hero-cards";
 import { HomeStatsRow } from "@/components/home/home-stats-row";
 import { HomeRecentSessions } from "@/components/home/home-recent-sessions";
 import { HomePublicRooms } from "@/components/home/home-public-rooms";
+import { RoomCancelledBanner } from "@/components/home/room-cancelled-banner";
 import { apiFetch } from "@/hooks/use-api";
 import { useHomeStream } from "@/hooks/use-home-stream";
 import type { HomeDashboard } from "@/lib/session-service";
@@ -49,6 +51,11 @@ export function HomeView({ displayName }: { displayName: string }) {
       />
 
       <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6">
+        <div className="col-span-12">
+          <Suspense fallback={null}>
+            <RoomCancelledBanner />
+          </Suspense>
+        </div>
         <div className="col-span-12 flex flex-col justify-center lg:col-span-8">
           <HomeDashboardHeader displayName={displayName} />
         </div>

@@ -277,6 +277,10 @@ export interface SessionSnapshot {
   autoHost: boolean;
   aiNarration: string | null;
   isHost: boolean;
+  /** When only the host remains in LOBBY — ISO timestamp solo countdown started. */
+  lobbySoloSince: string | null;
+  /** Host already used the one-time +1 minute extension for this solo wait. */
+  lobbySoloExtendUsed: boolean;
   participants: ParticipantView[];
   self: SelfState | null;
   market: MarketView | null;
@@ -366,6 +370,8 @@ export async function getSnapshot(
     autoHost: session.autoHost,
     aiNarration: session.aiNarration,
     isHost,
+    lobbySoloSince: session.lobbySoloSince?.toISOString() ?? null,
+    lobbySoloExtendUsed: session.lobbySoloExtendUsed,
     self,
     market,
     analytics,

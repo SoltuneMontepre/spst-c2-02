@@ -254,7 +254,8 @@ model GameSession {
   updatedAt       DateTime      @updatedAt
   startedAt       DateTime?
   endedAt         DateTime?
-  lobbySoloSince  DateTime?
+  lobbySoloSince      DateTime?
+  lobbySoloExtendUsed Boolean     @default(false)
 
   host            User             @relation("HostSessions", fields: [hostUserId], references: [id])
   participants    Participant[]

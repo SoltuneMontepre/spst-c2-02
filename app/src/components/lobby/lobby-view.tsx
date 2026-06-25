@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useSessionSnapshot,
@@ -8,34 +8,35 @@ import {
   useLeaveRoom,
 } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
-import { useHostControl } from "@/hooks/use-host-control";
-import { SessionNav } from "@/components/session/session-nav";
-import { BentoTile } from "@/components/ui/bento-tile";
-import { LobbyCode } from "./lobby-code";
-import { LobbyRoster } from "./lobby-roster";
-import { LobbyRefreshButton } from "./lobby-refresh-button";
-import { LobbySetup } from "./lobby-setup";
-import { LobbyControls, lobbyMinHumans } from "./lobby-controls";
-import { GuidancePanel } from "@/components/learning/guidance-panel";
-import { getGuidance } from "@/lib/game-guidance";
-import { useTutorial } from "@/components/learning/tutorial-provider";
+import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
+import { ApiClientError } from "@/hooks/use-api";
+import { LobbyShell } from "@/components/lobby/lobby-shell";
+import { PlayerLobbyScreen } from "@/components/lobby/player-lobby-screen";
+import { RoleTutorialWizard } from "@/components/lobby/role-tutorial-wizard";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
-import { TutorialToggle } from "@/components/learning/tutorial-toggle";
+import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { isRoleTutorialSkipped } from "@/lib/role-tutorial";
 
 export function LobbyView({
   sessionId,
-  displayName,
 }: {
   sessionId: string;
   displayName: string;
 }) {
   const router = useRouter();
-  useSessionStream(sessionId);
-  const { data, isLoading } = useSessionSnapshot(sessionId);
+  const { data, isLoading, isError, error } = useSessionSnapshot(sessionId);
+  useSessionStream(sessionId, { enabled: !!data });
   const setReady = useSetReady(sessionId);
   const leave = useLeaveRoom(sessionId);
-  const host = useHostControl(sessionId);
-  const { enabled: tutorialOn } = useTutorial();
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const autoOpened = useRef(false);
+
+  useSessionCancelledRedirect(data?.status, "solo_timeout");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!data || data.status !== "LOBBY") return;
@@ -46,8 +47,13 @@ export function LobbyView({
   }, [data, router, sessionId]);
 
   useEffect(() => {
-    if (!data || data.status === "LOBBY") return;
-    if (["CANCELLED", "COMPLETED", "INCOMPLETE"].includes(data.status)) {
+    if (!isError || !(error instanceof ApiClientError) || error.status !== 403) return;
+    router.replace("/home");
+  }, [isError, error, router]);
+
+  useEffect(() => {
+    if (!data || data.status === "LOBBY" || data.status === "CANCELLED") return;
+    if (["COMPLETED", "INCOMPLETE"].includes(data.status)) {
       router.replace(`/session/${sessionId}/debrief`);
     } else {
       router.replace(
@@ -58,141 +64,74 @@ export function LobbyView({
     }
   }, [data, router, sessionId]);
 
-  if (isLoading || !data) {
+  const self = data?.participants.find((p) => p.isSelf);
+  const selfRole = self?.role ?? null;
+
+  useEffect(() => {
+    if (!data?.guidanceEnabled || !selfRole || autoOpened.current) return;
+    if (!isRoleTutorialSkipped(selfRole)) {
+      autoOpened.current = true;
+      setTutorialOpen(true);
+    }
+  }, [data?.guidanceEnabled, selfRole]);
+
+  if (!mounted || isLoading || (!data && !isError)) {
     return (
-      <div className="flex min-h-full flex-col">
-        <SessionNav displayName={displayName} sessionLabel="Phòng chờ" />
+      <div className="flex min-h-full flex-col bg-background">
         <p className="p-8 text-muted-foreground">Đang tải phòng…</p>
       </div>
     );
   }
 
-  const self = data.participants.find((p) => p.isSelf);
-  const humans = data.participants.filter((p) => !p.isBot);
-  const allReady = humans.length >= 1 && humans.every((p) => p.ready);
-  const manualMode =
-    data.participants.some((p) => p.role) || data.participants.some((p) => p.isBot);
-  const manualComplete =
-    !manualMode ||
-    (humans.every((p) => p.role) &&
-      data.participants.filter((p) => p.isBot).every((p) => p.role));
-  const minHumans = lobbyMinHumans(data.autoHost);
-  const guidance = getGuidance({ screen: "lobby", autoHost: data.autoHost });
+  if (isError || !data) {
+    return (
+      <div className="flex min-h-full flex-col bg-background">
+        <p className="p-8 text-muted-foreground">Không thể truy cập phòng này.</p>
+      </div>
+    );
+  }
 
-  const headerSubtitle = data.isHost
-    ? `Bạn là host · ${humans.length}/${data.maxPlayers} người`
-    : `Bạn là người chơi · ${humans.length}/${data.maxPlayers} người`;
+  if (data.isHost) {
+    return (
+      <div className="flex min-h-full flex-col bg-background">
+        <p className="p-8 text-muted-foreground">Đang chuyển tới bảng host…</p>
+      </div>
+    );
+  }
 
-  const readyDescription = data.isHost
-    ? data.autoHost
-      ? "Bật AI và báo sẵn sàng để bắt đầu."
-      : "Bạn quyết định khi bắt đầu phiên."
-    : data.autoHost
-      ? "Báo sẵn sàng — AI sẽ tự bắt đầu."
-      : "Báo host khi bạn sẵn sàng chơi.";
+  const lobbySubtitle = "Đang chờ host bắt đầu…";
+  const tutorialSubtitle = selfRole
+    ? `${ROLE_LABELS[selfRole]} · 3 bước`
+    : lobbySubtitle;
+
+  const handleLeave = () => leave.mutate();
 
   return (
     <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
-    <div className="flex min-h-full flex-col bg-background">
-      <SessionNav
-        displayName={displayName}
-        sessionLabel="Phòng chờ"
+      <LobbyShell
+        mode={tutorialOpen && selfRole ? "tutorial" : "lobby"}
         sessionCode={data.code}
-        onLeave={() => leave.mutate()}
+        subtitle={tutorialOpen && selfRole ? tutorialSubtitle : lobbySubtitle}
+        onLeave={handleLeave}
         leavePending={leave.isPending}
-      />
-
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Phòng chờ</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{headerSubtitle}</p>
-          </div>
-          <TutorialToggle className="sm:hidden" />
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-12 gap-4 lg:items-start">
-            {/* Trái — mời tham gia */}
-            <div className="col-span-12 lg:col-span-3 lg:col-start-1 lg:row-start-1">
-              <BentoTile
-                title="Mời tham gia"
-                description={
-                  data.isHost
-                    ? "Chia sẻ mã hoặc QR để mời người chơi."
-                    : "Mã phòng để mời thêm bạn bè (nếu host cho phép)."
-                }
-              >
-                <LobbyCode code={data.code} />
-              </BentoTile>
-            </div>
-
-            {/* Giữa — danh sách / gán vai / bot */}
-            <BentoTile
-              colSpan="col-span-12 lg:col-span-6 lg:col-start-4 lg:row-start-1"
-              title={data.isHost ? "Người chơi & vai trò" : "Danh sách người chơi"}
-              description={
-                data.isHost
-                  ? "Gán vai và thêm bot trước khi bắt đầu."
-                  : "Theo dõi ai đã vào phòng và sẵn sàng."
-              }
-              className="lg:min-h-[min(520px,72vh)]"
-              headerExtra={
-                data.isHost ? undefined : (
-                  <LobbyRefreshButton sessionId={sessionId} />
-                )
-              }
-            >
-              {data.isHost ? (
-                <LobbySetup
-                  participants={data.participants}
-                  humanCount={humans.length}
-                  pending={host.isPending}
-                  onAction={(action) => host.mutate(action)}
-                />
-              ) : (
-                <div className="max-h-[min(480px,60vh)] overflow-y-auto pr-0.5">
-                  <LobbyRoster participants={data.participants} />
-                </div>
-              )}
-            </BentoTile>
-
-            {/* Phải — sẵn sàng / điều khiển */}
-            <BentoTile
-              colSpan="col-span-12 lg:col-span-3 lg:col-start-10 lg:row-start-1"
-              title="Sẵn sàng"
-              description={readyDescription}
-              className={tutorialOn ? undefined : "lg:sticky lg:top-20 lg:self-start"}
-            >
-              <LobbyControls
-                isHost={data.isHost}
-                autoHost={data.autoHost}
-                autoHostPending={host.isPending}
-                hostPending={host.isPending}
-                allReady={allReady}
-                manualComplete={manualComplete}
-                humanCount={humans.length}
-                minHumans={minHumans}
-                selfReady={self?.ready ?? false}
-                isParticipant={!!self}
-                readyPending={setReady.isPending}
-                onSetReady={(ready) => setReady.mutate(ready)}
-                onSetAutoHost={(enabled) =>
-                  host.mutate({ action: "setAutoHost", autoHost: enabled })
-                }
-                onStart={() => host.mutate("start")}
-              />
-            </BentoTile>
-          </div>
-
-          {tutorialOn ? (
-            <BentoTile title="Hướng dẫn" className="w-full">
-              <GuidancePanel content={guidance} wide />
-            </BentoTile>
-          ) : null}
-        </div>
-      </div>
-    </div>
+      >
+        {tutorialOpen && selfRole ? (
+          <RoleTutorialWizard
+            role={selfRole}
+            totalRounds={data.totalRounds}
+            onClose={() => setTutorialOpen(false)}
+          />
+        ) : (
+          <PlayerLobbyScreen
+            data={data}
+            readyPending={setReady.isPending}
+            onSetReady={(ready) => setReady.mutate(ready)}
+            onOpenTutorial={() => {
+              if (selfRole) setTutorialOpen(true);
+            }}
+          />
+        )}
+      </LobbyShell>
     </SessionGuidanceScope>
   );
 }

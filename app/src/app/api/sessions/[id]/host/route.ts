@@ -8,6 +8,7 @@ import {
   hostExtend,
   hostEnd,
   hostCancel,
+  hostExtendSoloLobby,
   hostSetAutoHost,
   hostSetParticipantRole,
   hostAddBot,
@@ -20,7 +21,16 @@ const profileSchema = z.enum(["TRADITIONAL", "SOCIAL_AVERAGE", "PIONEER"]);
 
 const schema = z.discriminatedUnion("action", [
   z.object({
-    action: z.enum(["start", "next", "pause", "resume", "extend", "end", "cancel"]),
+    action: z.enum([
+      "start",
+      "next",
+      "pause",
+      "resume",
+      "extend",
+      "end",
+      "cancel",
+      "extendSoloLobby",
+    ]),
   }),
   z.object({ action: z.literal("setAutoHost"), autoHost: z.boolean() }),
   z.object({
@@ -85,6 +95,7 @@ export async function POST(
           extend: hostExtend,
           end: hostEnd,
           cancel: hostCancel,
+          extendSoloLobby: hostExtendSoloLobby,
         };
         await fns[body.action](user.id, id);
       }

@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { useSessionSnapshot, useSessionResult } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { STATUS_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ function mergeRosterParticipants(
 export function DebriefView({ sessionId }: { sessionId: string }) {
   useSessionStream(sessionId);
   const { data: snapshot, isLoading: snapLoading } = useSessionSnapshot(sessionId);
+  useSessionCancelledRedirect(snapshot?.status, "solo_timeout");
   const { enabled: guidanceOn } = useTutorial();
   const guidance = getGuidance({ screen: "debrief" });
 

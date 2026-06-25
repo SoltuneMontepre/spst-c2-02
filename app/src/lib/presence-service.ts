@@ -3,6 +3,7 @@
 import { db } from "./db";
 import { publish } from "./events";
 import { ApiError } from "./api";
+import { ensureHostParticipant } from "./lobby-seat";
 import {
   DISCONNECT_BOT_TAKEOVER_SEC,
   HOST_RECONNECT_WINDOW_SEC,
@@ -27,6 +28,15 @@ export async function heartbeat(
   sessionId: string,
   tabId?: string,
 ): Promise<{ controlMode: string }> {
+  const session = await db.gameSession.findUnique({
+    where: { id: sessionId },
+    select: { hostUserId: true, status: true },
+  });
+  if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
+  if (session.hostUserId === userId && session.status === "LOBBY") {
+    await ensureHostParticipant(sessionId, userId);
+  }
+
   const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
   });

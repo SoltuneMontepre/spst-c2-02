@@ -12,6 +12,7 @@ export type HostAction =
   | "extend"
   | "end"
   | "cancel"
+  | "extendSoloLobby"
   | "setAutoHost";
 
 export type HostLobbyAction =

@@ -51,7 +51,7 @@ export function HomeStatsRow({ stats, loading }: HomeStatsRowProps) {
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <StatCard
-        label="Phiên đã chơi"
+        label="Phòng đã chơi"
         value={String(stats.sessionsPlayed)}
         icon={Gamepad2}
         loading={loading}

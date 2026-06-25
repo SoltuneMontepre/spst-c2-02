@@ -9,6 +9,7 @@ async function cancelLobby(sessionId: string, reason: string): Promise<void> {
       status: "CANCELLED",
       endedAt: new Date(),
       lobbySoloSince: null,
+      lobbySoloExtendUsed: false,
       stateVersion: { increment: 1 },
     },
     select: { stateVersion: true },
@@ -37,7 +38,7 @@ export async function syncLobbySoloSince(sessionId: string): Promise<void> {
     if (!session.lobbySoloSince) {
       await db.gameSession.update({
         where: { id: sessionId },
-        data: { lobbySoloSince: new Date() },
+        data: { lobbySoloSince: new Date(), lobbySoloExtendUsed: false },
       });
     }
     return;
@@ -46,7 +47,7 @@ export async function syncLobbySoloSince(sessionId: string): Promise<void> {
   if (session.lobbySoloSince) {
     await db.gameSession.update({
       where: { id: sessionId },
-      data: { lobbySoloSince: null },
+      data: { lobbySoloSince: null, lobbySoloExtendUsed: false },
     });
   }
 }

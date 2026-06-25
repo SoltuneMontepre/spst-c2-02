@@ -58,8 +58,11 @@ export function SessionListRow({
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {href ? (
-            <Link href={href} className={cn(buttonVariants({ size: "sm" }))}>
-              Mở
+            <Link
+              href={href}
+              className={cn(buttonVariants({ size: "sm" }), "whitespace-nowrap")}
+            >
+              Tham gia phòng
             </Link>
           ) : null}
           {actions}

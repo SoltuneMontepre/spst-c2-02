@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { useHostControl } from "@/hooks/use-host-control";
+import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { SessionNav } from "@/components/session/session-nav";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { PhaseBanner } from "@/components/session/phase-banner";
@@ -16,7 +17,7 @@ import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { ChartLegend } from "@/components/observatory/chart-legend";
 import { STATUS_LABELS, PHASE_LABELS } from "@/lib/labels";
 
-const ENDED = ["COMPLETED", "INCOMPLETE", "CANCELLED"];
+const ENDED = ["COMPLETED", "INCOMPLETE"];
 
 function SessionStats({
   status,
@@ -66,6 +67,8 @@ export function HostControl({
   useSessionStream(sessionId);
   const { data, isLoading } = useSessionSnapshot(sessionId);
   const host = useHostControl(sessionId);
+
+  useSessionCancelledRedirect(data?.status, "solo_timeout");
 
   useEffect(() => {
     if (!data) return;

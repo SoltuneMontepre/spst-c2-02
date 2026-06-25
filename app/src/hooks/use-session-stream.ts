@@ -78,12 +78,17 @@ function applySnapshot(
 }
 
 /** SSE stream + heartbeat for presence / bot takeover (FR-GAME-03). */
-export function useSessionStream(sessionId: string): SessionStreamState {
+export function useSessionStream(
+  sessionId: string,
+  options?: { enabled?: boolean },
+): SessionStreamState {
+  const enabled = options?.enabled ?? true;
   const queryClient = useQueryClient();
   const [streamState, setStreamState] = useState<SessionStreamState>("connecting");
   const wasDisconnected = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const source = new EventSource(`/api/sessions/${sessionId}/stream`);
     const queryKey = ["session", sessionId] as const;
 
@@ -100,7 +105,8 @@ export function useSessionStream(sessionId: string): SessionStreamState {
       try {
         const event = JSON.parse((e as MessageEvent).data) as GameEvent;
         if (LIFECYCLE_EVENTS.has(event.type)) {
-          void queryClient.invalidateQueries({ queryKey });
+          void queryClient.refetchQueries({ queryKey });
+          return;
         }
         const patched = patchSnapshot(
           queryClient.getQueryData<SessionSnapshot>(queryKey),
@@ -141,7 +147,7 @@ export function useSessionStream(sessionId: string): SessionStreamState {
       source.close();
       setStreamState("connecting");
     };
-  }, [sessionId, queryClient]);
+  }, [sessionId, queryClient, enabled]);
 
   return streamState;
 }

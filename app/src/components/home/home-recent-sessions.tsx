@@ -1,6 +1,7 @@
 "use client";
 
 import type { Role } from "@/generated/prisma/enums";
+import { useRouter } from "next/navigation";
 import { Store } from "lucide-react";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   playerSessionHref,
 } from "@/lib/session-routes";
 import { STATUS_LABELS } from "@/lib/labels";
+import { roomCancelledHomeHref } from "@/lib/room-cancelled";
 import { cn } from "@/lib/utils";
 
 function formatRelativeDay(iso: string | null): string {
@@ -110,6 +112,7 @@ function ActiveHostRow({
   session: HomeRecentSession;
   onClosed: () => void;
 }) {
+  const router = useRouter();
   const host = useHostControl(session.sessionId);
   const inLobby = session.status === "LOBBY";
 
@@ -129,7 +132,14 @@ function ActiveHostRow({
             variant="destructive"
             size="sm"
             disabled={host.isPending}
-            onClick={() => host.mutate("cancel", { onSuccess: onClosed })}
+            onClick={() =>
+              host.mutate("cancel", {
+                onSuccess: () => {
+                  onClosed();
+                  router.replace(roomCancelledHomeHref("host_cancelled"));
+                },
+              })
+            }
           >
             Hủy
           </Button>
@@ -189,8 +199,8 @@ export function HomeRecentSessions({
 
   return (
     <BentoTile
-      title="Phiên chơi gần đây"
-      description="Các phiên bạn đã tham gia hoặc đang mở"
+      title="Phòng gần đây"
+      description="Các phòng bạn đã tham gia hoặc đang mở"
       colSpan="col-span-12"
       headerExtra={
         sessions.length > 0 ? (
@@ -198,7 +208,7 @@ export function HomeRecentSessions({
             {activeSessions.length > 0
               ? `${activeSessions.length} đang mở · `
               : ""}
-            {sessions.length} phiên
+            {sessions.length} phòng
           </span>
         ) : null
       }
@@ -211,7 +221,7 @@ export function HomeRecentSessions({
         </div>
       ) : sessions.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Chưa có phiên nào. Tạo phòng mới hoặc nhập mã để bắt đầu.
+          Chưa có phòng nào. Tạo phòng mới hoặc nhập mã để bắt đầu.
         </p>
       ) : (
         <div className="flex flex-col gap-4">

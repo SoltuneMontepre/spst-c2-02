@@ -14,7 +14,7 @@ export function useCreateRoom() {
   const router = useRouter();
   return useMutation({
     mutationFn: () => apiFetch<CreatedSession>("/api/sessions", { method: "POST" }),
-    onSuccess: (data) => router.push(`/session/${data.id}/lobby`),
+    onSuccess: (data) => router.push(`/host/session/${data.id}`),
     onError: (error) => {
       if (error instanceof ApiClientError && error.code === "HOST_SESSION_LIMIT") {
         router.push("/home");
@@ -46,6 +46,10 @@ export function useSessionSnapshot(sessionId: string) {
     queryFn: () => apiFetch<SessionSnapshot>(`/api/sessions/${sessionId}`),
     staleTime: 0,
     refetchOnWindowFocus: true,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiClientError && error.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 }
 

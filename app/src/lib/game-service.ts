@@ -201,6 +201,41 @@ function countRoles(participants: { role: Role | null }[]): Record<Role, number>
   return counts;
 }
 
+/** Matches `startSession` manual vs auto-assign branch. */
+export function lobbyManualMode(session: {
+  autoAssignRoles: boolean;
+  participants: { isBot: boolean; role: Role | null }[];
+}): boolean {
+  const lobbyBots = session.participants.filter((p) => p.isBot);
+  return (
+    !session.autoAssignRoles ||
+    lobbyBots.length > 0 ||
+    session.participants.some((p) => p.role !== null)
+  );
+}
+
+/** Pre-flight for AI-host auto-start — same guards as `startSession`. */
+export function canAutoStartLobby(session: {
+  autoAssignRoles: boolean;
+  status: string;
+  participants: { isBot: boolean; role: Role | null; ready: boolean }[];
+}): boolean {
+  if (session.status !== "LOBBY") return false;
+
+  const humans = session.participants.filter((p) => !p.isBot);
+  if (humans.length < 1) return false;
+  if (!humans.every((p) => p.ready)) return false;
+
+  if (!lobbyManualMode(session)) return true;
+
+  const lobbyBots = session.participants.filter((p) => p.isBot);
+  if (!humans.every((p) => p.role)) return false;
+  if (lobbyBots.some((p) => !p.role)) return false;
+
+  const counts = countRoles([...humans, ...lobbyBots]);
+  return counts.PRODUCER >= 1 && counts.CONSUMER >= 1;
+}
+
 /** Slots still needed after manual lobby assignments. */
 function missingRoleSlots(
   target: Role[],
@@ -775,7 +810,34 @@ export async function hostCancel(hostUserId: string, sessionId: string): Promise
     throw new ApiError("INVALID_STATE", 409);
   await db.gameSession.update({
     where: { id: sessionId },
-    data: { status: "CANCELLED", endedAt: new Date(), lobbySoloSince: null },
+    data: {
+      status: "CANCELLED",
+      endedAt: new Date(),
+      lobbySoloSince: null,
+      lobbySoloExtendUsed: false,
+    },
   });
-  await touch(sessionId, "session:ended", { status: "CANCELLED" });
+  await touch(sessionId, "session:ended", { status: "CANCELLED", reason: "host_cancelled" });
+}
+
+/** Reset the solo-lobby auto-cancel timer (+1 minute) — once per solo wait. */
+export async function hostExtendSoloLobby(
+  hostUserId: string,
+  sessionId: string,
+): Promise<void> {
+  const s = await assertHost(hostUserId, sessionId);
+  if (s.status !== "LOBBY") throw new ApiError("SESSION_LOCKED", 409);
+  if (!s.lobbySoloSince) throw new ApiError("INVALID_STATE", 409);
+  if (s.lobbySoloExtendUsed) throw new ApiError("SOLO_EXTEND_USED", 409);
+
+  const humanCount = await db.participant.count({
+    where: { sessionId, isBot: false },
+  });
+  if (humanCount > 1) throw new ApiError("INVALID_STATE", 409);
+
+  await db.gameSession.update({
+    where: { id: sessionId },
+    data: { lobbySoloSince: new Date(), lobbySoloExtendUsed: true },
+  });
+  await touch(sessionId, "lobby:solo_extended", {});
 }

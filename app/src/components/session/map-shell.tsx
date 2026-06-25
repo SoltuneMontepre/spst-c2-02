@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
+import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { GameBentoShell } from "@/components/session/game-bento-shell";
 import { MapZones } from "./map-zones";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
@@ -10,7 +11,7 @@ import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { zoneLabelForRole } from "@/lib/game-zones";
 import type { Role } from "@/generated/prisma/enums";
 
-const ENDED = ["COMPLETED", "INCOMPLETE", "CANCELLED"];
+const ENDED = ["COMPLETED", "INCOMPLETE"];
 
 function MapPhaseHint({
   status,
@@ -74,6 +75,8 @@ function MapPhaseHint({
 export function MapShell({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const { data, isLoading } = useSessionSnapshot(sessionId);
+
+  useSessionCancelledRedirect(data?.status, "solo_timeout");
 
   useEffect(() => {
     if (!data) return;
