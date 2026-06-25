@@ -18,6 +18,7 @@ import { LobbyControls, lobbyMinHumans } from "./lobby-controls";
 import { GuidancePanel } from "@/components/learning/guidance-panel";
 import { getGuidance } from "@/lib/game-guidance";
 import { useTutorial } from "@/components/learning/tutorial-provider";
+import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 
 export function LobbyView({
@@ -34,6 +35,14 @@ export function LobbyView({
   const leave = useLeaveRoom(sessionId);
   const host = useHostControl(sessionId);
   const { enabled: tutorialOn } = useTutorial();
+
+  useEffect(() => {
+    if (!data || data.status !== "LOBBY") return;
+    if (data.isHost) {
+      router.replace(`/host/session/${sessionId}`);
+      return;
+    }
+  }, [data, router, sessionId]);
 
   useEffect(() => {
     if (!data || data.status === "LOBBY") return;
@@ -82,6 +91,7 @@ export function LobbyView({
       : "Báo host khi bạn sẵn sàng chơi.";
 
   return (
+    <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
     <div className="flex min-h-full flex-col bg-background">
       <SessionNav
         displayName={displayName}
@@ -175,5 +185,6 @@ export function LobbyView({
         </div>
       </div>
     </div>
+    </SessionGuidanceScope>
   );
 }

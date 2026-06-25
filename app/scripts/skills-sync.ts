@@ -13,7 +13,8 @@
 import { execSync } from "child_process";
 import { readdirSync } from "fs";
 import { cpSync, rmSync, existsSync, mkdirSync, statSync } from "fs";
-import { join, resolve } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
 
@@ -31,7 +32,7 @@ const BLACKLIST: string[] = [
 const SKILLS_SUBDIR = "skills";
 
 // Resolve workspace root: this script lives at app/scripts/
-const WORKSPACE_ROOT = resolve(import.meta.dir, "../..");
+const WORKSPACE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DEST_DIR = join(WORKSPACE_ROOT, ".agents", "skills");
 
 const tmpDir = join(tmpdir(), `figma-mcp-${randomUUID()}`);

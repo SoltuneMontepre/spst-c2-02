@@ -7,6 +7,7 @@ import { maybeAutoAdvance } from "./game-service";
 import { ensureHostParticipant } from "./lobby-seat";
 import { publish } from "./events";
 import type { ParticipantOutcome } from "./finalize";
+import type { CreateSessionInput } from "./create-session-schema";
 export type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
 import {
   ensureAiDebriefReview,
@@ -62,7 +63,10 @@ export async function getActiveHostedSession(
 }
 
 /** Host creates a room (FR-ROOM-01). One active hosted session per user. */
-export async function createSession(hostUserId: string): Promise<CreatedSession> {
+export async function createSession(
+  hostUserId: string,
+  config: CreateSessionInput,
+): Promise<CreatedSession> {
   const active = await db.gameSession.findFirst({
     where: { hostUserId, status: { in: [...ACTIVE_STATUSES] } },
     select: { id: true, code: true },
@@ -84,7 +88,11 @@ export async function createSession(hostUserId: string): Promise<CreatedSession>
         hostUserId,
         status: "LOBBY",
         scenarioVersion: SCENARIO_VERSION,
-        autoHost: true,
+        maxPlayers: config.maxPlayers,
+        totalRounds: config.totalRounds,
+        autoAssignRoles: config.autoAssignRoles,
+        guidanceEnabled: config.guidanceEnabled,
+        autoHost: config.autoHost ?? true,
       },
       select: { id: true, code: true },
     });
@@ -144,7 +152,7 @@ export async function joinSession(
   const humanCount = await db.participant.count({
     where: { sessionId: session.id, isBot: false },
   });
-  if (humanCount >= MAX_PLAYERS) throw new ApiError("SESSION_FULL", 409);
+  if (humanCount >= session.maxPlayers) throw new ApiError("SESSION_FULL", 409);
 
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const participant = await db.participant.create({
@@ -249,6 +257,9 @@ export interface SessionSnapshot {
   currentRound: number;
   stateVersion: number;
   maxPlayers: number;
+  totalRounds: number;
+  autoAssignRoles: boolean;
+  guidanceEnabled: boolean;
   autoHost: boolean;
   aiNarration: string | null;
   isHost: boolean;
@@ -334,6 +345,9 @@ export async function getSnapshot(
     currentRound: session.currentRound,
     stateVersion: session.stateVersion,
     maxPlayers: session.maxPlayers,
+    totalRounds: session.totalRounds,
+    autoAssignRoles: session.autoAssignRoles,
+    guidanceEnabled: session.guidanceEnabled,
     autoHost: session.autoHost,
     aiNarration: session.aiNarration,
     isHost,
@@ -638,4 +652,129 @@ export async function leaveSession(userId: string, sessionId: string): Promise<v
 
   await db.participant.deleteMany({ where: { sessionId, userId, isBot: false } });
   await bumpAndPublish(sessionId, "participant:left", { userId });
+}
+
+const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
+
+export interface HomeDashboardStats {
+  sessionsPlayed: number;
+  totalScore: number;
+  roundsCompleted: number;
+  topRole: Role | null;
+}
+
+export interface HomeRecentSession {
+  sessionId: string;
+  code: string;
+  status: string;
+  role: Role | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  joinedAt: string;
+  participantCount: number;
+  currentRound: number;
+  isActive: boolean;
+  isHost: boolean;
+  isJoined: boolean;
+  selfScore?: number;
+}
+
+export interface HomeDashboard {
+  stats: HomeDashboardStats;
+  recentSessions: HomeRecentSession[];
+  activeHostedSession: ActiveHostedSession | null;
+}
+
+/** Aggregated home hub stats and enriched recent sessions for the dashboard. */
+export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
+  const participants = await db.participant.findMany({
+    where: { userId, isBot: false },
+    include: {
+      session: {
+        include: {
+          _count: { select: { participants: true } },
+          result: { select: { participantOutcomes: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+  });
+
+  const fourWeeksAgo = new Date(Date.now() - FOUR_WEEKS_MS);
+  let sessionsPlayed = 0;
+  let totalScore = 0;
+  let roundsCompleted = 0;
+  const roleCounts = new Map<Role, number>();
+  const recentBySession = new Map<string, HomeRecentSession>();
+
+  for (const p of participants) {
+    const s = p.session;
+    const isActive = (ACTIVE_STATUSES as readonly string[]).includes(s.status);
+    const isHost = s.hostUserId === userId;
+
+    if (p.role) {
+      roleCounts.set(p.role, (roleCounts.get(p.role) ?? 0) + 1);
+    }
+
+    const outcomes = s.result?.participantOutcomes as ParticipantOutcome[] | undefined;
+    const selfOutcome = outcomes?.find((o) => o.participantId === p.id);
+
+    if (
+      (s.status === "COMPLETED" || s.status === "INCOMPLETE") &&
+      s.endedAt &&
+      s.endedAt >= fourWeeksAgo
+    ) {
+      sessionsPlayed++;
+      roundsCompleted += s.currentRound;
+      if (selfOutcome) totalScore += selfOutcome.scoreVnd;
+    }
+
+    const entry: HomeRecentSession = {
+      sessionId: s.id,
+      code: s.code,
+      status: s.status,
+      role: p.role,
+      startedAt: s.startedAt?.toISOString() ?? null,
+      endedAt: s.endedAt?.toISOString() ?? null,
+      joinedAt: p.createdAt.toISOString(),
+      participantCount: s._count.participants,
+      currentRound: s.currentRound,
+      isActive,
+      isHost,
+      isJoined: isActive && !isHost,
+      selfScore: selfOutcome?.scoreVnd,
+    };
+
+    const existing = recentBySession.get(s.id);
+    if (!existing || p.createdAt > new Date(existing.joinedAt)) {
+      recentBySession.set(s.id, entry);
+    }
+  }
+
+  let topRole: Role | null = null;
+  let maxRoleCount = 0;
+  for (const [role, count] of roleCounts) {
+    if (count > maxRoleCount) {
+      maxRoleCount = count;
+      topRole = role;
+    }
+  }
+
+  const recentSessions = [...recentBySession.values()]
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      const aTime = new Date(a.endedAt ?? a.startedAt ?? a.joinedAt).getTime();
+      const bTime = new Date(b.endedAt ?? b.startedAt ?? b.joinedAt).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 10);
+
+  const activeHostedSession = await getActiveHostedSession(userId);
+
+  return {
+    stats: { sessionsPlayed, totalScore, roundsCompleted, topRole },
+    recentSessions,
+    activeHostedSession,
+  };
 }

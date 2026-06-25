@@ -8,9 +8,10 @@ Rules for implementing Figma designs in this codebase using the Figma MCP. Read 
 | ----------------------- | -------------------------------------------------------------------------------------------------------- |
 | **File**                | [Design-Thanh-Long-Market](https://www.figma.com/design/R1oT2bmKxlIhvZ50JdSDCX/Design-Thanh-Long-Market) |
 | **fileKey**             | `R1oT2bmKxlIhvZ50JdSDCX`                                                                                 |
-| **Canvas page**         | `Dev-work` (`0:1`)                                                                                       |
-| **Landing (logged-in)** | `5:2` — `Landing / Logged In` (1440×2372)                                                                |
-| **Session lobby**       | `38:422` — `Session / Lobby` (924×1852)                                                                  |
+| **Canvas page**         | `Dev-work` (`0:1`) — legacy; **`Dev-work-refactor`** (`64:2620`) for mobile + desktop frames |
+| **Desktop section**     | `68:117` — `Desktop — 1440` (y≈5200 on `64:2620`)                                          |
+| **Landing (logged-in)** | `5:2` / `64:2621` — `Landing / Logged In` (1440)                                             |
+| **Session lobby**       | `38:422` mobile · `78:153` desktop — `Session / Lobby`                                       |
 
 ### Figma component library (off-canvas symbols)
 
@@ -409,13 +410,24 @@ app/
 
 ### Key screen → file map
 
-| Screen   | Figma frame  | Code entry                                                     |
-| -------- | ------------ | -------------------------------------------------------------- |
-| Landing  | `5:2`        | `src/app/page.tsx` → `landing/*`                               |
-| Auth     | `27:14` etc. | `src/app/auth/page.tsx` → `auth/*`                             |
-| Home     | —            | `src/app/home/page.tsx` → `home/home-view.tsx`                 |
-| Lobby    | `38:422`     | `src/app/session/[id]/lobby/page.tsx` → `lobby/lobby-view.tsx` |
-| Game map | —            | `session/map-shell.tsx`, `game-bento-shell.tsx`                |
+| Screen | Mobile (`64:2620`) | Desktop (`68:117` or top row) | Code entry |
+| ------ | ------------------ | ----------------------------- | ---------- |
+| Landing | `64:2621` (1440) | — (reference) | `src/app/page.tsx` → `landing/*` |
+| Auth / Login | `64:3072` | `78:117` | `src/app/auth/page.tsx` → `auth/*` |
+| Auth / Forgot | `64:2754` | `78:2036` (top row) | `src/app/auth/forgot/page.tsx` |
+| Auth / Reset | `64:3421` | `78:268` | `src/app/auth/reset/page.tsx` |
+| Profile | `64:3425` | `78:280` | `src/app/profile/page.tsx` |
+| Home / Hub | `100:97` | `98:97` | `src/app/home/page.tsx` → `home/home-view.tsx` |
+| Create Room / Step 1 | — | `109:22` | `src/app/home/create/page.tsx` → `create-room/create-room-config-view.tsx` |
+| Create Room / Step 2 | — | `110:22` | `src/app/home/create/[sessionId]/page.tsx` → `create-room/create-room-preview-view.tsx` |
+| Host / Lobby Dashboard | — | `111:22` | `src/app/host/session/[id]/page.tsx` → `host/host-lobby-view.tsx` (LOBBY) |
+| Session / Lobby | `64:3108` | `78:153` | `src/app/session/[id]/lobby/page.tsx` → `lobby/lobby-view.tsx` |
+| Host / Control Panel | `64:2770` | `86:421` (top row) | `src/app/host/session/[id]/page.tsx` → `host/host-control.tsx` |
+| Session / Map | `64:3454` | `82:1309` | `src/app/session/[id]/map/page.tsx` → `session/map-shell.tsx` |
+| Session / Market | `64:3825` | `82:97` | `src/app/session/[id]/market/page.tsx` → `session/role-task.tsx` |
+| Session / Task | `64:4166` | `82:470` | `src/app/session/[id]/task/page.tsx` → `session/role-task.tsx` |
+| Session / Observatory | `64:4537` | `82:891` | `src/app/session/[id]/observatory/page.tsx` → `observatory/*` |
+| Session / Debrief | `64:4913` | `86:97` | `src/app/session/[id]/debrief/page.tsx` → `session/debrief-view.tsx` |
 
 ---
 

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "./use-api";
+import { apiFetch, ApiClientError } from "./use-api";
 import type { SessionSnapshot, SessionResultView } from "@/lib/session-service";
 
 interface CreatedSession {
@@ -15,6 +15,15 @@ export function useCreateRoom() {
   return useMutation({
     mutationFn: () => apiFetch<CreatedSession>("/api/sessions", { method: "POST" }),
     onSuccess: (data) => router.push(`/session/${data.id}/lobby`),
+    onError: (error) => {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "ACTIVE_HOST_SESSION" &&
+        error.message
+      ) {
+        router.push(`/session/${error.message}/lobby`);
+      }
+    },
   });
 }
 

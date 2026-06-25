@@ -13,6 +13,8 @@ export async function GET() {
         email: true,
         displayName: true,
         avatarUrl: true,
+        school: true,
+        gradeClass: true,
         emailVerified: true,
       },
     });
@@ -28,7 +30,7 @@ export async function PATCH(request: Request) {
     return db.user.update({
       where: { id: user.id },
       data,
-      select: { id: true, displayName: true, avatarUrl: true },
+      select: { id: true, displayName: true, avatarUrl: true, school: true, gradeClass: true },
     });
   });
 }

@@ -10,6 +10,7 @@ import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { STATUS_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { GuidancePanel } from "@/components/learning/guidance-panel";
+import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { getGuidance } from "@/lib/game-guidance";
@@ -123,6 +124,7 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
   const selectedAiReview = selected ? (aiByParticipantId.get(selected.id) ?? null) : null;
 
   return (
+    <SessionGuidanceScope guidanceEnabled={snapshot.guidanceEnabled}>
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
       <div className="grid grid-cols-12 gap-4 lg:items-start">
         {/* Trái — avatar + peek cá nhân nhỏ */}
@@ -272,5 +274,6 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
         </div>
       </div>
     </main>
+    </SessionGuidanceScope>
   );
 }

@@ -2,11 +2,13 @@
 
 import { CircleHelp } from "lucide-react";
 import { useTutorial } from "./tutorial-provider";
+import { useSessionGuidance } from "./session-guidance-scope";
 
 /** Inline hint shown next to a label when tutorial mode is on. */
 export function HelpHint({ text }: { text: string }) {
   const { enabled } = useTutorial();
-  if (!enabled) return null;
+  const { guidanceEnabled } = useSessionGuidance();
+  if (!guidanceEnabled || !enabled) return null;
 
   return (
     <span

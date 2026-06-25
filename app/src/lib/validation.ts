@@ -40,6 +40,8 @@ export const resetPasswordSchema = z.object({
 export const updateProfileSchema = z.object({
   displayName: displayNameSchema.optional(),
   avatarUrl: z.string().url().max(500).nullable().optional(),
+  school: z.string().trim().max(120).nullable().optional(),
+  gradeClass: z.string().trim().max(40).nullable().optional(),
 });
 
 export const roomCodeSchema = z

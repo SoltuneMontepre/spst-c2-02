@@ -188,6 +188,8 @@ model User {
   emailVerified DateTime?
   displayName   String
   avatarUrl     String?
+  school        String?
+  gradeClass    String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
@@ -236,6 +238,9 @@ model GameSession {
   status          SessionStatus @default(CREATED)
   scenarioVersion String        @default("dragon-fruit-v1")
   maxPlayers      Int           @default(10)
+  totalRounds     Int           @default(4)
+  autoAssignRoles Boolean       @default(true)
+  guidanceEnabled Boolean       @default(true)
   currentRound    Int           @default(0)
   phase            RoundPhase?
   phaseEndsAt      DateTime?

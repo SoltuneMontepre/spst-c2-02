@@ -8,6 +8,7 @@ import { useHostControl } from "@/hooks/use-host-control";
 import { SessionNav } from "@/components/session/session-nav";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { PhaseBanner } from "@/components/session/phase-banner";
+import { HostLobbyView } from "@/components/host/host-lobby-view";
 import { HostRoster } from "@/components/host/host-roster";
 import { HostControls } from "./host-controls";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
@@ -20,11 +21,13 @@ const ENDED = ["COMPLETED", "INCOMPLETE", "CANCELLED"];
 function SessionStats({
   status,
   currentRound,
+  totalRounds,
   readyCount,
   humanCount,
 }: {
   status: string;
   currentRound: number;
+  totalRounds: number;
   readyCount: number;
   humanCount: number;
 }) {
@@ -39,7 +42,7 @@ function SessionStats({
       <div className="rounded-lg bg-muted/30 px-3 py-2">
         <dt className="text-xs text-muted-foreground">Vòng</dt>
         <dd className="mt-0.5 font-mono font-semibold tabular-nums">
-          {currentRound > 0 ? currentRound : "—"}
+          {currentRound > 0 ? `${currentRound}/${totalRounds}` : "—"}
         </dd>
       </div>
       <div className="col-span-2 rounded-lg bg-muted/30 px-3 py-2">
@@ -66,8 +69,7 @@ export function HostControl({
 
   useEffect(() => {
     if (!data) return;
-    if (data.status === "LOBBY") router.replace(`/session/${sessionId}/lobby`);
-    else if (ENDED.includes(data.status)) router.replace(`/session/${sessionId}/debrief`);
+    if (ENDED.includes(data.status)) router.replace(`/session/${sessionId}/debrief`);
   }, [data, router, sessionId]);
 
   if (isLoading || !data) {
@@ -77,6 +79,10 @@ export function HostControl({
         <p className="p-8 text-muted-foreground">Đang tải bảng điều khiển…</p>
       </div>
     );
+  }
+
+  if (data.status === "LOBBY") {
+    return <HostLobbyView sessionId={sessionId} displayName={displayName} />;
   }
 
   const latest = data.analytics[data.analytics.length - 1];
@@ -146,6 +152,7 @@ export function HostControl({
               <SessionStats
                 status={data.status}
                 currentRound={data.currentRound}
+                totalRounds={data.totalRounds}
                 readyCount={readyCount}
                 humanCount={humans.length}
               />

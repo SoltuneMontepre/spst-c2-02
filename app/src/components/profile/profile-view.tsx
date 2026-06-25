@@ -1,48 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { apiFetch } from "@/hooks/use-api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { SessionNav } from "@/components/session/session-nav";
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
-import { STATUS_LABELS } from "@/lib/labels";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { ProfileSummaryCard, ProfileStatsCard } from "@/components/profile/profile-summary-card";
+import { ProfileInfoForm } from "@/components/profile/profile-info-form";
+import { ProfileSecurityCard } from "@/components/profile/profile-security-card";
+import { ProfileBadgesCard } from "@/components/profile/profile-badges-card";
+import { ProfileLearningProgressCard } from "@/components/profile/profile-learning-progress";
+import { apiFetch } from "@/hooks/use-api";
+import type { ProfileDashboard } from "@/lib/profile-service";
 
-interface Profile {
-  id: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-}
+const EMPTY_STATS = {
+  sessionsPlayed: 0,
+  totalScore: 0,
+  roundsCompleted: 0,
+  wins: 0,
+  topRole: null,
+} as const;
 
-interface HistoryItem {
-  sessionId: string;
-  code: string;
-  status: string;
-  role: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-}
-
-export function ProfileView() {
+export function ProfileView({ displayName }: { displayName: string }) {
   const queryClient = useQueryClient();
-  const { data: profile } = useQuery({
-    queryKey: ["profile"],
-    queryFn: () => apiFetch<Profile>("/api/me"),
-  });
-  const { data: history } = useQuery({
-    queryKey: ["session-history"],
-    queryFn: () => apiFetch<HistoryItem[]>("/api/me/sessions"),
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["profile-dashboard"],
+    queryFn: () => apiFetch<ProfileDashboard>("/api/me/profile-dashboard"),
   });
 
-  const [name, setName] = useState("");
-  const update = useMutation({
-    mutationFn: (displayName: string) =>
-      apiFetch("/api/me", { method: "PATCH", body: JSON.stringify({ displayName }) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profile"] }),
-  });
   const remove = useMutation({
     mutationFn: () => apiFetch("/api/me", { method: "DELETE" }),
     onSuccess: () => {
@@ -50,70 +34,57 @@ export function ProfileView() {
     },
   });
 
-  if (!profile) return <p className="p-6 text-muted-foreground">Đang tải hồ sơ…</p>;
+  const profile = data?.profile;
+  const stats = data?.stats ?? EMPTY_STATS;
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Hồ sơ</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 text-sm">
-          <p>
-            Email: <span className="font-medium">{profile.email}</span>
-          </p>
-          <Field label="Tên hiển thị" htmlFor="displayName">
-            <input
-              id="displayName"
-              className="w-full rounded-md border px-3 py-2"
-              defaultValue={profile.displayName}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
+    <div className="flex min-h-full flex-col">
+      <SessionNav displayName={displayName} sessionLabel="Hồ sơ cá nhân" />
+
+      <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6">
+        <div className="col-span-12">
+          <h1 className="text-2xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
+        </div>
+
+        <div className="col-span-12 flex flex-col gap-4 lg:col-span-3">
+          <ProfileSummaryCard
+            displayName={profile?.displayName ?? displayName}
+            school={profile?.school ?? null}
+            gradeClass={profile?.gradeClass ?? null}
+            topRole={stats.topRole}
+            proficiencyStars={data?.proficiencyStars ?? 0}
+            loading={isLoading}
+          />
+          <ProfileStatsCard stats={stats} loading={isLoading} />
+        </div>
+
+        <div className="col-span-12 flex flex-col gap-4 lg:col-span-5">
+          {profile ? <ProfileInfoForm profile={profile} /> : null}
+          <ProfileSecurityCard />
           <Button
+            variant="destructive"
             size="sm"
-            disabled={update.isPending || !name.trim()}
-            onClick={() => update.mutate(name.trim() || profile.displayName)}
+            className="self-start"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (confirm("Xóa tài khoản? Hành động không thể hoàn tác.")) {
+                remove.mutate();
+                queryClient.invalidateQueries({ queryKey: ["profile-dashboard"] });
+              }
+            }}
           >
-            Lưu tên
+            {remove.isPending ? "Đang xóa…" : "Xóa tài khoản"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Lịch sử phiên</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 text-sm">
-          {!history?.length ? (
-            <p className="text-muted-foreground">Chưa có phiên nào.</p>
-          ) : (
-            history.map((h) => (
-              <Link
-                key={h.sessionId}
-                href={`/session/${h.sessionId}/debrief`}
-                className="flex justify-between rounded-lg border px-3 py-2 hover:bg-muted"
-              >
-                <span>
-                  {h.code} · {h.role ? ROLE_LABELS[h.role as keyof typeof ROLE_LABELS] : "—"}
-                </span>
-                <span className="text-muted-foreground">{STATUS_LABELS[h.status]}</span>
-              </Link>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Button
-        variant="destructive"
-        size="sm"
-        disabled={remove.isPending}
-        onClick={() => {
-          if (confirm("Xóa tài khoản? Hành động không thể hoàn tác.")) remove.mutate();
-        }}
-      >
-        Xóa tài khoản
-      </Button>
-    </main>
+        <div className="col-span-12 flex flex-col gap-4 lg:col-span-4">
+          <ProfileBadgesCard badges={data?.badges ?? []} loading={isLoading} />
+          <ProfileLearningProgressCard
+            topics={data?.learningProgress ?? []}
+            loading={isLoading}
+          />
+        </div>
+      </main>
+    </div>
   );
 }

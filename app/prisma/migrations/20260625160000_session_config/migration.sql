@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "GameSession" ADD COLUMN "totalRounds" INTEGER NOT NULL DEFAULT 4;
+ALTER TABLE "GameSession" ADD COLUMN "autoAssignRoles" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "GameSession" ADD COLUMN "guidanceEnabled" BOOLEAN NOT NULL DEFAULT true;

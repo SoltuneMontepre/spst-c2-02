@@ -125,8 +125,12 @@ export async function hostAddBot(
   productivityProfile?: ProductivityProfile | null,
 ): Promise<void> {
   await assertLobbyHost(hostUserId, sessionId);
+  const session = await db.gameSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { maxPlayers: true },
+  });
   const count = await db.participant.count({ where: { sessionId } });
-  if (count >= MAX_PLAYERS) throw new ApiError("SESSION_FULL", 409);
+  if (count >= session.maxPlayers) throw new ApiError("SESSION_FULL", 409);
 
   const roleBotCount = await db.participant.count({
     where: { sessionId, isBot: true, role },
@@ -231,7 +235,9 @@ export async function startSession(
   if (!humans.every((p) => p.ready)) throw new ApiError("NOT_ALL_READY", 409);
 
   const manualMode =
-    lobbyBots.length > 0 || session.participants.some((p) => p.role !== null);
+    !session.autoAssignRoles ||
+    lobbyBots.length > 0 ||
+    session.participants.some((p) => p.role !== null);
 
   if (manualMode) {
     await startSessionManual(sessionId, humans, lobbyBots);
@@ -396,6 +402,13 @@ function roundConfig(n: number) {
 }
 
 async function enterRound(sessionId: string, n: number): Promise<void> {
+  const session = await db.gameSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { totalRounds: true },
+  });
+  if (n > session.totalRounds) {
+    throw new ApiError("INVALID_ROUND", 409);
+  }
   const cfg = roundConfig(n);
   const participants = await db.participant.findMany({
     where: { sessionId },
@@ -605,7 +618,7 @@ async function transition(sessionId: string, auto: boolean): Promise<void> {
       await setPhase(sessionId, "RECAP");
       return;
     case "RECAP":
-      if (n >= 4) {
+      if (n >= session.totalRounds) {
         const phaseEndsAt = session.autoHost
           ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
           : null;

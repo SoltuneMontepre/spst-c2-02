@@ -8,6 +8,8 @@ export function SessionListRow({
   meta,
   submeta,
   badges,
+  statusBadge,
+  icon,
   href,
   actions,
   highlight,
@@ -16,6 +18,8 @@ export function SessionListRow({
   meta: string;
   submeta?: string;
   badges?: ReactNode;
+  statusBadge?: ReactNode;
+  icon?: ReactNode;
   href?: string;
   actions?: ReactNode;
   highlight?: "host" | "joined";
@@ -32,17 +36,25 @@ export function SessionListRow({
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-semibold tracking-wider">
-              {code}
-            </span>
-            {badges}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{meta}</p>
-          {submeta ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">{submeta}</p>
+        <div className="flex min-w-0 flex-1 gap-3">
+          {icon ? (
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              {icon}
+            </div>
           ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm font-semibold tracking-wider">
+                {code}
+              </span>
+              {statusBadge}
+              {badges}
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{meta}</p>
+            {submeta ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">{submeta}</p>
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {href ? (

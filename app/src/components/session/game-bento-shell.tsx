@@ -9,6 +9,7 @@ import { GameAnnouncementBanner } from "@/components/session/game-announcement-b
 import { PersonalInventoryHud } from "@/components/session/personal-inventory-hud";
 import { SessionRosterWall } from "@/components/session/session-roster-wall";
 import { GuidancePanel } from "@/components/learning/guidance-panel";
+import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { getGuidance, type GuidanceContext } from "@/lib/game-guidance";
@@ -58,6 +59,7 @@ export function GameBentoShell({
   const selfParticipant = data.participants.find((p) => p.isSelf);
 
   return (
+    <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
     <>
       <header className="fixed inset-x-0 top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/90">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
@@ -127,5 +129,6 @@ export function GameBentoShell({
         sessionStatus={data.status}
       />
     </>
+    </SessionGuidanceScope>
   );
 }
