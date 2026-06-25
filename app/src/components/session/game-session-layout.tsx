@@ -6,6 +6,7 @@ import { useSessionStream } from "@/hooks/use-session-stream";
 import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/session/game-sidebar";
 import { GameTopBar } from "@/components/session/game-top-bar";
 import { GameAnnouncementBanner } from "@/components/session/game-announcement-banner";
+import { GamePhaseTimeline } from "@/components/session/game-phase-timeline";
 import { SessionRosterWall } from "@/components/session/session-roster-wall";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import type { GameScreen } from "@/lib/game-zones";
@@ -50,14 +51,21 @@ export function GameSessionLayout({
             role={data.self?.role ?? null}
             status={data.status}
             phase={data.phase}
+            isHost={data.isHost}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <GameTopBar data={data} streamState={streamState} />
+            <GameTopBar
+              data={data}
+              streamState={streamState}
+              sessionId={sessionId}
+              isHost={data.isHost}
+            />
 
             {activeZone !== "debrief" ? (
               <div className="border-b border-border px-4 py-3 sm:px-6">
                 <GameAnnouncementBanner sessionId={sessionId} data={data} />
+                <GamePhaseTimeline data={data} />
               </div>
             ) : null}
 

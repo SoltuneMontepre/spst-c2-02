@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Play } from "lucide-react";
 import { useSessionSnapshot, useSetReady } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
@@ -28,22 +26,12 @@ export function HostLobbyView({
   sessionId: string;
   displayName: string;
 }) {
-  const router = useRouter();
   useSessionStream(sessionId);
   const { data, isLoading } = useSessionSnapshot(sessionId);
   const host = useHostControl(sessionId);
   const setReady = useSetReady(sessionId);
 
   useSessionCancelledRedirect(data?.status, "solo_timeout");
-
-  useEffect(() => {
-    if (!data || data.status === "LOBBY") return;
-    if (["COMPLETED", "INCOMPLETE"].includes(data.status)) {
-      router.replace(`/session/${sessionId}/debrief`);
-    } else if (data.status !== "CANCELLED") {
-      router.replace(`/host/session/${sessionId}`);
-    }
-  }, [data, router, sessionId]);
 
   if (isLoading || !data) {
     return <p className="p-8 text-muted-foreground">Đang tải bảng điều khiển…</p>;
@@ -59,8 +47,10 @@ export function HostLobbyView({
   return (
     <div className="flex min-h-full flex-col bg-background">
       <HostLobbyHeader
+        sessionId={sessionId}
         code={data.code}
         subtitle="Đang chờ người chơi tham gia"
+        status={data.status}
       />
       <main className="flex w-full flex-1 flex-col gap-4 p-4 pb-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-12 gap-4 lg:items-start">

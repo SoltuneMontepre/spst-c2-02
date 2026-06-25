@@ -825,7 +825,7 @@ export async function hostSetAutoHost(
 ): Promise<void> {
   const s = await assertHost(hostUserId, sessionId);
   if (s.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
-  if (autoHost) await ensureHostParticipant(sessionId, hostUserId);
+  await ensureHostParticipant(sessionId, hostUserId);
   await db.gameSession.update({ where: { id: sessionId }, data: { autoHost } });
   await touch(sessionId, "session:auto_host", { autoHost });
 }

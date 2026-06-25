@@ -12,6 +12,7 @@ export function LobbyShell({
   subtitle,
   onLeave,
   leavePending,
+  headerExtra,
   children,
 }: {
   mode: "lobby" | "tutorial";
@@ -19,6 +20,7 @@ export function LobbyShell({
   subtitle: string;
   onLeave?: () => void;
   leavePending?: boolean;
+  headerExtra?: ReactNode;
   children: ReactNode;
 }) {
   const title = mode === "tutorial" ? "Hướng dẫn vai trò" : "Phòng chờ";
@@ -50,7 +52,8 @@ export function LobbyShell({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-2">
+            {headerExtra}
             <span className="size-1.5 rounded-full bg-success" aria-hidden />
             <span className="font-mono text-xs font-semibold text-success">{sessionCode}</span>
             <span className="text-xs text-muted-foreground">· Đang mở</span>

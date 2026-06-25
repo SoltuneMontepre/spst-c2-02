@@ -349,7 +349,7 @@ export async function getSnapshot(
 
   const isHost = session.hostUserId === userId;
   let participants = session.participants;
-  if (isHost && session.status === "LOBBY") {
+  if (isHost) {
     const created = await ensureHostParticipant(session.id, userId);
     if (created) {
       participants = await db.participant.findMany({

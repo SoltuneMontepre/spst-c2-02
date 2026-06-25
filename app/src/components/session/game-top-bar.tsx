@@ -16,15 +16,21 @@ function connectionLabel(streamState: SessionStreamState): string {
   return "Kết nối ổn định";
 }
 
+import { OpenProjectorButton } from "@/components/host/projector-mode-toggle";
+
 export function GameTopBar({
   data,
   streamState,
+  sessionId,
+  isHost,
 }: {
   data: Pick<
     SessionSnapshot,
-    "currentRound" | "totalRounds" | "phase" | "phaseEndsAt" | "paused" | "self"
+    "currentRound" | "totalRounds" | "phase" | "phaseEndsAt" | "paused" | "self" | "status"
   >;
   streamState: SessionStreamState;
+  sessionId: string;
+  isHost: boolean;
 }) {
   const remaining = useCountdown(data.phaseEndsAt, data.paused);
   const phaseLabel = data.phase ? PHASE_LABELS[data.phase] ?? data.phase : "Đang chờ";
@@ -49,6 +55,7 @@ export function GameTopBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {isHost ? <OpenProjectorButton sessionId={sessionId} className="hidden sm:inline-flex" /> : null}
         <span
           className={cn(
             "hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs sm:flex",

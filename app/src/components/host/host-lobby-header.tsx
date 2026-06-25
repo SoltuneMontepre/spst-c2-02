@@ -6,12 +6,18 @@ import { Brand } from "@/components/brand";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { PlayAsPlayerButton } from "@/components/host/projector-mode-toggle";
+
 export function HostLobbyHeader({
+  sessionId,
   code,
   subtitle,
+  status,
 }: {
+  sessionId: string;
   code: string;
   subtitle: string;
+  status: string;
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
@@ -29,6 +35,7 @@ export function HostLobbyHeader({
           <span className="truncate text-sm font-semibold">Bảng điều khiển Host</span>
         </div>
         <div className="flex items-center gap-2">
+          <PlayAsPlayerButton sessionId={sessionId} status={status} />
           <span className="size-2 rounded-full bg-success" aria-hidden />
           <span className="font-mono text-xs font-semibold text-success">
             {code} · Đang mở

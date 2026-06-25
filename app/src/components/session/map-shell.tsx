@@ -23,7 +23,6 @@ export function MapShell({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     if (!data) return;
     if (data.status === "LOBBY") router.replace(`/session/${sessionId}/lobby`);
-    else if (data.isHost && !data.autoHost) router.replace(`/host/session/${sessionId}`);
     else if (ENDED.includes(data.status) || data.status === "DEBRIEF")
       router.replace(`/session/${sessionId}/debrief`);
   }, [data, router, sessionId]);

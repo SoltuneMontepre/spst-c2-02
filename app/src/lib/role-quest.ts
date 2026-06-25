@@ -167,6 +167,24 @@ export function getRoleQuest(params: {
         status: used ? "done" : "active",
       };
     }
+    if (phase === "MARKET_OPEN" && round >= 2 && !used) {
+      return {
+        ...base,
+        title: "Xúc tiến xuất khẩu",
+        objective: "15 giây đầu chợ mở — mua ~25% cung bán lẻ.",
+        action: "Kích hoạt xuất khẩu tại bảng điều khiển hoặc chờ hết cửa sổ.",
+        status: "active",
+      };
+    }
+    if (phase === "MARKET_OPEN" && used) {
+      return {
+        ...base,
+        title: "Đã dùng chính sách vòng này",
+        objective: "Theo dõi thị trường & ngân sách.",
+        action: "Xem Tháp quan sát hoặc chờ chuyển giai đoạn.",
+        status: "done",
+      };
+    }
     return {
       ...base,
       title: round < 2 ? "Quan sát vòng 1" : "Nhà nước",

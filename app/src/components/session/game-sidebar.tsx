@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
 import { zoneScreenForRole } from "@/lib/zone-phase";
+import { OpenProjectorButton } from "@/components/host/projector-mode-toggle";
 import { cn } from "@/lib/utils";
 
 export type GameNavItem =
@@ -111,12 +112,14 @@ export function GameSidebar({
   role,
   status,
   phase,
+  isHost,
 }: {
   sessionId: string;
   active: GameNavItem;
   role: Role | null;
   status: string;
   phase: string | null;
+  isHost?: boolean;
 }) {
   const router = useRouter();
   const recapActive = active === "recap" || phase === "RECAP";
@@ -211,6 +214,11 @@ export function GameSidebar({
       </nav>
 
       <div className="border-t border-border p-3">
+        {isHost ? (
+          <div className="mb-2">
+            <OpenProjectorButton sessionId={sessionId} className="w-full" size="md" />
+          </div>
+        ) : null}
         <button
           type="button"
           className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"

@@ -16,7 +16,7 @@ export default async function LobbyPage({
   const user = await currentUser();
   if (!user) redirect("/auth");
   const access = await resolveSessionAccess(user.id, id);
-  if (access === "host") redirect(`/host/session/${id}`);
+  if (access === "not_found" || access === "denied") redirect("/home");
 
   return (
     <LobbyView

@@ -26,6 +26,8 @@ export interface LobbyReadiness {
   completedCount: number;
   totalCount: number;
   canStart: boolean;
+  allReady: boolean;
+  manualComplete: boolean;
   roleDistribution: RoleDistribution[];
   onlineCount: number;
   readyCount: number;
@@ -131,6 +133,8 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
     completedCount,
     totalCount: checklist.length,
     canStart,
+    allReady,
+    manualComplete,
     roleDistribution,
     onlineCount,
     readyCount,

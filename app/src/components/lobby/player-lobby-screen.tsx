@@ -7,6 +7,7 @@ import { getRoleTutorialContent } from "@/lib/role-tutorial";
 import { LobbyRoleCard } from "@/components/lobby/lobby-role-card";
 import { LobbyParticipantPanel } from "@/components/lobby/lobby-participant-panel";
 import { LobbyReadyPanel } from "@/components/lobby/lobby-ready-panel";
+import { LobbyControls } from "@/components/lobby/lobby-controls";
 import { RoleTutorialCallouts } from "@/components/lobby/role-tutorial-callouts";
 import { RoleTutorialWizard } from "@/components/lobby/role-tutorial-wizard";
 import { SoloLobbyCountdown } from "@/components/lobby/solo-lobby-countdown";
@@ -18,6 +19,7 @@ export function PlayerLobbyScreen({
   onSetReady,
   onOpenTutorial,
   onCloseTutorial,
+  hostControls,
 }: {
   data: SessionSnapshot;
   readyPending: boolean;
@@ -25,6 +27,16 @@ export function PlayerLobbyScreen({
   onSetReady: (ready: boolean) => void;
   onOpenTutorial: () => void;
   onCloseTutorial: () => void;
+  hostControls?: {
+    autoHostPending: boolean;
+    hostPending: boolean;
+    allReady: boolean;
+    manualComplete: boolean;
+    humanCount: number;
+    minHumans: number;
+    onSetAutoHost: (enabled: boolean) => void;
+    onStart: () => void;
+  };
 }) {
   const self = data.participants.find((p) => p.isSelf);
   const selfRole = self?.role ?? null;
@@ -47,7 +59,13 @@ export function PlayerLobbyScreen({
 
   return (
     <div className="flex w-full flex-col gap-4 lg:gap-5">
-      {showSoloCountdown ? <SoloLobbyCountdown soloSince={data.lobbySoloSince!} extendUsed={data.lobbySoloExtendUsed} isHost={false} /> : null}
+      {showSoloCountdown ? (
+        <SoloLobbyCountdown
+          soloSince={data.lobbySoloSince!}
+          extendUsed={data.lobbySoloExtendUsed}
+          isHost={data.isHost}
+        />
+      ) : null}
       <div className="grid w-full gap-4 lg:grid-cols-3 lg:items-stretch lg:gap-5">
         <div className="min-h-[360px] md:col-span-1">
           <LobbyRoleCard role={selfRole} onOpenTutorial={onOpenTutorial} />
@@ -56,13 +74,35 @@ export function PlayerLobbyScreen({
           <LobbyParticipantPanel participants={data.participants} humanCount={humans.length} maxPlayers={data.maxPlayers} />
         </div>
         <div className="min-h-[360px] md:col-span-1">
-          <LobbyReadyPanel
-            selfReady={self?.ready ?? false}
-            readyPending={readyPending}
-            isParticipant={!!self}
-            roleDistribution={readiness.roleDistribution}
-            onSetReady={onSetReady}
-          />
+          {hostControls ? (
+            <div className="flex h-full flex-col rounded-2xl border border-border bg-surface p-4 shadow-sm">
+              <p className="mb-3 text-sm font-semibold">Điều khiển host</p>
+              <LobbyControls
+                isHost
+                autoHost={data.autoHost}
+                autoHostPending={hostControls.autoHostPending}
+                hostPending={hostControls.hostPending}
+                allReady={hostControls.allReady}
+                manualComplete={hostControls.manualComplete}
+                humanCount={hostControls.humanCount}
+                minHumans={hostControls.minHumans}
+                selfReady={self?.ready ?? false}
+                isParticipant={!!self}
+                readyPending={readyPending}
+                onSetReady={onSetReady}
+                onSetAutoHost={hostControls.onSetAutoHost}
+                onStart={hostControls.onStart}
+              />
+            </div>
+          ) : (
+            <LobbyReadyPanel
+              selfReady={self?.ready ?? false}
+              readyPending={readyPending}
+              isParticipant={!!self}
+              roleDistribution={readiness.roleDistribution}
+              onSetReady={onSetReady}
+            />
+          )}
         </div>
       </div>
 

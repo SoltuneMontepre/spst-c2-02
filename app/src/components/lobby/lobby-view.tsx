@@ -22,6 +22,10 @@ import { SessionGuidanceScope } from "@/components/learning/session-guidance-sco
 import { isRoleTutorialSkipped } from "@/lib/role-tutorial";
 import type { GameEvent } from "@/lib/events";
 import type { SessionSnapshot } from "@/lib/session-service";
+import { useHostControl } from "@/hooks/use-host-control";
+import { OpenProjectorButton } from "@/components/host/projector-mode-toggle";
+import { computeLobbyReadiness } from "@/lib/lobby-readiness";
+import { lobbyMinHumans } from "@/components/lobby/lobby-controls";
 import type { Role } from "@/generated/prisma/enums";
 
 export function LobbyView({
@@ -35,6 +39,7 @@ export function LobbyView({
   const { data, isLoading, isError, error } = useSessionSnapshot(sessionId);
   const setReady = useSetReady(sessionId);
   const leave = useLeaveRoom(sessionId);
+  const host = useHostControl(sessionId);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [roleChangeNotice, setRoleChangeNotice] = useState<RoleChangeNotice | null>(
     null,
@@ -86,7 +91,7 @@ export function LobbyView({
   );
 
   useSessionStream(sessionId, {
-    enabled: !!data && !data.isHost,
+    enabled: !!data,
     onEvent: handleStreamEvent,
   });
 
@@ -95,14 +100,6 @@ export function LobbyView({
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (!data || data.status !== "LOBBY") return;
-    if (data.isHost) {
-      router.replace(`/host/session/${sessionId}`);
-      return;
-    }
-  }, [data, router, sessionId]);
 
   useEffect(() => {
     if (!isError || !(error instanceof ApiClientError) || error.status !== 403) return;
@@ -114,18 +111,14 @@ export function LobbyView({
     if (["COMPLETED", "INCOMPLETE"].includes(data.status)) {
       router.replace(`/session/${sessionId}/debrief`);
     } else {
-      router.replace(
-        data.isHost && !data.autoHost
-          ? `/host/session/${sessionId}`
-          : `/session/${sessionId}/map`,
-      );
+      router.replace(`/session/${sessionId}/map`);
     }
   }, [data, router, sessionId]);
 
   const self = data?.participants.find((p) => p.isSelf);
   const selfRole = self?.role ?? null;
   const selfRoleForHook =
-    data && !data.isHost && data.status === "LOBBY" ? selfRole : undefined;
+    data && data.status === "LOBBY" ? selfRole : undefined;
 
   useEffect(() => {
     selfIdRef.current = self?.id;
@@ -159,15 +152,12 @@ export function LobbyView({
     );
   }
 
-  if (data.isHost) {
-    return (
-      <div className="flex min-h-full flex-col bg-background">
-        <p className="p-8 text-muted-foreground">Đang chuyển tới bảng host…</p>
-      </div>
-    );
-  }
+  const lobbySubtitle = data.isHost
+    ? "Chơi như người chơi — dùng «Bảng projector» để điều phối lớp"
+    : "Đang chờ host bắt đầu…";
 
-  const lobbySubtitle = "Đang chờ host bắt đầu…";
+  const readiness = computeLobbyReadiness(data);
+  const minHumans = lobbyMinHumans(data.autoHost);
 
   const handleLeave = () => leave.mutate();
 
@@ -179,6 +169,14 @@ export function LobbyView({
         subtitle={lobbySubtitle}
         onLeave={handleLeave}
         leavePending={leave.isPending}
+        headerExtra={
+          data.isHost ? (
+            <>
+              <OpenProjectorButton sessionId={sessionId} className="hidden sm:inline-flex" />
+              <OpenProjectorButton sessionId={sessionId} className="sm:hidden" size="sm" />
+            </>
+          ) : null
+        }
       >
         <PlayerLobbyScreen
           data={data}
@@ -189,6 +187,21 @@ export function LobbyView({
             if (selfRole) setTutorialOpen(true);
           }}
           onCloseTutorial={() => setTutorialOpen(false)}
+          hostControls={
+            data.isHost
+              ? {
+                  autoHostPending: host.isPending,
+                  hostPending: host.isPending,
+                  allReady: readiness.allReady,
+                  manualComplete: readiness.manualComplete,
+                  humanCount: readiness.humanCount,
+                  minHumans,
+                  onSetAutoHost: (enabled) =>
+                    host.mutate({ action: "setAutoHost", autoHost: enabled }),
+                  onStart: () => host.mutate("start"),
+                }
+              : undefined
+          }
         />
       </LobbyShell>
       {roleChangeNotice ? (

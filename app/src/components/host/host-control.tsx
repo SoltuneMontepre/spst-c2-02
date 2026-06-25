@@ -15,6 +15,7 @@ import { HostControls } from "./host-controls";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { ChartLegend } from "@/components/observatory/chart-legend";
+import { PlayAsPlayerButton } from "@/components/host/projector-mode-toggle";
 import { STATUS_LABELS, PHASE_LABELS } from "@/lib/labels";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
@@ -107,14 +108,17 @@ export function HostControl({
       />
 
       <div className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Bảng điều phối</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Chế độ projector · {data.autoHost ? "AI điều phối" : "Host thủ công"}
+              Bảng projector · {data.autoHost ? "AI điều phối" : "Host thủ công"}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">{phaseLabel}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <PlayAsPlayerButton sessionId={sessionId} status={data.status} />
+            <p className="text-sm text-muted-foreground">{phaseLabel}</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-12 gap-4">
