@@ -41,15 +41,18 @@ export function useRegisterForm() {
   const form = useForm<RegisterValues>({ resolver: zodResolver(registerSchema) });
   const [formError, setFormError] = useState<string | null>(null);
   const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
+    setSubmitted(false);
     try {
       const res = await apiFetch<{ verifyUrl?: string }>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify(values),
       });
       setVerifyUrl(res.verifyUrl ?? null);
+      setSubmitted(true);
     } catch (err) {
       if (err instanceof ApiClientError && err.code === "EMAIL_IN_USE") {
         setFormError("Email này đã có tài khoản. Hãy đăng nhập hoặc đặt lại mật khẩu.");
@@ -64,7 +67,7 @@ export function useRegisterForm() {
     onSubmit,
     formError,
     verifyUrl,
-    submitted: form.formState.isSubmitSuccessful,
+    submitted,
     pending: form.formState.isSubmitting,
   };
 }
