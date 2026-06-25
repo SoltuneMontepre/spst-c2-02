@@ -143,10 +143,10 @@ export function HostControl({
           </BentoTile>
 
           <BentoTile
-            colSpan="col-span-12 lg:col-span-3 lg:row-span-2 lg:row-start-1 lg:col-start-10"
+            colSpan="col-span-12 lg:col-span-3 lg:row-start-1 lg:col-start-10"
             title="Điều khiển"
             description={data.autoHost ? "AI đang điều phối" : "Host thủ công"}
-            className="lg:sticky lg:top-20 lg:min-h-[280px]"
+            className="lg:self-start"
           >
             <div className="flex h-full flex-col gap-4">
               <SessionStats

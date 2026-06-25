@@ -12,7 +12,7 @@ import type { ConsumerRoundState } from "@/lib/role-state";
 
 export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
-  const command = useCommand(sessionId);
+  const command = useCommand(sessionId, data?.stateVersion);
   const [offerPrices, setOfferPrices] = useState<Record<string, number>>({});
   if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
 
@@ -101,6 +101,7 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
         {open ? (
           <OffersPanel
             sessionId={sessionId}
+            stateVersion={data.stateVersion}
             incoming={data.self.incomingOffers}
             outgoing={data.self.outgoingOffers}
           />

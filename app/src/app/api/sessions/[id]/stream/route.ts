@@ -1,9 +1,11 @@
 import { currentUser } from "@/lib/api";
 import { db } from "@/lib/db";
 import { subscribe, type GameEvent } from "@/lib/events";
-import { setPresence } from "@/lib/session-service";
+import { getSnapshot, setPresence } from "@/lib/session-service";
 
 export const dynamic = "force-dynamic";
+
+const SNAPSHOT_DEBOUNCE_MS = 50;
 
 export async function GET(
   request: Request,
@@ -32,14 +34,74 @@ export async function GET(
       const send = (payload: string) => controller.enqueue(encoder.encode(payload));
       send(`event: ready\ndata: {}\n\n`);
 
-      const onEvent = (event: GameEvent) =>
+      let lastDeliveredVersion = 0;
+      let pendingVersion = 0;
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let closed = false;
+
+      const pushSnapshot = async () => {
+        if (closed) return;
+        const minVersion = pendingVersion;
+        pendingVersion = 0;
+        try {
+          const snapshot = await getSnapshot(user.id, id);
+          if (closed) return;
+          if (snapshot.stateVersion < minVersion && minVersion > lastDeliveredVersion) {
+            pendingVersion = Math.max(pendingVersion, minVersion);
+            scheduleSnapshot();
+            return;
+          }
+          if (snapshot.stateVersion <= lastDeliveredVersion) return;
+          lastDeliveredVersion = snapshot.stateVersion;
+          send(
+            `event: snapshot\ndata: ${JSON.stringify({
+              stateVersion: snapshot.stateVersion,
+              snapshot,
+            })}\n\n`,
+          );
+        } catch (e) {
+          console.error("SSE snapshot push failed:", (e as Error).message);
+        }
+      };
+
+      const scheduleSnapshot = () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          debounceTimer = null;
+          void pushSnapshot();
+        }, SNAPSHOT_DEBOUNCE_MS);
+      };
+
+      const onEvent = (event: GameEvent) => {
         send(`event: update\ndata: ${JSON.stringify(event)}\n\n`);
+        if (event.stateVersion <= lastDeliveredVersion) return;
+        pendingVersion = Math.max(pendingVersion, event.stateVersion);
+        scheduleSnapshot();
+      };
+
       const unsubscribe = subscribe(id, onEvent);
+
+      void getSnapshot(user.id, id)
+        .then((snapshot) => {
+          if (closed) return;
+          lastDeliveredVersion = snapshot.stateVersion;
+          send(
+            `event: snapshot\ndata: ${JSON.stringify({
+              stateVersion: snapshot.stateVersion,
+              snapshot,
+            })}\n\n`,
+          );
+        })
+        .catch((e) => {
+          console.error("SSE initial snapshot failed:", (e as Error).message);
+        });
 
       const heartbeat = setInterval(() => send(`: ping\n\n`), 25_000);
 
       request.signal.addEventListener("abort", () => {
+        closed = true;
         clearInterval(heartbeat);
+        if (debounceTimer) clearTimeout(debounceTimer);
         unsubscribe();
         if (!isHost) void setPresence(user.id, id, "OFFLINE").catch(() => {});
         try {

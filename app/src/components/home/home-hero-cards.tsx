@@ -7,16 +7,19 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useJoinRoom } from "@/hooks/use-session-room";
 import type { ActiveHostedSession } from "@/lib/session-service";
+import { MAX_ACTIVE_HOST_ROOMS } from "@/lib/scenario";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function HomeHeroCards({
-  activeHostedSession,
+  activeHostedSessions = [],
 }: {
-  activeHostedSession?: ActiveHostedSession | null;
+  activeHostedSessions?: ActiveHostedSession[];
 }) {
   const joinRoom = useJoinRoom();
   const [code, setCode] = useState("");
+  const atHostLimit = activeHostedSessions.length >= MAX_ACTIVE_HOST_ROOMS;
+  const canCreate = !atHostLimit;
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,25 +40,34 @@ export function HomeHeroCards({
           </div>
           <div className="flex flex-1 flex-col gap-1">
             <h2 className="text-lg font-semibold tracking-tight">
-              {activeHostedSession ? "Phòng đang mở" : "Tạo phòng mới"}
+              {activeHostedSessions.length > 0 ? "Phòng đang mở" : "Tạo phòng mới"}
             </h2>
             <p className="text-sm text-primary-foreground/80">
-              {activeHostedSession
-                ? `Mã phòng ${activeHostedSession.code} — quay lại để tiếp tục host.`
+              {activeHostedSessions.length > 0
+                ? `Bạn đang host ${activeHostedSessions.length}/${MAX_ACTIVE_HOST_ROOMS} phòng.`
                 : "Mở phiên chợ mới và mời bạn bè tham gia qua mã phòng."}
             </p>
           </div>
-          {activeHostedSession ? (
-            <Link
-              href={`/host/session/${activeHostedSession.id}`}
-              className={cn(
-                buttonVariants({ variant: "secondary", size: "lg" }),
-                "w-full bg-surface text-foreground hover:bg-surface/90",
-              )}
-            >
-              Quay lại phòng
-            </Link>
-          ) : (
+
+          {activeHostedSessions.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {activeHostedSessions.map((room) => (
+                <li key={room.id}>
+                  <Link
+                    href={`/host/session/${room.id}`}
+                    className={cn(
+                      buttonVariants({ variant: "secondary", size: "lg" }),
+                      "w-full bg-surface text-foreground hover:bg-surface/90",
+                    )}
+                  >
+                    Quay lại {room.code}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {canCreate ? (
             <Link
               href="/home/create"
               className={cn(
@@ -63,8 +75,13 @@ export function HomeHeroCards({
                 "w-full bg-surface text-foreground hover:bg-surface/90",
               )}
             >
-              Tạo phòng
+              {activeHostedSessions.length > 0 ? "Tạo phòng thêm" : "Tạo phòng"}
             </Link>
+          ) : (
+            <p className="text-xs text-primary-foreground/80">
+              Đã đạt tối đa {MAX_ACTIVE_HOST_ROOMS} phòng host. Hủy hoặc kết thúc một
+              phòng để tạo mới.
+            </p>
           )}
         </div>
         <div

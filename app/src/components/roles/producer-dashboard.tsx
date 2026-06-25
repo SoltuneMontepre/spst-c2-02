@@ -51,17 +51,20 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
               <>
                 <WholesalePanel
                   sessionId={sessionId}
+                  stateVersion={data.stateVersion}
                   inventory={data.self.inventory}
                   offers={data.market?.wholesaleOffers ?? []}
                   role="PRODUCER"
                 />
                 <SellPanel
                   sessionId={sessionId}
+                  stateVersion={data.stateVersion}
                   inventory={data.self.inventory}
                   listings={data.self.listings}
                 />
                 <OffersPanel
                   sessionId={sessionId}
+                  stateVersion={data.stateVersion}
                   incoming={data.self.incomingOffers}
                   outgoing={data.self.outgoingOffers}
                 />

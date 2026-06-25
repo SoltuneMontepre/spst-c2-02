@@ -30,17 +30,20 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
           <div className="flex flex-col gap-4">
             <WholesalePanel
               sessionId={sessionId}
+              stateVersion={data.stateVersion}
               inventory={data.self.inventory}
               offers={data.market?.wholesaleOffers ?? []}
               role="INTERMEDIARY"
             />
             <SellPanel
               sessionId={sessionId}
+              stateVersion={data.stateVersion}
               inventory={data.self.inventory}
               listings={data.self.listings}
             />
             <OffersPanel
               sessionId={sessionId}
+              stateVersion={data.stateVersion}
               incoming={data.self.incomingOffers}
               outgoing={data.self.outgoingOffers}
             />

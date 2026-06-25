@@ -26,6 +26,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   NOT_ALL_READY: "Mọi người chơi cần sẵn sàng trước khi bắt đầu.",
   FORBIDDEN: "Bạn không có quyền thực hiện thao tác này.",
   INVALID_STATE: "Thao tác không khả dụng trong trạng thái phiên hiện tại.",
+  SESSION_LOCKED: "Phiên đã bắt đầu; thao tác này chỉ dùng trong phòng chờ.",
+  NOT_ALL_ROLES_ASSIGNED: "Mọi người chơi cần được gán vai trước khi bắt đầu.",
   INTERNAL_ERROR: "Đã xảy ra lỗi máy chủ. Vui lòng thử lại.",
 };
 

@@ -7,14 +7,14 @@ import { useState } from "react";
 import { z } from "zod";
 import {
   loginSchema,
-  registerSchema,
+  registerFormSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
 } from "@/lib/validation";
 import { apiFetch, ApiClientError } from "./use-api";
 
 type LoginValues = z.infer<typeof loginSchema>;
-type RegisterValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = z.infer<typeof registerFormSchema>;
 type ForgotValues = z.infer<typeof forgotPasswordSchema>;
 type ResetValues = z.infer<typeof resetPasswordSchema>;
 
@@ -38,12 +38,12 @@ export function useLoginForm(callbackUrl: string) {
 }
 
 export function useRegisterForm() {
-  const form = useForm<RegisterValues>({ resolver: zodResolver(registerSchema) });
+  const form = useForm<RegisterFormValues>({ resolver: zodResolver(registerFormSchema) });
   const [formError, setFormError] = useState<string | null>(null);
   const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  const onSubmit = form.handleSubmit(async ({ confirmPassword: _, ...values }) => {
     setFormError(null);
     setSubmitted(false);
     try {
@@ -74,13 +74,44 @@ export function useRegisterForm() {
 
 export function useForgotForm() {
   const form = useForm<ForgotValues>({ resolver: zodResolver(forgotPasswordSchema) });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [resetUrl, setResetUrl] = useState<string | null>(null);
+  const [googleAccount, setGoogleAccount] = useState(false);
+
   const onSubmit = form.handleSubmit(async (values) => {
-    await apiFetch("/api/auth/password/forgot", {
-      method: "POST",
-      body: JSON.stringify(values),
-    });
+    setFormError(null);
+    setSubmitted(false);
+    setResetUrl(null);
+    setGoogleAccount(false);
+    try {
+      const res = await apiFetch<{ status: string; resetUrl?: string }>(
+        "/api/auth/password/forgot",
+        {
+          method: "POST",
+          body: JSON.stringify(values),
+        },
+      );
+      if (res.status === "GOOGLE_ACCOUNT") {
+        setGoogleAccount(true);
+        return;
+      }
+      setResetUrl(res.resetUrl ?? null);
+      setSubmitted(true);
+    } catch {
+      setFormError("Không thể gửi liên kết. Vui lòng thử lại.");
+    }
   });
-  return { form, onSubmit, submitted: form.formState.isSubmitSuccessful, pending: form.formState.isSubmitting };
+
+  return {
+    form,
+    onSubmit,
+    formError,
+    resetUrl,
+    submitted,
+    googleAccount,
+    pending: form.formState.isSubmitting,
+  };
 }
 
 export function useResetForm(token: string) {

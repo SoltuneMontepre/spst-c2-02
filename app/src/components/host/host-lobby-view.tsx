@@ -8,6 +8,7 @@ import { useSessionStream } from "@/hooks/use-session-stream";
 import { useHostControl } from "@/hooks/use-host-control";
 import { HostLobbyHeader } from "@/components/host/host-lobby-header";
 import { HostLobbyRoster } from "@/components/host/host-lobby-roster";
+import { LobbyRefreshButton } from "@/components/lobby/lobby-refresh-button";
 import { HostLobbyChecklist } from "@/components/host/host-lobby-checklist";
 import { HostRoleDistribution } from "@/components/host/host-role-distribution";
 import { HostTeacherTips } from "@/components/host/host-teacher-tips";
@@ -52,66 +53,84 @@ export function HostLobbyView({
         code={data.code}
         subtitle="Đang chờ người chơi tham gia"
       />
-      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 pb-8 lg:grid-cols-[240px_1fr_280px] lg:items-start">
-        <div className="min-h-[420px] lg:sticky lg:top-20 lg:self-start">
-          <HostLobbyRoster
-            participants={data.participants}
-            readyCount={readiness.readyCount}
-            humanCount={readiness.humanCount}
-          />
-        </div>
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 pb-8">
+        <div className="grid grid-cols-12 gap-4 lg:items-start">
+          <div className="col-span-12 min-h-[320px] lg:col-span-4">
+            <HostLobbyRoster
+              participants={data.participants}
+              readyCount={readiness.readyCount}
+              humanCount={readiness.humanCount}
+              headerExtra={<LobbyRefreshButton sessionId={sessionId} />}
+            />
+          </div>
 
-        <div className="flex flex-col gap-4">
-          <CreateRoomShareCard code={data.code} />
-          <p className="text-center text-sm text-muted-foreground">
-            Chia sẻ mã hoặc màn hình QR này cho học sinh
-          </p>
-          {self ? (
-            <Button
-              variant={self.ready ? "secondary" : "outline"}
-              className="w-full"
-              disabled={setReady.isPending}
-              onClick={() => setReady.mutate(!self.ready)}
-            >
-              {self.ready ? "Bỏ sẵn sàng" : "Tôi đã sẵn sàng (host)"}
-            </Button>
-          ) : null}
-          <Button
-            size="lg"
-            className="w-full gap-2"
-            disabled={!readiness.canStart || host.isPending}
-            onClick={() => host.mutate("start")}
-          >
-            <Play className="size-4" aria-hidden />
-            Bắt đầu phiên chợ
-          </Button>
-          {!readiness.canStart && humans.length < minHumans ? (
-            <p className="text-center text-xs text-muted-foreground">
-              Cần ít nhất {minHumans} người chơi để bắt đầu.
+          <div className="col-span-12 mx-auto flex w-full max-w-sm flex-col gap-3 lg:col-span-4">
+            <CreateRoomShareCard code={data.code} compact />
+            <p className="text-center text-sm text-muted-foreground">
+              Chia sẻ mã hoặc màn hình QR này cho học sinh
             </p>
-          ) : null}
+            {self ? (
+              <Button
+                variant={self.ready ? "secondary" : "outline"}
+                className="w-full"
+                disabled={setReady.isPending}
+                onClick={() => setReady.mutate(!self.ready)}
+              >
+                {self.ready ? "Bỏ sẵn sàng" : "Tôi đã sẵn sàng (host)"}
+              </Button>
+            ) : null}
+            {data.autoHost ? (
+              readiness.canStart ? (
+                <p className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-center text-sm font-medium text-primary">
+                  AI đang khởi động phiên…
+                </p>
+              ) : null
+            ) : (
+              <Button
+                size="lg"
+                className="w-full gap-2"
+                disabled={!readiness.canStart || host.isPending}
+                onClick={() => host.mutate("start")}
+              >
+                <Play className="size-4" aria-hidden />
+                Bắt đầu phiên chợ
+              </Button>
+            )}
+            {!readiness.canStart && humans.length < minHumans ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Cần ít nhất {minHumans} người chơi để bắt đầu.
+              </p>
+            ) : null}
+            {humans.length <= 1 ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Phòng sẽ tự hủy sau 1 phút nếu không có người tham gia.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="col-span-12 flex flex-col gap-4 lg:col-span-4">
+            <HostLobbyChecklist
+              items={readiness.checklist}
+              completedCount={readiness.completedCount}
+              totalCount={readiness.totalCount}
+            />
+            <HostRoleDistribution roles={readiness.roleDistribution} />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
-          <HostLobbyChecklist
-            items={readiness.checklist}
-            completedCount={readiness.completedCount}
-            totalCount={readiness.totalCount}
-          />
-          <HostRoleDistribution roles={readiness.roleDistribution} />
-          {!data.autoAssignRoles ? (
-            <div className="rounded-2xl border border-border bg-surface p-4">
-              <h3 className="mb-3 text-sm font-semibold">Gán vai thủ công</h3>
-              <LobbySetup
-                participants={data.participants}
-                humanCount={humans.length}
-                pending={host.isPending}
-                onAction={(action) => host.mutate(action)}
-              />
-            </div>
-          ) : null}
-          <HostTeacherTips />
-        </div>
+        {!data.autoAssignRoles ? (
+          <div className="rounded-2xl border border-border bg-surface p-4">
+            <h3 className="mb-3 text-sm font-semibold">Gán vai thủ công</h3>
+            <LobbySetup
+              participants={data.participants}
+              humanCount={humans.length}
+              pending={host.isPending}
+              onAction={(action) => host.mutate(action)}
+            />
+          </div>
+        ) : null}
+
+        <HostTeacherTips />
       </main>
     </div>
   );

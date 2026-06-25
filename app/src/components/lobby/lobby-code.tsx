@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export function LobbyCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -16,10 +17,17 @@ export function LobbyCode({ code }: { code: string }) {
     void QRCode.toDataURL(joinUrl, { width: 160, margin: 1 }).then(setQrDataUrl);
   }, [joinUrl]);
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const copy = () => {
+    void (async () => {
+      try {
+        const ok = await copyTextToClipboard(code);
+        if (!ok) return;
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        // Clipboard blocked (unfocused tab, embedded preview, etc.)
+      }
+    })();
   };
 
   return (

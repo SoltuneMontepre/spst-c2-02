@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Field } from "@/components/ui/field";
 import { useLoginForm } from "@/hooks/use-auth-forms";
 
@@ -20,9 +21,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         htmlFor="login-password"
         error={formState.errors.password?.message}
       >
-        <Input
+        <PasswordInput
           id="login-password"
-          type="password"
           autoComplete="current-password"
           {...register("password")}
         />

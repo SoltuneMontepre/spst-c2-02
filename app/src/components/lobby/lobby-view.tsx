@@ -13,6 +13,7 @@ import { SessionNav } from "@/components/session/session-nav";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { LobbyCode } from "./lobby-code";
 import { LobbyRoster } from "./lobby-roster";
+import { LobbyRefreshButton } from "./lobby-refresh-button";
 import { LobbySetup } from "./lobby-setup";
 import { LobbyControls, lobbyMinHumans } from "./lobby-controls";
 import { GuidancePanel } from "@/components/learning/guidance-panel";
@@ -110,78 +111,85 @@ export function LobbyView({
           <TutorialToggle className="sm:hidden" />
         </div>
 
-        <div className="grid grid-cols-12 gap-4 lg:items-start">
-          {/* Trái — mời tham gia (+ hướng dẫn nếu bật) */}
-          <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:col-start-1 lg:sticky lg:top-20 lg:self-start">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-12 gap-4 lg:items-start">
+            {/* Trái — mời tham gia */}
+            <div className="col-span-12 lg:col-span-3 lg:col-start-1 lg:row-start-1">
+              <BentoTile
+                title="Mời tham gia"
+                description={
+                  data.isHost
+                    ? "Chia sẻ mã hoặc QR để mời người chơi."
+                    : "Mã phòng để mời thêm bạn bè (nếu host cho phép)."
+                }
+              >
+                <LobbyCode code={data.code} />
+              </BentoTile>
+            </div>
+
+            {/* Giữa — danh sách / gán vai / bot */}
             <BentoTile
-              title="Mời tham gia"
+              colSpan="col-span-12 lg:col-span-6 lg:col-start-4 lg:row-start-1"
+              title={data.isHost ? "Người chơi & vai trò" : "Danh sách người chơi"}
               description={
                 data.isHost
-                  ? "Chia sẻ mã hoặc QR để mời người chơi."
-                  : "Mã phòng để mời thêm bạn bè (nếu host cho phép)."
+                  ? "Gán vai và thêm bot trước khi bắt đầu."
+                  : "Theo dõi ai đã vào phòng và sẵn sàng."
+              }
+              className="lg:min-h-[min(520px,72vh)]"
+              headerExtra={
+                data.isHost ? undefined : (
+                  <LobbyRefreshButton sessionId={sessionId} />
+                )
               }
             >
-              <LobbyCode code={data.code} />
+              {data.isHost ? (
+                <LobbySetup
+                  participants={data.participants}
+                  humanCount={humans.length}
+                  pending={host.isPending}
+                  onAction={(action) => host.mutate(action)}
+                />
+              ) : (
+                <div className="max-h-[min(480px,60vh)] overflow-y-auto pr-0.5">
+                  <LobbyRoster participants={data.participants} />
+                </div>
+              )}
             </BentoTile>
 
-            {tutorialOn ? (
-              <BentoTile title="Hướng dẫn">
-                <GuidancePanel content={guidance} />
-              </BentoTile>
-            ) : null}
+            {/* Phải — sẵn sàng / điều khiển */}
+            <BentoTile
+              colSpan="col-span-12 lg:col-span-3 lg:col-start-10 lg:row-start-1"
+              title="Sẵn sàng"
+              description={readyDescription}
+              className={tutorialOn ? undefined : "lg:sticky lg:top-20 lg:self-start"}
+            >
+              <LobbyControls
+                isHost={data.isHost}
+                autoHost={data.autoHost}
+                autoHostPending={host.isPending}
+                hostPending={host.isPending}
+                allReady={allReady}
+                manualComplete={manualComplete}
+                humanCount={humans.length}
+                minHumans={minHumans}
+                selfReady={self?.ready ?? false}
+                isParticipant={!!self}
+                readyPending={setReady.isPending}
+                onSetReady={(ready) => setReady.mutate(ready)}
+                onSetAutoHost={(enabled) =>
+                  host.mutate({ action: "setAutoHost", autoHost: enabled })
+                }
+                onStart={() => host.mutate("start")}
+              />
+            </BentoTile>
           </div>
 
-          {/* Giữa — danh sách / gán vai / bot */}
-          <BentoTile
-            colSpan="col-span-12 lg:col-span-6 lg:col-start-4"
-            title={data.isHost ? "Người chơi & vai trò" : "Danh sách người chơi"}
-            description={
-              data.isHost
-                ? "Gán vai và thêm bot trước khi bắt đầu."
-                : "Theo dõi ai đã vào phòng và sẵn sàng."
-            }
-            className="lg:min-h-[min(520px,72vh)]"
-          >
-            {data.isHost ? (
-              <LobbySetup
-                participants={data.participants}
-                humanCount={humans.length}
-                pending={host.isPending}
-                onAction={(action) => host.mutate(action)}
-              />
-            ) : (
-              <div className="max-h-[min(480px,60vh)] overflow-y-auto pr-0.5">
-                <LobbyRoster participants={data.participants} />
-              </div>
-            )}
-          </BentoTile>
-
-          {/* Phải — sẵn sàng / điều khiển */}
-          <BentoTile
-            colSpan="col-span-12 lg:col-span-3 lg:col-start-10"
-            title="Sẵn sàng"
-            description={readyDescription}
-            className="lg:sticky lg:top-20 lg:self-start"
-          >
-            <LobbyControls
-              isHost={data.isHost}
-              autoHost={data.autoHost}
-              autoHostPending={host.isPending}
-              hostPending={host.isPending}
-              allReady={allReady}
-              manualComplete={manualComplete}
-              humanCount={humans.length}
-              minHumans={minHumans}
-              selfReady={self?.ready ?? false}
-              isParticipant={!!self}
-              readyPending={setReady.isPending}
-              onSetReady={(ready) => setReady.mutate(ready)}
-              onSetAutoHost={(enabled) =>
-                host.mutate({ action: "setAutoHost", autoHost: enabled })
-              }
-              onStart={() => host.mutate("start")}
-            />
-          </BentoTile>
+          {tutorialOn ? (
+            <BentoTile title="Hướng dẫn" className="w-full">
+              <GuidancePanel content={guidance} wide />
+            </BentoTile>
+          ) : null}
         </div>
       </div>
     </div>

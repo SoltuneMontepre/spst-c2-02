@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./use-api";
+import { apiFetch, ApiClientError } from "./use-api";
 import type { Role, ProductivityProfile } from "@/generated/prisma/enums";
 
 export type HostAction =
@@ -27,8 +27,12 @@ export type HostLobbyAction =
 
 export type HostMutationAction = HostAction | HostLobbyAction;
 
+const STALE_HOST_CODES = new Set(["INVALID_STATE", "SESSION_LOCKED"]);
+
 export function useHostControl(sessionId: string) {
   const queryClient = useQueryClient();
+  const queryKey = ["session", sessionId] as const;
+
   return useMutation({
     mutationFn: (action: HostMutationAction) =>
       apiFetch(`/api/sessions/${sessionId}/host`, {
@@ -37,7 +41,18 @@ export function useHostControl(sessionId: string) {
           typeof action === "string" ? { action } : action,
         ),
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: ["home-dashboard"] });
+    },
+    onError: (error) => {
+      if (
+        error instanceof ApiClientError &&
+        error.status === 409 &&
+        STALE_HOST_CODES.has(error.code)
+      ) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
   });
 }

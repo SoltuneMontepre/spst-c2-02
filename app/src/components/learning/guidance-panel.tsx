@@ -6,16 +6,19 @@ import type { GuidanceContent } from "@/lib/game-guidance";
 export function GuidancePanel({
   content,
   embedded,
+  wide,
 }: {
   content: GuidanceContent;
   embedded?: boolean;
+  /** Use horizontal multi-column layout on large screens (full-width tiles). */
+  wide?: boolean;
 }) {
   return (
     <div
       className={
         embedded
           ? "text-sm"
-          : "flex gap-2 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm"
+          : "flex gap-2 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm lg:px-6 lg:py-4"
       }
       role="region"
       aria-label="Hướng dẫn chơi"
@@ -36,7 +39,9 @@ export function GuidancePanel({
           className={
             embedded
               ? "list-disc space-y-1.5 pl-4 text-muted-foreground"
-              : "mt-2 list-disc space-y-1.5 pl-4 text-muted-foreground"
+              : wide
+                ? "mt-2 list-disc space-y-1.5 pl-4 text-muted-foreground lg:columns-2 lg:gap-x-10 xl:columns-3"
+                : "mt-2 list-disc space-y-1.5 pl-4 text-muted-foreground"
           }
         >
           {content.tips.map((tip) => (

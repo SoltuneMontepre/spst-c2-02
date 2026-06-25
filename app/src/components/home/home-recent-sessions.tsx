@@ -39,35 +39,58 @@ function formatTime(iso: string | null): string {
 }
 
 function sessionMetaLine(s: HomeRecentSession): string {
-  const when = s.endedAt ?? s.startedAt ?? s.joinedAt;
-  const parts = [
+  const inLobby = s.isActive && (s.status === "LOBBY" || s.status === "CREATED");
+  const when = inLobby
+    ? s.createdAt
+    : s.isActive
+      ? (s.startedAt ?? s.joinedAt)
+      : (s.endedAt ?? s.startedAt ?? s.joinedAt);
+  const parts: string[] = [];
+  if (!s.isHost) {
+    parts.push(`Host: ${s.hostDisplayName}`);
+  }
+  parts.push(
     formatRelativeDay(when),
     formatTime(when),
-    `${s.participantCount} người`,
-  ].filter(Boolean);
-  if (s.isActive || s.currentRound > 0) {
-    parts.push(`${s.currentRound}/4 vòng`);
-  }
-  return parts.join(" · ");
-}
-
-function isInProgress(status: string): boolean {
-  return !["LOBBY", "CREATED", "COMPLETED", "INCOMPLETE", "CANCELLED"].includes(
-    status,
+    `${s.participantCount}/${s.maxPlayers} người`,
   );
+  if (s.isActive) {
+    if (inLobby && s.currentRound === 0) {
+      parts.push(`${s.totalRounds} vòng`);
+    } else {
+      parts.push(`${s.currentRound}/${s.totalRounds} vòng`);
+    }
+  }
+  return parts.filter(Boolean).join(" · ");
 }
 
-function StatusPill({ active }: { active: boolean }) {
+function sessionStatusLabel(status: string, isActive: boolean): string {
+  if (!isActive) return "Đã kết thúc";
+  if (status === "LOBBY" || status === "CREATED") return "Đang mở";
+  return "Đang diễn ra";
+}
+
+function SessionStatusPill({
+  status,
+  isActive,
+}: {
+  status: string;
+  isActive: boolean;
+}) {
+  const label = sessionStatusLabel(status, isActive);
+  const open = isActive && (status === "LOBBY" || status === "CREATED");
+  const live = isActive && !open;
+
   return (
     <span
       className={cn(
         "rounded-full px-2 py-0.5 text-xs font-medium",
-        active
-          ? "bg-primary/15 text-primary"
-          : "bg-muted text-muted-foreground",
+        open && "bg-success/15 text-success",
+        live && "bg-primary/15 text-primary",
+        !isActive && "bg-muted text-muted-foreground",
       )}
     >
-      {active ? "Đang diễn ra" : "Đã kết thúc"}
+      {label}
     </span>
   );
 }
@@ -97,20 +120,29 @@ function ActiveHostRow({
       submeta={STATUS_LABELS[session.status] ?? session.status}
       highlight="host"
       icon={<Store className="size-4 text-primary" aria-hidden />}
-      statusBadge={<StatusPill active={isInProgress(session.status)} />}
+      statusBadge={<SessionStatusPill status={session.status} isActive={session.isActive} />}
       badges={<HostPill />}
       href={hostSessionHref({ id: session.sessionId, status: session.status })}
       actions={
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={host.isPending}
-          onClick={() =>
-            host.mutate(inLobby ? "cancel" : "end", { onSuccess: onClosed })
-          }
-        >
-          {inLobby ? "Hủy" : "Kết thúc"}
-        </Button>
+        session.isHost && session.status === "LOBBY" ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={host.isPending}
+            onClick={() => host.mutate("cancel", { onSuccess: onClosed })}
+          >
+            Hủy
+          </Button>
+        ) : session.isHost && session.isActive ? (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={host.isPending}
+            onClick={() => host.mutate("end", { onSuccess: onClosed })}
+          >
+            Kết thúc
+          </Button>
+        ) : null
       }
     />
   );
@@ -120,7 +152,6 @@ function RecentSessionRow({ session }: { session: HomeRecentSession }) {
   const roleLabel = session.role
     ? ROLE_LABELS[session.role as Role]
     : "Chưa phân vai";
-  const active = isInProgress(session.status);
 
   return (
     <SessionListRow
@@ -129,7 +160,7 @@ function RecentSessionRow({ session }: { session: HomeRecentSession }) {
       submeta={`${roleLabel} · ${STATUS_LABELS[session.status] ?? session.status}`}
       highlight={session.isJoined ? "joined" : undefined}
       icon={<Store className="size-4 text-primary" aria-hidden />}
-      statusBadge={<StatusPill active={active} />}
+      statusBadge={<SessionStatusPill status={session.status} isActive={session.isActive} />}
       badges={session.role ? <RoleBadge role={session.role} /> : null}
       href={
         session.isHost
@@ -153,6 +184,9 @@ export function HomeRecentSessions({
   loading,
   onRefresh,
 }: HomeRecentSessionsProps) {
+  const activeSessions = sessions.filter((s) => s.isActive);
+  const endedSessions = sessions.filter((s) => !s.isActive);
+
   return (
     <BentoTile
       title="Phiên chơi gần đây"
@@ -161,6 +195,9 @@ export function HomeRecentSessions({
       headerExtra={
         sessions.length > 0 ? (
           <span className="text-xs text-muted-foreground">
+            {activeSessions.length > 0
+              ? `${activeSessions.length} đang mở · `
+              : ""}
             {sessions.length} phiên
           </span>
         ) : null
@@ -177,19 +214,42 @@ export function HomeRecentSessions({
           Chưa có phiên nào. Tạo phòng mới hoặc nhập mã để bắt đầu.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {sessions.map((s) =>
-            s.isHost && s.isActive ? (
-              <ActiveHostRow
-                key={s.sessionId}
-                session={s}
-                onClosed={onRefresh}
-              />
-            ) : (
-              <RecentSessionRow key={s.sessionId} session={s} />
-            ),
-          )}
-        </ul>
+        <div className="flex flex-col gap-4">
+          {activeSessions.length > 0 ? (
+            <section>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Đang mở
+              </p>
+              <ul className="flex flex-col gap-2">
+                {activeSessions.map((s) =>
+                  s.isHost ? (
+                    <ActiveHostRow
+                      key={s.sessionId}
+                      session={s}
+                      onClosed={onRefresh}
+                    />
+                  ) : (
+                    <RecentSessionRow key={s.sessionId} session={s} />
+                  ),
+                )}
+              </ul>
+            </section>
+          ) : null}
+          {endedSessions.length > 0 ? (
+            <section>
+              {activeSessions.length > 0 ? (
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Đã kết thúc
+                </p>
+              ) : null}
+              <ul className="flex flex-col gap-2">
+                {endedSessions.map((s) => (
+                  <RecentSessionRow key={s.sessionId} session={s} />
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       )}
     </BentoTile>
   );

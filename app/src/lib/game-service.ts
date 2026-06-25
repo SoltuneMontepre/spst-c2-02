@@ -775,7 +775,7 @@ export async function hostCancel(hostUserId: string, sessionId: string): Promise
     throw new ApiError("INVALID_STATE", 409);
   await db.gameSession.update({
     where: { id: sessionId },
-    data: { status: "CANCELLED", endedAt: new Date() },
+    data: { status: "CANCELLED", endedAt: new Date(), lobbySoloSince: null },
   });
   await touch(sessionId, "session:ended", { status: "CANCELLED" });
 }

@@ -16,12 +16,8 @@ export function useCreateRoom() {
     mutationFn: () => apiFetch<CreatedSession>("/api/sessions", { method: "POST" }),
     onSuccess: (data) => router.push(`/session/${data.id}/lobby`),
     onError: (error) => {
-      if (
-        error instanceof ApiClientError &&
-        error.code === "ACTIVE_HOST_SESSION" &&
-        error.message
-      ) {
-        router.push(`/session/${error.message}/lobby`);
+      if (error instanceof ApiClientError && error.code === "HOST_SESSION_LIMIT") {
+        router.push("/home");
       }
     },
   });
@@ -29,22 +25,27 @@ export function useCreateRoom() {
 
 export function useJoinRoom() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (code: string) =>
       apiFetch<{ sessionId: string }>("/api/sessions/join", {
         method: "POST",
         body: JSON.stringify({ code }),
       }),
-    onSuccess: (data) => router.push(`/session/${data.sessionId}/lobby`),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["home-dashboard"] });
+      router.push(`/session/${data.sessionId}/lobby`);
+    },
   });
 }
 
-/** Poll the role-filtered snapshot. Replaced by SSE in the realtime phase. */
+/** Role-filtered snapshot; live updates via session SSE stream. */
 export function useSessionSnapshot(sessionId: string) {
   return useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => apiFetch<SessionSnapshot>(`/api/sessions/${sessionId}`),
-    refetchInterval: 15000, // backup; SSE drives most updates
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -64,14 +65,31 @@ export function useSessionResult(sessionId: string, enabled: boolean) {
 
 export function useSetReady(sessionId: string) {
   const queryClient = useQueryClient();
+  const queryKey = ["session", sessionId] as const;
   return useMutation({
     mutationFn: (ready: boolean) =>
       apiFetch(`/api/sessions/${sessionId}/ready`, {
         method: "POST",
         body: JSON.stringify({ ready }),
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] }),
+    onMutate: async (ready) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<SessionSnapshot>(queryKey, {
+          ...previous,
+          participants: previous.participants.map((p) =>
+            p.isSelf ? { ...p, ready } : p,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _ready, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
   });
 }
 

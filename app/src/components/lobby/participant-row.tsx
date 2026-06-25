@@ -3,59 +3,30 @@ import { Bot } from "lucide-react";
 import type { ProductivityProfile } from "@/generated/prisma/enums";
 import type { ParticipantView } from "@/lib/session-service";
 import { RoleBadge } from "./role-badge";
+import {
+  ParticipantOfflineBadge,
+  ParticipantPresenceDot,
+  ParticipantStatusBadge,
+} from "./participant-status-badge";
 import { PRODUCTIVITY_PROFILES } from "@/lib/scenario";
-import { cn } from "@/lib/utils";
 
 /** Stable two-line roster row — read-only list for non-host lobby view. */
-export function ParticipantRow({
-  p,
-  readyLabel,
-}: {
-  p: ParticipantView;
-  readyLabel?: boolean;
-}) {
-  return (
-    <ProjectorParticipantRow
-      p={p}
-      inGame={false}
-      readyLabel={readyLabel}
-    />
-  );
+export function ParticipantRow({ p }: { p: ParticipantView }) {
+  return <ProjectorParticipantRow p={p} inGame={false} />;
 }
 
 /** Host projector / in-session list row with stable two-line layout. */
 export function ProjectorParticipantRow({
   p,
   inGame = true,
-  readyLabel,
 }: {
   p: ParticipantView;
   inGame?: boolean;
-  readyLabel?: boolean;
 }) {
-  const statusText =
-    inGame && !p.isBot
-      ? p.phaseReady
-        ? "Sẵn sàng"
-        : "Đang chơi"
-      : readyLabel !== false && !p.isBot
-        ? p.ready
-          ? "Sẵn sàng"
-          : "Chưa sẵn sàng"
-        : null;
-
   return (
     <li className="rounded-xl border border-border bg-muted/10 p-2.5 sm:p-3">
       <div className="flex gap-2">
-        <span
-          className={cn(
-            "mt-2 size-2 shrink-0 rounded-full",
-            p.isBot || p.presence === "ONLINE"
-              ? "bg-success"
-              : "bg-muted-foreground/40",
-          )}
-          aria-hidden
-        />
+        <ParticipantPresenceDot participant={p} className="mt-2" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {p.isBot ? (
@@ -73,17 +44,11 @@ export function ProjectorParticipantRow({
                 <span className="font-normal text-muted-foreground"> (bạn)</span>
               ) : null}
             </p>
-            {statusText ? (
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                {statusText}
-              </span>
-            ) : null}
+            <ParticipantStatusBadge participant={p} inGame={inGame} />
           </div>
           <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
             {!p.isBot && !p.isSelf && p.presence === "OFFLINE" ? (
-              <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs text-danger">
-                Mất kết nối
-              </span>
+              <ParticipantOfflineBadge />
             ) : null}
             <RoleBadge role={p.role} />
             {p.role === "PRODUCER" && p.productivityProfile ? (
@@ -158,15 +123,7 @@ export function SetupParticipantRow({
   return (
     <li className="rounded-xl border border-border bg-muted/10 p-3">
       <div className="flex gap-2">
-        <span
-          className={cn(
-            "mt-2 size-2 shrink-0 rounded-full",
-            p.isBot || p.presence === "ONLINE"
-              ? "bg-success"
-              : "bg-muted-foreground/40",
-          )}
-          aria-hidden
-        />
+        <ParticipantPresenceDot participant={p} className="mt-2" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {p.isBot ? (
@@ -185,9 +142,7 @@ export function SetupParticipantRow({
               ) : null}
             </p>
             {!p.isBot ? (
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                {p.ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
-              </span>
+              <ParticipantStatusBadge participant={p} inGame={false} />
             ) : null}
             {trailing ? <div className="shrink-0 sm:hidden">{trailing}</div> : null}
           </div>

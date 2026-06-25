@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { handle, currentUser, unauthorized, ApiError } from "@/lib/api";
 import { updateProfileSchema } from "@/lib/validation";
+import { ACTIVE_STATUSES } from "@/lib/session-service";
 
 export async function GET() {
   const user = await currentUser();
@@ -39,13 +40,13 @@ export async function DELETE() {
   const user = await currentUser();
   if (!user) return unauthorized();
   return handle(async () => {
-    const activeHost = await db.gameSession.findFirst({
+    const activeHostCount = await db.gameSession.count({
       where: {
         hostUserId: user.id,
-        status: { in: ["LOBBY", "INTRO", "ROUND_1", "ROUND_2", "ROUND_3", "ROUND_4", "DEBRIEF"] },
+        status: { in: [...ACTIVE_STATUSES] },
       },
     });
-    if (activeHost) throw new ApiError("ACTIVE_HOST_SESSION", 409);
+    if (activeHostCount > 0) throw new ApiError("ACTIVE_HOST_SESSION", 409);
 
     await db.user.update({
       where: { id: user.id },

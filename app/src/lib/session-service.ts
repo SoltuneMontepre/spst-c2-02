@@ -2,9 +2,10 @@ import type { Role, ControlMode, Presence, BadgeType } from "@/generated/prisma/
 import type { Presence as PresenceEnum } from "@/generated/prisma/enums";
 import { db } from "./db";
 import { ApiError, generateRoomCode } from "./api";
-import { MAX_PLAYERS, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS } from "./scenario";
+import { MAX_PLAYERS, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS, MAX_ACTIVE_HOST_ROOMS } from "./scenario";
 import { maybeAutoAdvance } from "./game-service";
 import { ensureHostParticipant } from "./lobby-seat";
+import { sweepAbandonedSoloLobbies, syncLobbySoloSince } from "./lobby-maintenance";
 import { publish } from "./events";
 import type { ParticipantOutcome } from "./finalize";
 import type { CreateSessionInput } from "./create-session-schema";
@@ -28,7 +29,7 @@ async function bumpAndPublish(
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }
 
-const ACTIVE_STATUSES = [
+export const ACTIVE_STATUSES = [
   "CREATED",
   "LOBBY",
   "INTRO",
@@ -50,29 +51,38 @@ export interface ActiveHostedSession {
   status: string;
 }
 
-/** The host's currently-open room, if any (for the Home "return to room" card). */
+/** The host's most recent open room (for legacy single-room UI). */
 export async function getActiveHostedSession(
   hostUserId: string,
 ): Promise<ActiveHostedSession | null> {
-  const s = await db.gameSession.findFirst({
-    where: { hostUserId, status: { in: [...ACTIVE_STATUSES] } },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, code: true, status: true },
-  });
-  return s;
+  const sessions = await getActiveHostedSessions(hostUserId);
+  return sessions[0] ?? null;
 }
 
-/** Host creates a room (FR-ROOM-01). One active hosted session per user. */
+/** All active rooms this user hosts (up to MAX_ACTIVE_HOST_ROOMS). */
+export async function getActiveHostedSessions(
+  hostUserId: string,
+): Promise<ActiveHostedSession[]> {
+  return db.gameSession.findMany({
+    where: { hostUserId, status: { in: [...ACTIVE_STATUSES] } },
+    orderBy: { createdAt: "desc" },
+    take: MAX_ACTIVE_HOST_ROOMS,
+    select: { id: true, code: true, status: true },
+  });
+}
+
+/** Host creates a room (FR-ROOM-01). Up to MAX_ACTIVE_HOST_ROOMS concurrent hosted sessions. */
 export async function createSession(
   hostUserId: string,
   config: CreateSessionInput,
 ): Promise<CreatedSession> {
-  const active = await db.gameSession.findFirst({
+  await sweepAbandonedSoloLobbies();
+
+  const activeCount = await db.gameSession.count({
     where: { hostUserId, status: { in: [...ACTIVE_STATUSES] } },
-    select: { id: true, code: true },
   });
-  if (active) {
-    throw new ApiError("ACTIVE_HOST_SESSION", 409, active.id);
+  if (activeCount >= MAX_ACTIVE_HOST_ROOMS) {
+    throw new ApiError("HOST_SESSION_LIMIT", 409);
   }
 
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -93,6 +103,7 @@ export async function createSession(
         autoAssignRoles: config.autoAssignRoles,
         guidanceEnabled: config.guidanceEnabled,
         autoHost: config.autoHost ?? true,
+        lobbySoloSince: new Date(),
       },
       select: { id: true, code: true },
     });
@@ -113,6 +124,8 @@ export async function joinSession(
   userId: string,
   code: string,
 ): Promise<JoinResult> {
+  await sweepAbandonedSoloLobbies();
+
   const session = await db.gameSession.findFirst({
     where: { code },
     orderBy: { createdAt: "desc" },
@@ -165,6 +178,7 @@ export async function joinSession(
     },
   });
   await bumpAndPublish(session.id, "participant:joined", { userId });
+  await syncLobbySoloSince(session.id);
 
   return { sessionId: session.id, participantId: participant.id, code: session.code };
 }
@@ -293,6 +307,7 @@ export async function getSnapshot(
   userId: string,
   sessionId: string,
 ): Promise<SessionSnapshot> {
+  await sweepAbandonedSoloLobbies();
   // Serverless-safe: advance the phase machine if a timer elapsed.
   await maybeAutoAdvance(sessionId);
   void import("./ai-host").then((m) => m.maybeFastForwardPhase(sessionId));
@@ -502,11 +517,16 @@ export async function setPresence(
   sessionId: string,
   presence: PresenceEnum,
 ): Promise<void> {
-  const updated = await db.participant.updateMany({
+  const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
+    select: { id: true },
+  });
+  if (!participant) return;
+
+  await db.participant.update({
+    where: { id: participant.id },
     data: { presence, lastSeenAt: new Date() },
   });
-  if (updated.count === 0) return;
   const session = await db.gameSession.update({
     where: { id: sessionId },
     data: { stateVersion: { increment: 1 } },
@@ -516,7 +536,7 @@ export async function setPresence(
     sessionId,
     type: "participant:presence",
     stateVersion: session.stateVersion,
-    data: { userId, presence },
+    data: { participantId: participant.id, userId, presence },
   });
 }
 
@@ -546,12 +566,21 @@ export async function setReady(
   if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
   if (session.status !== "LOBBY") throw new ApiError("SESSION_LOCKED", 409);
 
-  const updated = await db.participant.updateMany({
+  const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
+    select: { id: true },
+  });
+  if (!participant) throw new ApiError("FORBIDDEN", 403);
+
+  await db.participant.update({
+    where: { id: participant.id },
     data: { ready },
   });
-  if (updated.count === 0) throw new ApiError("FORBIDDEN", 403);
-  await bumpAndPublish(sessionId, "participant:ready", { userId, ready });
+  await bumpAndPublish(sessionId, "participant:ready", {
+    participantId: participant.id,
+    userId,
+    ready,
+  });
   void import("./ai-host").then((m) => m.maybeAutoStartLobby(sessionId));
 }
 
@@ -652,6 +681,7 @@ export async function leaveSession(userId: string, sessionId: string): Promise<v
 
   await db.participant.deleteMany({ where: { sessionId, userId, isBot: false } });
   await bumpAndPublish(sessionId, "participant:left", { userId });
+  await syncLobbySoloSince(sessionId);
 }
 
 const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;
@@ -668,11 +698,15 @@ export interface HomeRecentSession {
   code: string;
   status: string;
   role: Role | null;
+  hostDisplayName: string;
+  createdAt: string;
   startedAt: string | null;
   endedAt: string | null;
   joinedAt: string;
   participantCount: number;
+  maxPlayers: number;
   currentRound: number;
+  totalRounds: number;
   isActive: boolean;
   isHost: boolean;
   isJoined: boolean;
@@ -682,17 +716,78 @@ export interface HomeRecentSession {
 export interface HomeDashboard {
   stats: HomeDashboardStats;
   recentSessions: HomeRecentSession[];
+  publicOpenRooms: PublicOpenRoom[];
+  activeHostedSessions: ActiveHostedSession[];
   activeHostedSession: ActiveHostedSession | null;
+}
+
+export interface PublicOpenRoom {
+  sessionId: string;
+  code: string;
+  hostDisplayName: string;
+  participantCount: number;
+  maxPlayers: number;
+  totalRounds: number;
+  createdAt: string;
+}
+
+/** LOBBY rooms from other hosts, discoverable on the home hub. */
+export async function listPublicOpenRooms(userId: string): Promise<PublicOpenRoom[]> {
+  await sweepAbandonedSoloLobbies();
+
+  const expiryCutoff = new Date(
+    Date.now() - ROOM_CODE_EXPIRY_HOURS * 60 * 60 * 1000,
+  );
+
+  const joinedLobbyIds = await db.participant.findMany({
+    where: {
+      userId,
+      isBot: false,
+      session: { status: "LOBBY" },
+    },
+    select: { sessionId: true },
+  });
+  const excludeIds = joinedLobbyIds.map((p) => p.sessionId);
+
+  const sessions = await db.gameSession.findMany({
+    where: {
+      status: "LOBBY",
+      hostUserId: { not: userId },
+      createdAt: { gt: expiryCutoff },
+      ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+    },
+    include: {
+      host: { select: { displayName: true } },
+      _count: { select: { participants: { where: { isBot: false } } } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
+
+  return sessions
+    .filter((s) => s._count.participants < s.maxPlayers)
+    .map((s) => ({
+      sessionId: s.id,
+      code: s.code,
+      hostDisplayName: s.host.displayName,
+      participantCount: s._count.participants,
+      maxPlayers: s.maxPlayers,
+      totalRounds: s.totalRounds,
+      createdAt: s.createdAt.toISOString(),
+    }));
 }
 
 /** Aggregated home hub stats and enriched recent sessions for the dashboard. */
 export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
+  await sweepAbandonedSoloLobbies();
+
   const participants = await db.participant.findMany({
     where: { userId, isBot: false },
     include: {
       session: {
         include: {
-          _count: { select: { participants: true } },
+          host: { select: { displayName: true } },
+          _count: { select: { participants: { where: { isBot: false } } } },
           result: { select: { participantOutcomes: true } },
         },
       },
@@ -735,11 +830,15 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
       code: s.code,
       status: s.status,
       role: p.role,
+      hostDisplayName: s.host.displayName,
+      createdAt: s.createdAt.toISOString(),
       startedAt: s.startedAt?.toISOString() ?? null,
       endedAt: s.endedAt?.toISOString() ?? null,
       joinedAt: p.createdAt.toISOString(),
       participantCount: s._count.participants,
+      maxPlayers: s.maxPlayers,
       currentRound: s.currentRound,
+      totalRounds: s.totalRounds,
       isActive,
       isHost,
       isJoined: isActive && !isHost,
@@ -761,20 +860,66 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
     }
   }
 
+  const hostedActive = await db.gameSession.findMany({
+    where: { hostUserId: userId, status: { in: [...ACTIVE_STATUSES] } },
+    include: {
+      host: { select: { displayName: true } },
+      _count: { select: { participants: { where: { isBot: false } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  for (const s of hostedActive) {
+    if (recentBySession.has(s.id)) continue;
+    const hostParticipant = participants.find((p) => p.sessionId === s.id);
+    recentBySession.set(s.id, {
+      sessionId: s.id,
+      code: s.code,
+      status: s.status,
+      role: hostParticipant?.role ?? null,
+      hostDisplayName: s.host.displayName,
+      createdAt: s.createdAt.toISOString(),
+      startedAt: s.startedAt?.toISOString() ?? null,
+      endedAt: s.endedAt?.toISOString() ?? null,
+      joinedAt: s.createdAt.toISOString(),
+      participantCount: s._count.participants,
+      maxPlayers: s.maxPlayers,
+      currentRound: s.currentRound,
+      totalRounds: s.totalRounds,
+      isActive: true,
+      isHost: true,
+      isJoined: false,
+    });
+  }
+
   const recentSessions = [...recentBySession.values()]
     .sort((a, b) => {
       if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
       const aTime = new Date(a.endedAt ?? a.startedAt ?? a.joinedAt).getTime();
       const bTime = new Date(b.endedAt ?? b.startedAt ?? b.joinedAt).getTime();
       return bTime - aTime;
-    })
-    .slice(0, 10);
+    });
 
-  const activeHostedSession = await getActiveHostedSession(userId);
+  const activeSessions = recentSessions.filter((s) => s.isActive);
+  const endedSessions = recentSessions.filter((s) => !s.isActive).slice(0, 10);
+
+  const activeHostedSessions = await getActiveHostedSessions(userId);
+  const activeHostedSession = activeHostedSessions[0] ?? null;
+
+  const ownActiveSessionIds = new Set(
+    recentSessions
+      .filter((s) => s.isActive && (s.isHost || s.isJoined))
+      .map((s) => s.sessionId),
+  );
+  const publicOpenRooms = (await listPublicOpenRooms(userId)).filter(
+    (r) => !ownActiveSessionIds.has(r.sessionId),
+  );
 
   return {
     stats: { sessionsPlayed, totalScore, roundsCompleted, topRole },
-    recentSessions,
+    recentSessions: [...activeSessions, ...endedSessions],
+    publicOpenRooms,
+    activeHostedSessions,
     activeHostedSession,
   };
 }

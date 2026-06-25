@@ -11,14 +11,16 @@ import type { InventoryView, ListingView } from "@/lib/session-service";
 
 export function SellPanel({
   sessionId,
+  stateVersion,
   inventory,
   listings,
 }: {
   sessionId: string;
+  stateVersion?: number;
   inventory: InventoryView[];
   listings: ListingView[];
 }) {
-  const command = useCommand(sessionId);
+  const command = useCommand(sessionId, stateVersion);
   const [lotId, setLotId] = useState(inventory[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(10000);

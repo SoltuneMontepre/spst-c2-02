@@ -51,7 +51,11 @@ export async function heartbeat(
     },
   });
 
-  await bump(sessionId, "participant:presence", { userId, presence: "ONLINE" });
+  await bump(sessionId, "participant:presence", {
+    participantId: participant.id,
+    userId,
+    presence: "ONLINE",
+  });
   return { controlMode };
 }
 
@@ -81,7 +85,11 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
           where: { id: participant.id, presence: "OFFLINE" },
           data: { ready: false },
         });
-        await bump(sessionId, "participant:ready", { userId, ready: false });
+        await bump(sessionId, "participant:ready", {
+          participantId: participant.id,
+          userId,
+          ready: false,
+        });
       }, DISCONNECT_BOT_TAKEOVER_SEC * 1000),
     );
   }
@@ -109,7 +117,11 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
     );
   }
 
-  await bump(sessionId, "participant:presence", { userId, presence: "OFFLINE" });
+  await bump(sessionId, "participant:presence", {
+    participantId: participant.id,
+    userId,
+    presence: "OFFLINE",
+  });
 }
 
 /** Host presence tracking (FR-HOST-06). */

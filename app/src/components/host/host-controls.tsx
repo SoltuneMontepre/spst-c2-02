@@ -80,7 +80,7 @@ export function HostControls({
         disabled={pending}
         onClick={() => onAction("end")}
       >
-        Kết thúc phiên
+        Kết thúc game
       </Button>
     </div>
   );

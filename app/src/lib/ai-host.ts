@@ -45,7 +45,13 @@ export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
     await startSession(session.hostUserId, sessionId);
   } catch (err) {
     const code = (err as { code?: string }).code;
-    if (code !== "UNDER_MIN_PLAYERS" && code !== "NOT_ALL_READY") {
+    const expected = new Set([
+      "UNDER_MIN_PLAYERS",
+      "NOT_ALL_READY",
+      "INVALID_STATE",
+      "NOT_ALL_ROLES_ASSIGNED",
+    ]);
+    if (!expected.has(code ?? "")) {
       console.error("ai-host auto-start:", err);
     }
   }
@@ -121,11 +127,16 @@ export async function setPhaseReady(
     throw new ApiError("INVALID_STATE", 409);
   }
 
-  const updated = await db.participant.updateMany({
+  const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
+    select: { id: true },
+  });
+  if (!participant) throw new ApiError("FORBIDDEN", 403);
+
+  await db.participant.update({
+    where: { id: participant.id },
     data: { phaseReady: ready },
   });
-  if (updated.count === 0) throw new ApiError("FORBIDDEN", 403);
 
   const s = await db.gameSession.update({
     where: { id: sessionId },
@@ -136,7 +147,7 @@ export async function setPhaseReady(
     sessionId,
     type: "participant:phase_ready",
     stateVersion: s.stateVersion,
-    data: { userId, ready },
+    data: { participantId: participant.id, userId, phaseReady: ready },
   });
 
   await maybeFastForwardPhase(sessionId);

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "predev": "bun run db:generate",
     "build": "next build",
     "start": "next start",
     "db:migrate": "bun --env-file=.env prisma migrate deploy",

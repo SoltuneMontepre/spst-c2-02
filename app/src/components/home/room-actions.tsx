@@ -29,8 +29,10 @@ export function RoomActions() {
         {create.isPending ? "Đang tạo phòng…" : "Tạo phòng (Host)"}
       </Button>
       {create.error instanceof ApiClientError &&
-      create.error.code === "ACTIVE_HOST_SESSION" ? (
-        <p className="text-sm text-danger">Bạn đang có một phòng đang mở.</p>
+      create.error.code === "HOST_SESSION_LIMIT" ? (
+        <p className="text-sm text-danger">
+          Bạn đã mở tối đa 2 phòng host. Hãy hủy hoặc kết thúc một phòng trước.
+        </p>
       ) : null}
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">

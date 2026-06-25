@@ -9,7 +9,9 @@ import { HomeDashboardHeader } from "@/components/home/home-dashboard-header";
 import { HomeHeroCards } from "@/components/home/home-hero-cards";
 import { HomeStatsRow } from "@/components/home/home-stats-row";
 import { HomeRecentSessions } from "@/components/home/home-recent-sessions";
+import { HomePublicRooms } from "@/components/home/home-public-rooms";
 import { apiFetch } from "@/hooks/use-api";
+import { useHomeStream } from "@/hooks/use-home-stream";
 import type { HomeDashboard } from "@/lib/session-service";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,10 +25,12 @@ const EMPTY_STATS = {
 
 export function HomeView({ displayName }: { displayName: string }) {
   const queryClient = useQueryClient();
+  useHomeStream();
 
   const { data, isLoading } = useQuery({
     queryKey: ["home-dashboard"],
     queryFn: () => apiFetch<HomeDashboard>("/api/me/home-dashboard"),
+    refetchOnWindowFocus: true,
   });
 
   const invalidateDashboard = () =>
@@ -34,6 +38,7 @@ export function HomeView({ displayName }: { displayName: string }) {
 
   const stats = data?.stats ?? EMPTY_STATS;
   const recentSessions = data?.recentSessions ?? [];
+  const publicOpenRooms = data?.publicOpenRooms ?? [];
 
   return (
     <div className="flex min-h-full flex-col">
@@ -73,11 +78,15 @@ export function HomeView({ displayName }: { displayName: string }) {
         </BentoTile>
 
         <div className="col-span-12">
-          <HomeHeroCards activeHostedSession={data?.activeHostedSession} />
+          <HomeHeroCards activeHostedSessions={data?.activeHostedSessions} />
         </div>
 
         <div className="col-span-12">
           <HomeStatsRow stats={stats} loading={isLoading} />
+        </div>
+
+        <div className="col-span-12">
+          <HomePublicRooms rooms={publicOpenRooms} loading={isLoading} />
         </div>
 
         <HomeRecentSessions

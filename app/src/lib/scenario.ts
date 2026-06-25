@@ -63,6 +63,12 @@ export const START_MIN_HUMANS = MIN_PLAYERS;
 /** Room code expires after 24h if not started, or 24h after completion (FR-ROOM-08). */
 export const ROOM_CODE_EXPIRY_HOURS = 24;
 
+/** Max concurrent hosted sessions (LOBBY through DEBRIEF) per user. */
+export const MAX_ACTIVE_HOST_ROOMS = 2;
+
+/** Solo host lobby (no other humans) auto-cancel after this duration. */
+export const SOLO_LOBBY_CANCEL_MS = 60_000;
+
 /** Target role counts for a session with `humanCount` humans (SRS §3.2). */
 export function compositionTarget(humanCount: number): Record<Role, number> {
   const slots = compositionSlots(humanCount);

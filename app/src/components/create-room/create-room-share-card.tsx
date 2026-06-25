@@ -6,13 +6,17 @@ import { Copy, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export function CreateRoomShareCard({
   code,
   className,
+  compact,
 }: {
   code: string;
   className?: string;
+  /** Smaller layout for host lobby dashboard. */
+  compact?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -23,41 +27,78 @@ export function CreateRoomShareCard({
       : `/home?join=${code}`;
 
   useEffect(() => {
-    void QRCode.toDataURL(joinUrl, { width: 200, margin: 1 }).then(setQrDataUrl);
-  }, [joinUrl]);
+    const qrSize = compact ? 140 : 200;
+    void QRCode.toDataURL(joinUrl, { width: qrSize, margin: 1 }).then(setQrDataUrl);
+  }, [joinUrl, compact]);
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const copy = () => {
+    void (async () => {
+      try {
+        const ok = await copyTextToClipboard(code);
+        if (!ok) return;
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        // Clipboard blocked (unfocused tab, embedded preview, etc.)
+      }
+    })();
   };
 
   return (
     <>
-      <Card className={cn("flex flex-col items-center p-7 text-center", className)}>
+      <Card
+        className={cn(
+          "flex flex-col items-center text-center",
+          compact ? "p-5" : "p-7",
+          className,
+        )}
+      >
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Mã tham gia phòng
         </p>
         {qrDataUrl ? (
-          <div className="mt-5 rounded-2xl bg-foreground p-3.5 shadow-lg">
+          <div
+            className={cn(
+              "rounded-2xl bg-foreground shadow-lg",
+              compact ? "mt-3 p-2.5" : "mt-5 p-3.5",
+            )}
+          >
             <img
               src={qrDataUrl}
               alt={`QR tham gia phòng ${code}`}
-              className="size-44 rounded-lg bg-white"
-              width={176}
-              height={176}
+              className={cn(
+                "rounded-lg bg-white",
+                compact ? "size-28" : "size-44",
+              )}
+              width={compact ? 112 : 176}
+              height={compact ? 112 : 176}
             />
           </div>
         ) : (
-          <div className="mt-5 size-44 animate-pulse rounded-2xl bg-muted" />
+          <div
+            className={cn(
+              "animate-pulse rounded-2xl bg-muted",
+              compact ? "mt-3 size-28" : "mt-5 size-44",
+            )}
+          />
         )}
-        <p className="mt-5 font-mono text-4xl font-bold tracking-[0.2em] text-primary sm:text-5xl">
+        <p
+          className={cn(
+            "font-mono font-bold tracking-[0.2em] text-primary",
+            compact ? "mt-3 text-2xl" : "mt-5 text-4xl sm:text-5xl",
+          )}
+        >
           {code}
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className={cn("text-muted-foreground", compact ? "mt-1.5 text-xs" : "mt-2 text-sm")}>
           Chia sẻ mã này với học sinh để họ tham gia phòng
         </p>
-        <div className="mt-5 flex w-full max-w-xs gap-2.5">
+        <div
+          className={cn(
+            "flex w-full gap-2",
+            compact ? "mt-3 max-w-[240px]" : "mt-5 max-w-xs gap-2.5",
+          )}
+        >
           <Button variant="outline" className="flex-1 gap-1.5" onClick={copy}>
             <Copy className="size-3.5" aria-hidden />
             {copied ? "Đã sao chép" : "Sao chép"}

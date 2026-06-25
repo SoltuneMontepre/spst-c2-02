@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/hooks/use-api";
+import type { SessionSnapshot } from "@/lib/session-service";
 
 /** TFT-style "ready" to fast-forward the current phase when everyone is done. */
 export function PhaseReadyButton({
@@ -17,14 +18,31 @@ export function PhaseReadyButton({
   disabled?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const queryKey = ["session", sessionId] as const;
   const mutation = useMutation({
     mutationFn: (ready: boolean) =>
       apiFetch(`/api/sessions/${sessionId}/phase-ready`, {
         method: "POST",
         body: JSON.stringify({ ready }),
       }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] }),
+    onMutate: async (ready) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);
+      if (previous) {
+        queryClient.setQueryData<SessionSnapshot>(queryKey, {
+          ...previous,
+          participants: previous.participants.map((p) =>
+            p.isSelf ? { ...p, phaseReady: ready } : p,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _ready, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
   });
 
   if (!autoHost) return null;

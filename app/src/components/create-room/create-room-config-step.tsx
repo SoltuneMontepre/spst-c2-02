@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Landmark, Link2, ShoppingCart, Sprout } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -39,13 +39,16 @@ function ToggleRow({
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const id = useId();
+
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 py-3">
-      <span>
+    <div className="flex items-start justify-between gap-4 py-3">
+      <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
         <span className="block text-sm font-semibold">{label}</span>
         <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
-      </span>
+      </label>
       <button
+        id={id}
         type="button"
         role="switch"
         aria-checked={checked}
@@ -56,13 +59,14 @@ function ToggleRow({
         )}
       >
         <span
+          aria-hidden
           className={cn(
-            "absolute top-0.5 size-5 rounded-full bg-surface shadow transition-transform",
-            checked ? "translate-x-5" : "translate-x-0.5",
+            "absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow transition-transform duration-200",
+            checked ? "translate-x-5" : "translate-x-0",
           )}
         />
       </button>
-    </label>
+    </div>
   );
 }
 
@@ -82,8 +86,10 @@ export function CreateRoomConfigStep() {
       });
       router.push(`/home/create/${created.id}`);
     } catch (e) {
-      if (e instanceof ApiClientError && e.code === "ACTIVE_HOST_SESSION" && e.message) {
-        router.push(`/home/create/${e.message}`);
+      if (e instanceof ApiClientError && e.code === "HOST_SESSION_LIMIT") {
+        setError(
+          `Bạn đã mở tối đa 2 phòng host. Hãy hủy hoặc kết thúc một phòng trước khi tạo mới.`,
+        );
         return;
       }
       setError("Không thể tạo phòng. Vui lòng thử lại.");

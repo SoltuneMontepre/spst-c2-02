@@ -10,14 +10,16 @@ import type { OfferView } from "@/lib/session-service";
 
 export function OffersPanel({
   sessionId,
+  stateVersion,
   incoming,
   outgoing,
 }: {
   sessionId: string;
+  stateVersion?: number;
   incoming: OfferView[];
   outgoing: OfferView[];
 }) {
-  const command = useCommand(sessionId);
+  const command = useCommand(sessionId, stateVersion);
   const [counterPrices, setCounterPrices] = useState<Record<string, number>>({});
 
   if (incoming.length === 0 && outgoing.length === 0) return null;

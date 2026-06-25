@@ -11,16 +11,18 @@ import type { InventoryView, WholesaleView } from "@/lib/session-service";
 
 export function WholesalePanel({
   sessionId,
+  stateVersion,
   inventory,
   offers,
   role,
 }: {
   sessionId: string;
+  stateVersion?: number;
   inventory: InventoryView[];
   offers: WholesaleView[];
   role: "PRODUCER" | "INTERMEDIARY";
 }) {
-  const command = useCommand(sessionId);
+  const command = useCommand(sessionId, stateVersion);
   const [lotId, setLotId] = useState(inventory[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [minPrice, setMinPrice] = useState(8000);

@@ -25,6 +25,16 @@ export const registerSchema = z.object({
   displayName: displayNameSchema,
 });
 
+/** Client-only: includes confirm-password check before hitting the API. */
+export const registerFormSchema = registerSchema
+  .extend({
+    confirmPassword: z.string().min(1, "Vui lòng nhập lại mật khẩu"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Mật khẩu nhập lại không khớp",
+    path: ["confirmPassword"],
+  });
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, "Vui lòng nhập mật khẩu"),

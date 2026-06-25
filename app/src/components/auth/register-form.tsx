@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Field } from "@/components/ui/field";
 import { useRegisterForm } from "@/hooks/use-auth-forms";
 
@@ -36,11 +37,21 @@ export function RegisterForm() {
         <Input id="reg-email" type="email" autoComplete="email" {...register("email")} />
       </Field>
       <Field label="Mật khẩu" htmlFor="reg-password" error={formState.errors.password?.message}>
-        <Input
+        <PasswordInput
           id="reg-password"
-          type="password"
           autoComplete="new-password"
           {...register("password")}
+        />
+      </Field>
+      <Field
+        label="Nhập lại mật khẩu"
+        htmlFor="reg-confirm-password"
+        error={formState.errors.confirmPassword?.message}
+      >
+        <PasswordInput
+          id="reg-confirm-password"
+          autoComplete="new-password"
+          {...register("confirmPassword")}
         />
       </Field>
       {formError ? <p className="text-sm text-danger">{formError}</p> : null}

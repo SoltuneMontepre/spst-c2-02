@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Field } from "@/components/ui/field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useResetForm } from "@/hooks/use-auth-forms";
@@ -31,9 +31,8 @@ export function ResetForm({ token }: { token: string }) {
               htmlFor="reset-password"
               error={formState.errors.password?.message}
             >
-              <Input
+              <PasswordInput
                 id="reset-password"
-                type="password"
                 autoComplete="new-password"
                 {...register("password")}
               />
