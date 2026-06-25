@@ -5,10 +5,7 @@ import { ChevronRight } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { Button } from "@/components/ui/button";
-import {
-  RoleTutorialCallouts,
-  RoleTutorialProgress,
-} from "@/components/lobby/role-tutorial-callouts";
+import { RoleTutorialProgress } from "@/components/lobby/role-tutorial-callouts";
 import {
   getRoleTutorialContent,
   markRoleTutorialSkipped,
@@ -16,11 +13,9 @@ import {
 
 export function RoleTutorialWizard({
   role,
-  totalRounds,
   onClose,
 }: {
   role: Role;
-  totalRounds: number;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<0 | 1 | 2>(0);
@@ -35,12 +30,11 @@ export function RoleTutorialWizard({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col">
+    <div className="flex w-full flex-col">
       <RoleTutorialProgress step={step} />
 
-      <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_256px] lg:items-start">
-        <div className="flex flex-col">
-          <div className="rounded-2xl border border-border bg-surface p-7 shadow-sm">
+      <div className="mt-7 flex flex-col">
+        <div className="rounded-2xl border border-border bg-surface p-7 shadow-sm">
             <StepIcon className="size-8 text-primary" aria-hidden />
             <p className="mt-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               Bước {step + 1}/3
@@ -84,14 +78,7 @@ export function RoleTutorialWizard({
           </div>
         </div>
 
-        <RoleTutorialCallouts
-          theoryCallout={content.theoryCallout}
-          goalCallout={content.goalCallout(totalRounds)}
-          actions={content.actions}
-        />
-      </div>
-
-      <p className="mt-4 text-center text-xs text-muted-foreground lg:hidden">
+      <p className="mt-4 text-center text-xs text-muted-foreground">
         {ROLE_LABELS[role]} · 3 bước
       </p>
     </div>

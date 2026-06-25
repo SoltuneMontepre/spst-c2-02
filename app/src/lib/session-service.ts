@@ -7,7 +7,9 @@ import { maybeAutoAdvance } from "./game-service";
 import { ensureHostParticipant } from "./lobby-seat";
 import { sweepAbandonedSoloLobbies, syncLobbySoloSince } from "./lobby-maintenance";
 import { publish } from "./events";
+import type { ConsumerRoundState } from "./role-state";
 import type { ParticipantOutcome } from "./finalize";
+import { computeMarketPrice, unitValueVnd } from "./economy";
 import type { CreateSessionInput } from "./create-session-schema";
 export type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
 import {
@@ -251,6 +253,25 @@ export interface MarketView {
   wholesaleOffers: WholesaleView[];
 }
 
+export interface TransactionView {
+  id: string;
+  completedAt: string;
+  counterpartyName: string;
+  channel: string;
+  quantity: number;
+  unitPriceVnd: number;
+  totalPriceVnd: number;
+  direction: "buy" | "sell";
+}
+
+export interface LiveRoundStats {
+  unitValueVnd: number;
+  marketPriceVnd: number | null;
+  supplyQuantity: number;
+  demandQuantity: number;
+  expectedInventory: number;
+}
+
 export interface RoundAnalytics {
   number: number;
   unitValueVnd: number;
@@ -268,6 +289,8 @@ export interface SessionSnapshot {
   phase: string | null;
   phaseEndsAt: string | null;
   paused: boolean;
+  /** Extensions used in the current phase (max 2). */
+  phaseExtensions: number;
   currentRound: number;
   stateVersion: number;
   maxPlayers: number;
@@ -285,6 +308,8 @@ export interface SessionSnapshot {
   self: SelfState | null;
   market: MarketView | null;
   analytics: RoundAnalytics[];
+  recentTransactions: TransactionView[];
+  liveRoundStats: LiveRoundStats | null;
 }
 
 export interface BadgeView {
@@ -353,6 +378,19 @@ export async function getSnapshot(
     nameById,
   );
   const analytics = await buildAnalytics(session.id);
+  const recentTransactions = selfParticipant
+    ? await buildRecentTransactions(
+        selfParticipant.id,
+        session.id,
+        session.currentRound,
+        nameById,
+      )
+    : [];
+  const liveRoundStats = await buildLiveRoundStats(
+    session.id,
+    session.currentRound,
+    session.phase,
+  );
 
   return {
     id: session.id,
@@ -361,6 +399,7 @@ export async function getSnapshot(
     phase: session.phase,
     phaseEndsAt: session.phaseEndsAt?.toISOString() ?? null,
     paused: session.paused,
+    phaseExtensions: session.phaseExtensions,
     currentRound: session.currentRound,
     stateVersion: session.stateVersion,
     maxPlayers: session.maxPlayers,
@@ -375,6 +414,8 @@ export async function getSnapshot(
     self,
     market,
     analytics,
+    recentTransactions,
+    liveRoundStats,
     participants: participants.map((p) => ({
       id: p.id,
       displayName: p.displayNameSnapshot,
@@ -514,6 +555,89 @@ async function buildMarket(
       status: w.status,
       isOwn: w.producerId === selfId,
     })),
+  };
+}
+
+const RETAIL_CHANNELS = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"] as const;
+
+async function buildRecentTransactions(
+  participantId: string,
+  sessionId: string,
+  currentRound: number,
+  nameById: Map<string, string>,
+): Promise<TransactionView[]> {
+  if (!currentRound) return [];
+  const round = await db.round.findUnique({
+    where: { sessionId_number: { sessionId, number: currentRound } },
+    select: { id: true },
+  });
+  if (!round) return [];
+
+  const txs = await db.transaction.findMany({
+    where: {
+      roundId: round.id,
+      status: "COMPLETED",
+      OR: [{ sellerId: participantId }, { buyerId: participantId }],
+    },
+    orderBy: { completedAt: "desc" },
+    take: 20,
+  });
+
+  return txs.map((t) => {
+    const isSell = t.sellerId === participantId;
+    const counterpartyId = isSell ? t.buyerId : t.sellerId;
+    return {
+      id: t.id,
+      completedAt: t.completedAt.toISOString(),
+      counterpartyName: counterpartyId ? (nameById.get(counterpartyId) ?? "?") : "Hệ thống",
+      channel: t.channel,
+      quantity: t.quantity,
+      unitPriceVnd: t.unitPriceVnd,
+      totalPriceVnd: t.totalPriceVnd,
+      direction: isSell ? "sell" : "buy",
+    };
+  });
+}
+
+async function buildLiveRoundStats(
+  sessionId: string,
+  currentRound: number,
+  phase: string | null,
+): Promise<LiveRoundStats | null> {
+  if (!currentRound || !phase) return null;
+  if (!["MARKET_OPEN", "SETTLEMENT", "RECAP"].includes(phase)) return null;
+
+  const round = await db.round.findUnique({
+    where: { sessionId_number: { sessionId, number: currentRound } },
+    include: {
+      listings: true,
+      roleStates: true,
+      transactions: { where: { status: "COMPLETED" } },
+    },
+  });
+  if (!round) return null;
+
+  const retail = round.transactions.filter((t) =>
+    RETAIL_CHANNELS.includes(t.channel as (typeof RETAIL_CHANNELS)[number]),
+  );
+  const price = computeMarketPrice(
+    retail.map((t) => ({ unitPriceVnd: t.unitPriceVnd, quantity: t.quantity })),
+  );
+
+  const supplyQuantity = round.listings.reduce((sum, l) => sum + l.quantity, 0);
+  const demandQuantity = round.roleStates
+    .filter((r) => r.role === "CONSUMER")
+    .reduce(
+      (sum, r) => sum + (r.state as unknown as ConsumerRoundState).needTarget,
+      0,
+    );
+
+  return {
+    unitValueVnd: unitValueVnd(currentRound),
+    marketPriceVnd: price.marketPriceVnd,
+    supplyQuantity,
+    demandQuantity,
+    expectedInventory: Math.max(0, supplyQuantity - demandQuantity),
   };
 }
 

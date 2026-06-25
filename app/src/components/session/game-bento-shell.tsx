@@ -62,12 +62,12 @@ export function GameBentoShell({
     <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
     <>
       <header className="fixed inset-x-0 top-0 z-30 border-b border-border/50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/90">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+        <div className="w-full px-4 py-3 sm:px-6 lg:px-8">
           <GameAnnouncementBanner sessionId={sessionId} data={data} />
         </div>
       </header>
 
-      <div className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 pb-24 pr-12 pt-28 sm:px-6 sm:pb-24 sm:pr-14 sm:pt-32">
+      <div className="relative flex w-full flex-1 flex-col gap-4 px-4 pb-24 pr-12 pt-28 sm:px-6 sm:pb-24 sm:pr-14 sm:pt-32 lg:px-8">
         <div className="grid grid-cols-12 gap-4 lg:items-start">
           <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:sticky lg:top-32 lg:self-start">
             <BentoTile title="Khu vực" description="Chuyển màn hình">

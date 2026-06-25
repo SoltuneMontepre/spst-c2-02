@@ -16,6 +16,8 @@ import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { ChartLegend } from "@/components/observatory/chart-legend";
 import { STATUS_LABELS, PHASE_LABELS } from "@/lib/labels";
+import { ApiClientError } from "@/hooks/use-api";
+import { errorMessage } from "@/lib/error-messages";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
 
@@ -104,7 +106,7 @@ export function HostControl({
         sessionCode={data.code}
       />
 
-      <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+      <div className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Bảng điều phối</h1>
@@ -162,11 +164,18 @@ export function HostControl({
               <HostControls
                 status={data.status}
                 phase={data.phase}
+                phaseEndsAt={data.phaseEndsAt}
                 paused={data.paused}
+                phaseExtensions={data.phaseExtensions}
                 pending={host.isPending}
                 autoHost={data.autoHost}
                 onAction={(action) => host.mutate(action)}
               />
+              {host.isError && host.error instanceof ApiClientError ? (
+                <p className="text-sm text-danger" role="alert">
+                  {errorMessage(host.error.code)}
+                </p>
+              ) : null}
             </div>
           </BentoTile>
 

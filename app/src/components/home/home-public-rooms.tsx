@@ -3,6 +3,7 @@
 import { Globe, LogIn } from "lucide-react";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { Button } from "@/components/ui/button";
+import { HomeRefreshButton } from "@/components/home/home-refresh-button";
 import { useJoinRoom } from "@/hooks/use-session-room";
 import type { PublicOpenRoom } from "@/lib/session-service";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,7 @@ function PublicRoomRow({ room }: { room: PublicOpenRoom }) {
 
   return (
     <li className="rounded-xl border border-border bg-muted/10 p-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent/15">
             <Globe className="size-4 text-accent" aria-hidden />
@@ -59,7 +60,7 @@ function PublicRoomRow({ room }: { room: PublicOpenRoom }) {
         </div>
         <Button
           size="sm"
-          className="shrink-0 gap-1.5"
+          className="w-full shrink-0 gap-1.5 sm:w-auto"
           disabled={join.isPending || seatsLeft <= 0}
           onClick={() => join.mutate(room.code)}
         >
@@ -84,9 +85,12 @@ export function HomePublicRooms({
       description="Phòng công khai bạn chưa tham gia — vào ngay không cần mã"
       colSpan="col-span-12"
       headerExtra={
-        rooms.length > 0 ? (
-          <span className="text-xs text-muted-foreground">{rooms.length} phòng</span>
-        ) : null
+        <div className="flex items-center gap-2">
+          {rooms.length > 0 ? (
+            <span className="text-xs text-muted-foreground">{rooms.length} phòng</span>
+          ) : null}
+          <HomeRefreshButton label="Làm mới phòng công khai" />
+        </div>
       }
     >
       {loading ? (

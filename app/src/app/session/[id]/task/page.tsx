@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { RoleTask } from "@/components/session/role-task";
+import { TaskPageClient } from "@/components/session/task-page-client";
 
 export default async function TaskPage({
   params,
@@ -10,5 +10,5 @@ export default async function TaskPage({
   const session = await auth();
   if (!session?.user) redirect("/auth");
   const { id } = await params;
-  return <RoleTask sessionId={id} />;
+  return <TaskPageClient sessionId={id} />;
 }

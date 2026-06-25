@@ -51,7 +51,8 @@ function CompositionSummary({
         ))}
       </dl>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Gán vai cho từng người/bot. Hồ sơ sản xuất chỉ dành cho vai người sản xuất.
+        Gán vai cho từng người/bot. Hồ sơ sản xuất chỉ dành cho vai người sản xuất. Không
+        đổi vai người đã bấm sẵn sàng.
       </p>
     </section>
   );
@@ -90,6 +91,9 @@ export function LobbySetup({
             {participants.map((p) => {
               const roleId = `role-${p.id}`;
               const profileId = `profile-${p.id}`;
+              const roleLocked = !p.isBot && p.ready;
+              const roleLockedTitle =
+                "Người chơi đã sẵn sàng — không thể đổi vai cho đến khi họ bỏ sẵn sàng";
 
               return (
                 <SetupParticipantRow
@@ -118,7 +122,8 @@ export function LobbySetup({
                     <select
                       id={roleId}
                       className={selectClass}
-                      disabled={pending}
+                      disabled={pending || roleLocked}
+                      title={roleLocked ? roleLockedTitle : undefined}
                       value={p.role ?? ""}
                       onChange={(e) => {
                         const role = (e.target.value || null) as Role | null;
@@ -146,7 +151,8 @@ export function LobbySetup({
                     <select
                       id={profileId}
                       className={selectClass}
-                      disabled={pending}
+                      disabled={pending || roleLocked}
+                      title={roleLocked ? roleLockedTitle : undefined}
                       value={p.productivityProfile ?? "SOCIAL_AVERAGE"}
                       onChange={(e) =>
                         onAction({
@@ -184,6 +190,7 @@ function AddBotForm({
   onAction: (action: HostLobbyAction) => void;
 }) {
   const [role, setRole] = useState<Role>("CONSUMER");
+  const [profile, setProfile] = useState<ProductivityProfile>("SOCIAL_AVERAGE");
   const showProfile = role === "PRODUCER";
 
   return (
@@ -191,17 +198,13 @@ function AddBotForm({
       className="shrink-0 rounded-xl border border-dashed border-border bg-muted/5 p-3 sm:p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        const pickedRole = fd.get("role") as Role;
-        const profile = fd.get("profile") as ProductivityProfile;
-        if (!pickedRole) return;
         onAction({
           action: "addBot",
-          role: pickedRole,
-          productivityProfile: pickedRole === "PRODUCER" ? profile : undefined,
+          role,
+          productivityProfile: role === "PRODUCER" ? profile : undefined,
         });
-        e.currentTarget.reset();
         setRole("CONSUMER");
+        setProfile("SOCIAL_AVERAGE");
       }}
     >
       <p className="mb-2 text-xs font-medium text-muted-foreground">Thêm bot</p>
@@ -209,7 +212,6 @@ function AddBotForm({
         <SetupSelectField label="Vai trò" htmlFor="add-bot-role">
           <select
             id="add-bot-role"
-            name="role"
             className={selectClass}
             required
             value={role}
@@ -227,9 +229,9 @@ function AddBotForm({
           {showProfile ? (
             <select
               id="add-bot-profile"
-              name="profile"
               className={selectClass}
-              defaultValue="SOCIAL_AVERAGE"
+              value={profile}
+              onChange={(e) => setProfile(e.target.value as ProductivityProfile)}
             >
               {PROFILES.map((profile) => (
                 <option key={profile} value={profile}>

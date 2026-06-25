@@ -24,12 +24,17 @@ export const ERROR_MESSAGES: Record<string, string> = {
   UPGRADE_NOT_AVAILABLE: "Nâng cấp không khả dụng cho hồ sơ hoặc vòng hiện tại.",
   UNDER_MIN_PLAYERS: "Cần ít nhất 4 người chơi để bắt đầu.",
   NOT_ALL_READY: "Mọi người chơi cần sẵn sàng trước khi bắt đầu.",
+  PARTICIPANT_READY_LOCKED:
+    "Không thể đổi vai người chơi đã bấm sẵn sàng. Họ cần bỏ sẵn sàng trước.",
   FORBIDDEN: "Bạn không có quyền thực hiện thao tác này.",
   INVALID_STATE: "Thao tác không khả dụng trong trạng thái phiên hiện tại.",
   SESSION_LOCKED: "Phiên đã bắt đầu; thao tác này chỉ dùng trong phòng chờ.",
   NOT_ALL_ROLES_ASSIGNED: "Mọi người chơi cần được gán vai trước khi bắt đầu.",
   SOLO_EXTEND_USED: "Bạn đã gia hạn phòng một lần trong lần chờ này.",
+  CANNOT_EXTEND: "Không thể gia hạn trong giai đoạn này.",
+  EXTEND_LIMIT: "Đã dùng hết 2 lần gia hạn cho giai đoạn hiện tại.",
   INTERNAL_ERROR: "Đã xảy ra lỗi máy chủ. Vui lòng thử lại.",
+  VALIDATION_ERROR: "Dữ liệu không hợp lệ. Vui lòng thử lại.",
 };
 
 export function errorMessage(code: string, fallback?: string): string {

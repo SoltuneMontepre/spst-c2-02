@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Store } from "lucide-react";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { Button } from "@/components/ui/button";
+import { HomeRefreshButton } from "@/components/home/home-refresh-button";
 import { SessionListRow } from "@/components/home/session-list-row";
 import { RoleBadge, ROLE_LABELS } from "@/components/lobby/role-badge";
 import { useHostControl } from "@/hooks/use-host-control";
@@ -203,14 +204,17 @@ export function HomeRecentSessions({
       description="Các phòng bạn đã tham gia hoặc đang mở"
       colSpan="col-span-12"
       headerExtra={
-        sessions.length > 0 ? (
-          <span className="text-xs text-muted-foreground">
-            {activeSessions.length > 0
-              ? `${activeSessions.length} đang mở · `
-              : ""}
-            {sessions.length} phòng
-          </span>
-        ) : null
+        <div className="flex items-center gap-2">
+          {sessions.length > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {activeSessions.length > 0
+                ? `${activeSessions.length} đang mở · `
+                : ""}
+              {sessions.length} phòng
+            </span>
+          ) : null}
+          <HomeRefreshButton label="Làm mới phòng gần đây" />
+        </div>
       }
     >
       {loading ? (

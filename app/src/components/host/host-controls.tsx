@@ -3,24 +3,34 @@
 import { Play, Pause, SkipForward, Plus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { HostAction } from "@/hooks/use-host-control";
+import { MAX_PHASE_EXTENSIONS } from "@/lib/scenario";
 
 export function HostControls({
   status,
   phase,
+  phaseEndsAt,
   paused,
+  phaseExtensions,
   pending,
   autoHost,
   onAction,
 }: {
   status: string;
   phase: string | null;
+  phaseEndsAt: string | null;
   paused: boolean;
+  phaseExtensions: number;
   pending: boolean;
   autoHost?: boolean;
   onAction: (action: HostAction | { action: "setAutoHost"; autoHost: boolean }) => void;
 }) {
   const inRound = status.startsWith("ROUND_");
-  const canExtend = inRound && phase !== "SETTLEMENT" && phase !== "RECAP";
+  const timedPhase = phase === "EVENT" || phase === "DECISION" || phase === "MARKET_OPEN";
+  const canExtend =
+    inRound &&
+    timedPhase &&
+    phaseExtensions < MAX_PHASE_EXTENSIONS &&
+    (paused || Boolean(phaseEndsAt));
 
   return (
     <div className="flex min-h-[7.5rem] flex-col gap-2">

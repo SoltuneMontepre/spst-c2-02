@@ -10,7 +10,7 @@ export function Hero({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: string 
         className="pointer-events-none absolute -right-24 -top-24 size-[28rem] rounded-full bg-primary/10 blur-3xl"
         aria-hidden
       />
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-20 md:grid-cols-2 md:py-28">
+      <div className="grid w-full items-center gap-10 px-4 py-20 sm:px-6 md:grid-cols-2 md:py-28 lg:px-8">
         <div className="flex flex-col gap-6">
           <span className="w-fit rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
             Mô phỏng thị trường đa người chơi

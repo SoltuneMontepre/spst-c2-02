@@ -2,19 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { buttonVariants } from "@/components/ui/button";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { useSessionSnapshot, useSessionResult } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { STATUS_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { GuidancePanel } from "@/components/learning/guidance-panel";
-import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
-import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { getGuidance } from "@/lib/game-guidance";
+import { TutorialToggle } from "@/components/learning/tutorial-toggle";
 import {
   DebriefParticipantPeek,
   DebriefParticipantRoster,
@@ -53,7 +52,6 @@ function mergeRosterParticipants(
 }
 
 export function DebriefView({ sessionId }: { sessionId: string }) {
-  useSessionStream(sessionId);
   const { data: snapshot, isLoading: snapLoading } = useSessionSnapshot(sessionId);
   useSessionCancelledRedirect(snapshot?.status, "solo_timeout");
   const { enabled: guidanceOn } = useTutorial();
@@ -126,8 +124,27 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
   const selectedAiReview = selected ? (aiByParticipantId.get(selected.id) ?? null) : null;
 
   return (
-    <SessionGuidanceScope guidanceEnabled={snapshot.guidanceEnabled}>
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
+    <GameSessionLayout
+      sessionId={sessionId}
+      activeZone="debrief"
+      title="Kết quả cuối"
+      subtitle={STATUS_LABELS[snapshot.status]}
+      rightPanel={
+        <BentoTile title="Tiếp theo" description="Khám phá thêm hoặc rời phiên">
+          <div className="flex flex-col gap-2">
+            <Link
+              href={`/session/${sessionId}/observatory`}
+              className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+            >
+              Xem tháp quan sát chi tiết
+            </Link>
+            <Link href="/home" className={cn(buttonVariants(), "w-full")}>
+              Về trang chủ
+            </Link>
+          </div>
+        </BentoTile>
+      }
+    >
       <div className="grid grid-cols-12 gap-4 lg:items-start">
         {/* Trái — avatar + peek cá nhân nhỏ */}
         <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
@@ -244,8 +261,8 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
           </BentoTile>
         </div>
 
-        {/* Phải — meta & điều hướng */}
-        <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
+        {/* Phải — meta & điều hướng (mobile) */}
+        <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:hidden">
           <BentoTile
             title="Hướng dẫn"
             description={guidance.title}
@@ -275,7 +292,6 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
           </BentoTile>
         </div>
       </div>
-    </main>
-    </SessionGuidanceScope>
+    </GameSessionLayout>
   );
 }

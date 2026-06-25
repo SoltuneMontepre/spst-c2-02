@@ -4,73 +4,15 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
-import { GameBentoShell } from "@/components/session/game-bento-shell";
+import { GameSessionLayout } from "@/components/session/game-session-layout";
+import { GamePhaseCta } from "@/components/session/game-phase-cta";
+import { EventPanel } from "@/components/session/event-panel";
+import { MarketSnapshotPanel } from "@/components/session/market-snapshot-panel";
 import { MapZones } from "./map-zones";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
-import { zoneLabelForRole } from "@/lib/game-zones";
-import type { Role } from "@/generated/prisma/enums";
+import { PHASE_LABELS } from "@/lib/labels";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
-
-function MapPhaseHint({
-  status,
-  phase,
-  role,
-}: {
-  status: string;
-  phase: string | null;
-  role: Role | null;
-}) {
-  if (status === "INTRO") {
-    return (
-      <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-        <p className="font-semibold">Làm quen bản đồ</p>
-        <p className="mt-1 text-muted-foreground">
-          Khu sáng là nơi bạn làm việc theo vai trò
-          {role ? ` (${ROLE_LABELS[role]})` : ""}. Chọn khu ở cột trái khi đến lúc.
-        </p>
-      </div>
-    );
-  }
-
-  if (phase === "EVENT") {
-    return (
-      <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
-        <p className="font-semibold">Đang công bố biến cố</p>
-        <p className="mt-1 text-muted-foreground">
-          Đọc timer & hướng dẫn bên phải — chờ «Ra quyết định» rồi vào khu của bạn.
-        </p>
-      </div>
-    );
-  }
-
-  if (phase === "DECISION" && role) {
-    return (
-      <div className="rounded-xl border border-primary bg-primary/10 px-4 py-3 text-sm">
-        <p className="font-semibold">Ra quyết định</p>
-        <p className="mt-1 text-muted-foreground">
-          Chọn <span className="font-medium text-foreground">{zoneLabelForRole(role)}</span>{" "}
-          ở cột trái hoặc ô bên dưới.
-        </p>
-      </div>
-    );
-  }
-
-  if (phase === "MARKET_OPEN" && role) {
-    return (
-      <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm">
-        <p className="font-semibold">Chợ đã mở</p>
-        <p className="mt-1 text-muted-foreground">
-          Vào <span className="font-medium text-foreground">{zoneLabelForRole(role)}</span>{" "}
-          để mua bán.
-        </p>
-      </div>
-    );
-  }
-
-  return null;
-}
 
 export function MapShell({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -95,21 +37,28 @@ export function MapShell({ sessionId }: { sessionId: string }) {
   const mapInteractive =
     data.status !== "INTRO" &&
     (data.phase === "DECISION" || data.phase === "MARKET_OPEN");
+  const phaseLabel = data.phase ? PHASE_LABELS[data.phase] : "";
 
   return (
-    <GameBentoShell
+    <GameSessionLayout
       sessionId={sessionId}
       activeZone="map"
-      guidanceContext={{
-        screen: "map",
-        status: data.status,
-        phase: data.phase,
-        role,
-        autoHost: data.autoHost,
-      }}
+      title="Bản đồ chợ"
+      subtitle={`Chợ Thanh Long · Vòng ${data.currentRound}${phaseLabel ? ` · ${phaseLabel}` : ""}`}
+      rightPanel={
+        <>
+          <EventPanel round={data.currentRound} />
+          <MarketSnapshotPanel stats={data.liveRoundStats} />
+        </>
+      }
     >
       <div className="flex flex-col gap-4">
-        <MapPhaseHint status={data.status} phase={data.phase} role={role} />
+        <GamePhaseCta
+          sessionId={sessionId}
+          phase={data.phase}
+          round={data.currentRound}
+          role={role}
+        />
         {data.phase === "RECAP" && recapRound ? (
           <RoundRecapCard sessionId={sessionId} round={recapRound} />
         ) : (
@@ -121,6 +70,6 @@ export function MapShell({ sessionId }: { sessionId: string }) {
           />
         )}
       </div>
-    </GameBentoShell>
+    </GameSessionLayout>
   );
 }

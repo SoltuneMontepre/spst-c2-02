@@ -8,13 +8,15 @@ export function RoleTutorialCallouts({
   theoryCallout,
   goalCallout,
   actions,
+  className,
 }: {
   theoryCallout: string;
   goalCallout: string;
   actions: RoleTutorialAction[];
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className={cn("flex flex-col gap-2.5", className)}>
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
         <div className="flex items-center gap-1.5">
           <BookOpen className="size-3 text-amber-800/70" aria-hidden />

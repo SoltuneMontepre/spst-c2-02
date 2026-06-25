@@ -19,7 +19,7 @@ export function CreateRoomPreviewStep({
   config: CreateSessionInput;
 }) {
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <CreateRoomStepper step={2} />
       <div className="mt-7 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <CreateRoomShareCard code={code} />

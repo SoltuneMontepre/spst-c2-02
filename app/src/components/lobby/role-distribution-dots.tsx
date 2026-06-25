@@ -28,15 +28,16 @@ export function RoleDistributionDots({
               "flex items-center",
               compact ? "justify-between gap-2" : "justify-between gap-3",
             )}
+            aria-label={`${r.label}: ${r.filled}/${r.target}`}
           >
             <div className="flex min-w-0 items-center gap-2">
               <Icon
                 className="size-4 shrink-0 text-muted-foreground"
                 aria-hidden
               />
-              {!compact ? (
-                <span className="text-sm">{r.label}</span>
-              ) : null}
+              <span className={cn("truncate", compact ? "text-xs" : "text-sm")}>
+                {r.label}
+              </span>
             </div>
             <div className="flex shrink-0 gap-1">
               {Array.from({ length: r.target }, (_, i) => (

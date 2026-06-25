@@ -26,7 +26,7 @@ export function LobbyShell({
   return (
     <div className="flex min-h-full flex-col bg-background">
       <header className="shrink-0 border-b border-border bg-surface">
-        <div className="mx-auto flex h-[52px] max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex h-[52px] w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2.5">
             {onLeave ? (
               <Button
@@ -52,24 +52,16 @@ export function LobbyShell({
 
           <div className="flex shrink-0 items-center gap-1.5">
             <span className="size-1.5 rounded-full bg-success" aria-hidden />
-            <span className="font-mono text-xs font-semibold text-success">
-              {sessionCode}
-            </span>
+            <span className="font-mono text-xs font-semibold text-success">{sessionCode}</span>
             <span className="text-xs text-muted-foreground">· Đang mở</span>
           </div>
 
-          <p className="hidden max-w-[200px] truncate text-right text-xs text-muted-foreground sm:block">
-            {subtitle}
-          </p>
+          <p className="hidden max-w-[200px] truncate text-right text-xs text-muted-foreground sm:block">{subtitle}</p>
         </div>
-        <p className="truncate px-4 pb-2 text-center text-xs text-muted-foreground sm:hidden">
-          {subtitle}
-        </p>
+        <p className="truncate px-4 pb-2 text-center text-xs text-muted-foreground sm:hidden">{subtitle}</p>
       </header>
 
-      <main className={cn("mx-auto w-full max-w-7xl flex-1 px-4 py-7 sm:px-6")}>
-        {children}
-      </main>
+      <main className={cn("w-full flex-1 px-4 py-7 sm:px-6 lg:px-8")}>{children}</main>
     </div>
   );
 }

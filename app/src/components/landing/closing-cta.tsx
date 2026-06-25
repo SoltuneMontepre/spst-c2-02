@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export function ClosingCta({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: string }) {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
+    <section className="w-full px-4 py-20 sm:px-6 lg:px-8">
       <div className="flex flex-col items-center gap-6 rounded-3xl bg-primary px-6 py-14 text-center text-primary-foreground">
         <h2 className="max-w-xl text-3xl font-bold tracking-tight">
           Sẵn sàng mở phiên chợ của riêng bạn?

@@ -99,7 +99,7 @@ export function CreateRoomConfigStep() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <CreateRoomStepper step={1} />
       <div className="mt-7 grid gap-4 lg:grid-cols-[1fr_1.1fr_0.9fr]">
         <Card className="p-5">

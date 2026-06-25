@@ -7,7 +7,7 @@ const ROUNDS = [
 
 export function Rounds() {
   return (
-    <section id="cach-choi" className="mx-auto max-w-6xl px-6 py-16">
+    <section id="cach-choi" className="w-full px-4 py-16 sm:px-6 lg:px-8">
       <div className="mb-10 flex flex-col gap-2 text-center">
         <h2 className="text-3xl font-bold tracking-tight">Bốn vòng có chủ đích</h2>
         <p className="text-muted-foreground">

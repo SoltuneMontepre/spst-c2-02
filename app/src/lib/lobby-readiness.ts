@@ -98,9 +98,8 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
     },
     {
       id: "all-ready",
-      label: "Tất cả đã sẵn sàng",
+      label: allReady ? "Tất cả đã sẵn sàng" : "Chờ mọi người bấm sẵn sàng",
       done: allReady,
-      warning: !allReady && humanCount >= minHumans,
     },
   ];
 

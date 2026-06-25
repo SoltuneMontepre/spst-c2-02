@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { computeLobbyReadiness } from "@/lib/lobby-readiness";
 import { lobbyMinHumans } from "@/components/lobby/lobby-controls";
 import { SoloLobbyCountdown } from "@/components/lobby/solo-lobby-countdown";
+import { ApiClientError } from "@/hooks/use-api";
+import { errorMessage } from "@/lib/error-messages";
 
 export function HostLobbyView({
   sessionId,
@@ -60,7 +62,7 @@ export function HostLobbyView({
         code={data.code}
         subtitle="Đang chờ người chơi tham gia"
       />
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-4 pb-8">
+      <main className="flex w-full flex-1 flex-col gap-4 p-4 pb-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-12 gap-4 lg:items-start">
           <div className="col-span-12 min-h-[320px] lg:col-span-4">
             <HostLobbyRoster
@@ -138,6 +140,11 @@ export function HostLobbyView({
               pending={host.isPending}
               onAction={(action) => host.mutate(action)}
             />
+            {host.isError && host.error instanceof ApiClientError ? (
+              <p className="mt-3 text-sm text-danger" role="alert">
+                {errorMessage(host.error.code)}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

@@ -10,7 +10,7 @@ const ROLES: { icon: LucideIcon; title: string; body: string }[] = [
 export function Roles() {
   return (
     <section className="bg-muted/50 py-16">
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="mb-10 flex flex-col gap-2 text-center">
           <h2 className="text-3xl font-bold tracking-tight">Bốn chủ thể thị trường</h2>
           <p className="text-muted-foreground">

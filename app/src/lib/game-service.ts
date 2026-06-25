@@ -77,6 +77,8 @@ export async function hostSwapRoles(
     db.participant.findFirst({ where: { id: participantBId, sessionId, isBot: false } }),
   ]);
   if (!a || !b || !a.role || !b.role) throw new ApiError("NOT_FOUND", 404);
+  assertRoleEditable(a);
+  assertRoleEditable(b);
 
   const profileA = a.productivityProfile;
   const profileB = b.productivityProfile;
@@ -93,6 +95,12 @@ export async function hostSwapRoles(
   await touch(sessionId, "participant:role_set", { participantAId, participantBId });
 }
 
+function assertRoleEditable(p: { isBot: boolean; ready: boolean }): void {
+  if (!p.isBot && p.ready) {
+    throw new ApiError("PARTICIPANT_READY_LOCKED", 409);
+  }
+}
+
 /** Host assigns a role (and producer profile) in the lobby. */
 export async function hostSetParticipantRole(
   hostUserId: string,
@@ -104,6 +112,7 @@ export async function hostSetParticipantRole(
   await assertLobbyHost(hostUserId, sessionId);
   const p = await db.participant.findFirst({ where: { id: participantId, sessionId } });
   if (!p) throw new ApiError("NOT_FOUND", 404);
+  assertRoleEditable(p);
 
   let profile: ProductivityProfile | null = null;
   if (role === "PRODUCER") {
@@ -768,8 +777,25 @@ export async function hostResume(hostUserId: string, sessionId: string): Promise
 
 export async function hostExtend(hostUserId: string, sessionId: string): Promise<void> {
   const s = await assertHost(hostUserId, sessionId);
-  if (s.phase === "SETTLEMENT" || !s.phaseEndsAt) throw new ApiError("CANNOT_EXTEND", 409);
+  if (s.phase === "SETTLEMENT" || s.phase === "RECAP") {
+    throw new ApiError("CANNOT_EXTEND", 409);
+  }
   if (s.phaseExtensions >= MAX_PHASE_EXTENSIONS) throw new ApiError("EXTEND_LIMIT", 409);
+
+  if (s.paused) {
+    if (s.pausedRemainingMs == null) throw new ApiError("CANNOT_EXTEND", 409);
+    await db.gameSession.update({
+      where: { id: sessionId },
+      data: {
+        pausedRemainingMs: s.pausedRemainingMs + PHASE_EXTENSION_SEC * 1000,
+        phaseExtensions: { increment: 1 },
+      },
+    });
+    await touch(sessionId, "session:extended");
+    return;
+  }
+
+  if (!s.phaseEndsAt) throw new ApiError("CANNOT_EXTEND", 409);
   const phaseEndsAt = new Date(s.phaseEndsAt.getTime() + PHASE_EXTENSION_SEC * 1000);
   await db.gameSession.update({
     where: { id: sessionId },

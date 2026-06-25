@@ -12,7 +12,7 @@ export function LandingNav({
 }) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+      <nav className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/">
           <Brand />
         </Link>

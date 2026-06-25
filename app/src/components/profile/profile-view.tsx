@@ -1,8 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { SessionNav } from "@/components/session/session-nav";
-import { Button } from "@/components/ui/button";
 import { ProfileSummaryCard, ProfileStatsCard } from "@/components/profile/profile-summary-card";
 import { ProfileInfoForm } from "@/components/profile/profile-info-form";
 import { ProfileSecurityCard } from "@/components/profile/profile-security-card";
@@ -20,18 +19,9 @@ const EMPTY_STATS = {
 } as const;
 
 export function ProfileView({ displayName }: { displayName: string }) {
-  const queryClient = useQueryClient();
-
   const { data, isLoading } = useQuery({
     queryKey: ["profile-dashboard"],
     queryFn: () => apiFetch<ProfileDashboard>("/api/me/profile-dashboard"),
-  });
-
-  const remove = useMutation({
-    mutationFn: () => apiFetch("/api/me", { method: "DELETE" }),
-    onSuccess: () => {
-      window.location.href = "/auth";
-    },
   });
 
   const profile = data?.profile;
@@ -41,7 +31,7 @@ export function ProfileView({ displayName }: { displayName: string }) {
     <div className="flex min-h-full flex-col">
       <SessionNav displayName={displayName} sessionLabel="Hồ sơ cá nhân" />
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6">
+      <main className="grid w-full flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6 lg:px-8">
         <div className="col-span-12">
           <h1 className="text-2xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
         </div>
@@ -61,20 +51,6 @@ export function ProfileView({ displayName }: { displayName: string }) {
         <div className="col-span-12 flex flex-col gap-4 lg:col-span-5">
           {profile ? <ProfileInfoForm profile={profile} /> : null}
           <ProfileSecurityCard />
-          <Button
-            variant="destructive"
-            size="sm"
-            className="self-start"
-            disabled={remove.isPending}
-            onClick={() => {
-              if (confirm("Xóa tài khoản? Hành động không thể hoàn tác.")) {
-                remove.mutate();
-                queryClient.invalidateQueries({ queryKey: ["profile-dashboard"] });
-              }
-            }}
-          >
-            {remove.isPending ? "Đang xóa…" : "Xóa tài khoản"}
-          </Button>
         </div>
 
         <div className="col-span-12 flex flex-col gap-4 lg:col-span-4">

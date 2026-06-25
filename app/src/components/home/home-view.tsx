@@ -50,7 +50,7 @@ export function HomeView({ displayName }: { displayName: string }) {
         hideHomeLink
       />
 
-      <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6">
+      <main className="grid w-full flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6 lg:px-8">
         <div className="col-span-12">
           <Suspense fallback={null}>
             <RoomCancelledBanner />

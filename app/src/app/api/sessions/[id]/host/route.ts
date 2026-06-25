@@ -42,7 +42,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("addBot"),
     role: roleSchema,
-    productivityProfile: profileSchema.optional(),
+    productivityProfile: profileSchema.nullable().optional(),
   }),
   z.object({
     action: z.literal("removeBot"),
