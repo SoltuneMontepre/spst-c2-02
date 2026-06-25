@@ -1,21 +1,21 @@
 {
   "mcpServers": {
     "next-devtools": {
-      "command": "npx",
+      "command": "bunx",
       "args": [
         "-y",
         "next-devtools-mcp@latest"
       ]
     },
     "shadcn": {
-      "command": "npx",
+      "command": "bunx",
       "args": [
         "shadcn@latest",
         "mcp"
       ]
     },
     "doppler": {
-      "command": "npx",
+      "command": "bunx",
       "args": [
         "-y",
         "@dopplerhq/mcp-server"
@@ -25,7 +25,7 @@
       "url": "http://127.0.0.1:3845/mcp"
     },
     "filesystem": {
-      "command": "npx",
+      "command": "bunx",
       "args": [
         "@modelcontextprotocol/server-filesystem",
         "."
@@ -33,7 +33,7 @@
     },
     "sequential-thinking": {
       "type": "stdio",
-      "command": "npx",
+      "command": "bunx",
       "args": [
         "@modelcontextprotocol/server-sequential-thinking"
       ],
