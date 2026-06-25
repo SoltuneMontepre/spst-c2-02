@@ -120,6 +120,9 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                       balanceVnd={data.self.balanceVnd ?? 0}
                       stateVersion={data.stateVersion}
                       currentRound={data.currentRound}
+                      phase={data.phase}
+                      phaseEndsAt={data.phaseEndsAt}
+                      paused={data.paused}
                     />
                   </div>
                 </Card>

@@ -9,7 +9,8 @@ import type {
   ConsumerRoundState,
   IntermediaryRoundState,
 } from "./role-state";
-import { UPGRADE_COSTS, PHASE_DURATIONS_SEC, PRODUCER_INPUT_LOCK_SEC, POLICIES } from "./scenario";
+import { UPGRADE_COSTS, POLICIES } from "./scenario";
+import { isProducerInputLockedAt } from "./producer-input-lock";
 
 function requirePhase(ctx: CommandContext, phase: RoundPhase): void {
   if (ctx.session.phase !== phase) throw new ApiError("WRONG_PHASE", 409);
@@ -20,12 +21,11 @@ function requireRole(ctx: CommandContext, role: Role): void {
 
 /** First 15s of DECISION locks producer input (SRS §5.10). Bots skip the lock. */
 export function isProducerInputLocked(ctx: CommandContext): boolean {
-  if (ctx.participant.isBot) return false;
-  if (ctx.session.phase !== "DECISION" || !ctx.session.phaseEndsAt) return false;
-  const lockEndsAt =
-    ctx.session.phaseEndsAt.getTime() -
-    (PHASE_DURATIONS_SEC.DECISION - PRODUCER_INPUT_LOCK_SEC) * 1000;
-  return Date.now() < lockEndsAt;
+  return isProducerInputLockedAt({
+    phase: ctx.session.phase,
+    phaseEndsAt: ctx.session.phaseEndsAt,
+    isBot: ctx.participant.isBot,
+  });
 }
 
 async function currentRound(tx: Tx, sessionId: string, number: number) {

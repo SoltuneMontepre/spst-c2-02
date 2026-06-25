@@ -155,7 +155,10 @@ export function useSessionStream(
             event,
           );
           if (patched) {
-            queryClient.setQueryData(queryKey, patched);
+            queryClient.setQueryData(queryKey, {
+              ...patched,
+              stateVersion: Math.max(patched.stateVersion, event.stateVersion),
+            });
           }
           void queryClient.refetchQueries({ queryKey });
           return;
@@ -165,7 +168,10 @@ export function useSessionStream(
           event,
         );
         if (patched) {
-          queryClient.setQueryData(queryKey, patched);
+          queryClient.setQueryData(queryKey, {
+            ...patched,
+            stateVersion: Math.max(patched.stateVersion, event.stateVersion),
+          });
         }
       } catch {
         /* malformed payload */
