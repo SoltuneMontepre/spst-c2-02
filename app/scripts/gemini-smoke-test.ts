@@ -1,28 +1,19 @@
 /**
- * Smoke test: each GEMINI_KEY_<n> × each model/agent, one call each.
+ * Smoke test: each GEMINI_KEY_<n> × each text model, one call each.
  * Run: bun --env-file=.env scripts/gemini-smoke-test.ts
  */
 
 import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_MODEL_ROTATION } from "../src/lib/ai";
 
 const KEY_PATTERN = /^GEMINI_KEY_(\d+)$/;
-const INTERACTIONS_URL =
-  "https://generativelanguage.googleapis.com/v1beta/interactions";
 
-type TextModel = { label: string; id: string; kind: "text" };
-type AgentModel = { label: string; id: string; kind: "agent" };
-
-const MODELS: (TextModel | AgentModel)[] = [
-  { label: "Gemini 2.5 Flash", id: "gemini-2.5-flash", kind: "text" },
-  { label: "Gemini 2.5 Flash Lite", id: "gemini-2.5-flash-lite", kind: "text" },
-  { label: "Gemini 3 Flash", id: "gemini-3-flash-preview", kind: "text" },
-  { label: "Gemini 3.1 Flash Lite", id: "gemini-3.1-flash-lite", kind: "text" },
-  { label: "Gemini 3.5 Flash", id: "gemini-3.5-flash", kind: "text" },
-  {
-    label: "Antigravity",
-    id: "antigravity-preview-05-2026",
-    kind: "agent",
-  },
+const MODELS: { label: string; id: string }[] = [
+  { label: "Gemini 3.1 Flash Lite", id: "gemini-3.1-flash-lite" },
+  { label: "Gemini 3 Flash", id: "gemini-3-flash-preview" },
+  { label: "Gemini 2.5 Flash Lite", id: "gemini-2.5-flash-lite" },
+  { label: "Gemini 2.5 Flash", id: "gemini-2.5-flash" },
+  { label: "Gemini 3.5 Flash", id: "gemini-3.5-flash" },
 ];
 
 function collectKeys(): { name: string; value: string }[] {
@@ -51,7 +42,7 @@ function shortError(error: unknown): string {
   return raw.slice(0, 140);
 }
 
-async function probeText(
+async function probe(
   apiKey: string,
   modelId: string,
 ): Promise<{ ok: boolean; detail: string }> {
@@ -69,113 +60,6 @@ async function probeText(
   }
 }
 
-interface InteractionResponse {
-  name?: string;
-  id?: string;
-  status?: string;
-  error?: { code?: number; message?: string };
-  outputs?: { type?: string; text?: string }[];
-  steps?: { summary?: { text?: string }[] }[];
-}
-
-function interactionText(body: InteractionResponse): string {
-  const fromOutputs = body.outputs?.map((o) => o.text).filter(Boolean).join(" ");
-  if (fromOutputs?.trim()) return fromOutputs.trim();
-  const fromSteps = body.steps
-    ?.flatMap((s) => s.summary?.map((x) => x.text) ?? [])
-    .filter(Boolean)
-    .join(" ");
-  return fromSteps?.trim() ?? "";
-}
-
-function isTerminal(status: string | undefined): boolean {
-  const s = status?.toLowerCase();
-  return s === "completed" || s === "failed" || s === "cancelled";
-}
-
-async function probeAgent(
-  apiKey: string,
-  agentId: string,
-): Promise<{ ok: boolean; detail: string }> {
-  try {
-    const createRes = await fetch(INTERACTIONS_URL, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        agent: agentId,
-        input: "Reply with exactly: OK",
-        environment: "remote",
-      }),
-    });
-
-    const body = (await createRes.json()) as InteractionResponse & {
-      error?: { code?: number; message?: string };
-    };
-
-    if (!createRes.ok) {
-      const msg = body.error?.message ?? JSON.stringify(body).slice(0, 120);
-      return { ok: false, detail: `[${createRes.status}] ${msg}` };
-    }
-
-    if (isTerminal(body.status)) {
-      if (body.status?.toLowerCase() === "completed") {
-        const text = interactionText(body);
-        return { ok: true, detail: (text || "completed").slice(0, 40) };
-      }
-      return { ok: false, detail: `status=${body.status}` };
-    }
-
-    const interactionId = (body.name ?? body.id ?? "").replace(/^interactions\//, "");
-    if (!interactionId) {
-      const text = interactionText(body);
-      if (text) return { ok: true, detail: text.slice(0, 40) };
-      return { ok: false, detail: "no interaction id in response" };
-    }
-
-    const pollUrl = `${INTERACTIONS_URL}/${interactionId}`;
-
-    for (let i = 0; i < 20; i++) {
-      await sleep(3000);
-      const pollRes = await fetch(pollUrl, {
-        headers: { "x-goog-api-key": apiKey },
-      });
-      const poll = (await pollRes.json()) as InteractionResponse & {
-        error?: { code?: number; message?: string };
-      };
-
-      if (!pollRes.ok) {
-        return {
-          ok: false,
-          detail: `[poll ${pollRes.status}] ${poll.error?.message ?? "poll failed"}`,
-        };
-      }
-
-      if (isTerminal(poll.status)) {
-        if (poll.status?.toLowerCase() === "completed") {
-          const text = interactionText(poll);
-          return { ok: true, detail: (text || "completed").slice(0, 40) };
-        }
-        return { ok: false, detail: `status=${poll.status}` };
-      }
-    }
-
-    return { ok: false, detail: "timed out waiting for agent" };
-  } catch (error) {
-    return { ok: false, detail: shortError(error) };
-  }
-}
-
-async function probe(
-  apiKey: string,
-  model: (typeof MODELS)[number],
-): Promise<{ ok: boolean; detail: string }> {
-  if (model.kind === "agent") return probeAgent(apiKey, model.id);
-  return probeText(apiKey, model.id);
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -186,7 +70,9 @@ if (keys.length === 0) {
   process.exit(1);
 }
 
+const rotationIds = DEFAULT_MODEL_ROTATION.join(" → ");
 console.log(`Keys: ${keys.map((k) => k.name).join(", ")}`);
+console.log(`App rotation: ${rotationIds}`);
 console.log(`Models: ${MODELS.length} | Calls: ${keys.length * MODELS.length}\n`);
 
 type Row = { key: string; model: string; modelId: string; ok: boolean; detail: string };
@@ -195,7 +81,7 @@ const rows: Row[] = [];
 
 for (const key of keys) {
   for (const model of MODELS) {
-    const result = await probe(key.value, model);
+    const result = await probe(key.value, model.id);
     rows.push({
       key: key.name,
       model: model.label,
@@ -205,7 +91,7 @@ for (const key of keys) {
     });
     const mark = result.ok ? "OK" : "FAIL";
     console.log(`${mark.padEnd(4)} ${key.name.padEnd(14)} ${model.label}`);
-    await sleep(model.kind === "agent" ? 500 : 1200);
+    await sleep(1200);
   }
 }
 

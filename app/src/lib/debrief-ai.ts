@@ -2,7 +2,7 @@
 
 import type { BadgeType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { generateJson, NoGeminiKeysError } from "./ai";
+import { generateJson, isGeminiQuotaError } from "./ai";
 import { BADGE_LABELS, scoreLabel } from "./labels";
 import { formatThousandDong } from "./money";
 import type { ParticipantOutcome } from "./finalize";
@@ -137,7 +137,7 @@ export async function generateAiDebriefReview(input: {
       participants,
     };
   } catch (e) {
-    if (!(e instanceof NoGeminiKeysError)) console.error("debrief-ai:", e);
+    if (!isGeminiQuotaError(e)) console.error("debrief-ai:", e);
     return fallbackReview(outcomes);
   }
 }
