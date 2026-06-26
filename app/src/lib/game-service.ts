@@ -123,7 +123,11 @@ export async function hostSetParticipantRole(
     where: { id: participantId },
     data: { role, productivityProfile: profile },
   });
-  await touch(sessionId, "participant:role_set", { participantId, role });
+  await touch(sessionId, "participant:role_set", {
+    participantId,
+    role,
+    productivityProfile: profile,
+  });
 }
 
 /** Host adds a lobby bot with a pre-assigned role. */

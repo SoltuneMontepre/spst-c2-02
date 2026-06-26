@@ -18,10 +18,15 @@ async function resolveUserFromCookieHeader(
     secret: process.env.AUTH_SECRET,
     secureCookie: process.env.NODE_ENV === "production",
   });
-  if (!token?.sub || typeof token.email !== "string") return null;
+  if (!token) return null;
+
+  const userId =
+    (typeof token.uid === "string" ? token.uid : null) ??
+    (typeof token.sub === "string" ? token.sub : null);
+  if (!userId) return null;
 
   const user = await db.user.findFirst({
-    where: { id: token.sub, deletedAt: null },
+    where: { id: userId, deletedAt: null },
     select: { id: true, email: true },
   });
   return user ? { id: user.id, email: user.email } : null;

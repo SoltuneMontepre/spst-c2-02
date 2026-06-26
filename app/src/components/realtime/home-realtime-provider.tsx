@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { HomeDashboard } from "@/lib/session-service";
 import {
@@ -23,10 +24,17 @@ const HomeRealtimeContext = createContext<HomeStreamState>("connecting");
 
 export function HomeRealtimeProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { status } = useSession();
   const [streamState, setStreamState] = useState<HomeStreamState>("connecting");
   const wasDisconnected = useRef(false);
+  const enabled = status === "authenticated";
 
   useEffect(() => {
+    if (!enabled) {
+      setStreamState("disconnected");
+      return;
+    }
+
     const queryKey = ["home-dashboard"] as const;
     const url = realtimeWsUrl("/api/realtime/home");
 
@@ -54,7 +62,7 @@ export function HomeRealtimeProvider({ children }: { children: ReactNode }) {
     });
 
     return () => ws.close();
-  }, [queryClient]);
+  }, [queryClient, enabled]);
 
   useEffect(() => {
     if (streamState === "disconnected") wasDisconnected.current = true;

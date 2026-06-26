@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { GameEvent } from "@/lib/events";
 import type { ClientInbound } from "@/lib/realtime/ws-protocol";
@@ -48,10 +49,12 @@ export function SessionRealtimeProvider({
   children: ReactNode;
 }) {
   const queryClient = useQueryClient();
+  const { status: authStatus } = useSession();
   const [streamState, setStreamState] = useState<SessionStreamState>("connecting");
   const wsRef = useRef<ReturnType<typeof createReconnectingWs> | null>(null);
   const onEventRef = useRef<((event: GameEvent) => void) | undefined>(undefined);
   const wasDisconnected = useRef(false);
+  const wsEnabled = enabled && authStatus === "authenticated";
 
   const send = useCallback((msg: ClientInbound) => {
     return wsRef.current?.send(JSON.stringify(msg)) ?? false;
@@ -62,7 +65,12 @@ export function SessionRealtimeProvider({
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!wsEnabled) {
+      wsRef.current?.close();
+      wsRef.current = null;
+      setStreamState("disconnected");
+      return;
+    }
 
     const queryKey = ["session", sessionId] as const;
     const url = realtimeWsUrl(`/api/realtime/session/${sessionId}`);
@@ -114,7 +122,6 @@ export function SessionRealtimeProvider({
                   stateVersion: Math.max(patched.stateVersion, event.stateVersion),
                 });
               }
-              void queryClient.refetchQueries({ queryKey });
               return;
             }
 
@@ -147,7 +154,7 @@ export function SessionRealtimeProvider({
       wsRef.current = null;
       setStreamState("connecting");
     };
-  }, [sessionId, queryClient, enabled]);
+  }, [sessionId, queryClient, wsEnabled]);
 
   useEffect(() => {
     if (streamState === "disconnected") wasDisconnected.current = true;

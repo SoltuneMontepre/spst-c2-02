@@ -29,6 +29,7 @@ export default function RootLayout({
           geistMono.variable,
           "min-h-full flex flex-col antialiased",
         )}
+        suppressHydrationWarning
       >
         <Providers>{children}</Providers>
       </body>

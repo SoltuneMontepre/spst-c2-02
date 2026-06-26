@@ -35,28 +35,36 @@ export function createReconnectingWs(
   const connect = () => {
     if (closed) return;
     setState("connecting");
-    ws = new WebSocket(url);
+    const socket = new WebSocket(url);
+    ws = socket;
 
-    ws.onopen = () => {
+    socket.onopen = () => {
+      if (closed) {
+        socket.close();
+        return;
+      }
       retries = 0;
       setState("connected");
       handlers.onOpen?.();
     };
 
-    ws.onmessage = (ev) => {
+    socket.onmessage = (ev) => {
+      if (closed) return;
       handlers.onMessage(String(ev.data));
     };
 
-    ws.onclose = () => {
-      if (closed) return;
+    socket.onclose = () => {
+      if (closed || ws !== socket) return;
+      ws = null;
       setState("disconnected");
       const delay = Math.min(1000 * 2 ** retries, 15_000);
       retries += 1;
       reconnectTimer = setTimeout(connect, delay);
     };
 
-    ws.onerror = () => {
-      ws?.close();
+    socket.onerror = () => {
+      if (closed || ws !== socket) return;
+      socket.close();
     };
   };
 
@@ -71,8 +79,17 @@ export function createReconnectingWs(
     close() {
       closed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      ws?.close();
-      setState("connecting");
+      const socket = ws;
+      ws = null;
+      if (!socket) return;
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+      // CONNECTING: abandon without close() to avoid browser console noise on HMR unmount.
     },
     getState() {
       return state;

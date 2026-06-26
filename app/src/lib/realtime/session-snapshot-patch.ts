@@ -1,6 +1,6 @@
 import type { SessionSnapshot } from "@/lib/session-service";
 import type { GameEvent } from "@/lib/events";
-import type { Presence, Role } from "@/generated/prisma/enums";
+import type { Presence, ProductivityProfile, Role } from "@/generated/prisma/enums";
 
 const LIFECYCLE_EVENTS = new Set([
   "session:started",
@@ -65,18 +65,31 @@ export function patchSessionSnapshot(
   }
 
   if (event.type === "participant:role_set" && event.data) {
-    const { participantId, role, participantAId, participantBId } = event.data as {
-      participantId?: string;
-      role?: Role | null;
-      participantAId?: string;
-      participantBId?: string;
-    };
+    const { participantId, role, participantAId, participantBId, productivityProfile } =
+      event.data as {
+        participantId?: string;
+        role?: Role | null;
+        productivityProfile?: ProductivityProfile | null;
+        participantAId?: string;
+        participantBId?: string;
+      };
     if (participantId) {
       return {
         ...old,
-        participants: old.participants.map((p) =>
-          p.id === participantId ? { ...p, role: role ?? null } : p,
-        ),
+        participants: old.participants.map((p) => {
+          if (p.id !== participantId) return p;
+          const nextRole = role ?? null;
+          return {
+            ...p,
+            role: nextRole,
+            productivityProfile:
+              nextRole === "PRODUCER"
+                ? (productivityProfile ?? p.productivityProfile ?? "SOCIAL_AVERAGE")
+                : nextRole === null
+                  ? p.productivityProfile
+                  : null,
+          };
+        }),
       };
     }
     if (participantAId && participantBId) {
