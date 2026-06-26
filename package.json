@@ -1,0 +1,11 @@
+{
+  "name": "spst-c2-phi",
+  "private": true,
+  "scripts": {
+    "dev": "cd app && bun dev",
+    "build": "cd app && bun run build",
+    "start": "cd app && bun start",
+    "db:generate": "cd app && bun run db:generate",
+    "db:migrate": "cd app && bun run db:migrate"
+  }
+}

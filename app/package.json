@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch server/bootstrap.ts",
+    "dev": "bun run dev:unlock && tsx watch server/bootstrap.ts",
+    "dev:bun": "bun run dev:unlock && bun --watch server/bootstrap.ts",
+    "dev:unlock": "bun scripts/dev-unlock.ts",
+    "dev:docker": "docker compose up -d",
     "predev": "bun run db:generate",
     "build": "next build",
-    "start": "tsx server/bootstrap.ts",
+    "start": "bun server/bootstrap.ts",
     "db:migrate": "bun --env-file=.env prisma migrate deploy",
     "db:generate": "bun --env-file=.env prisma generate",
     "skills:sync": "bun scripts/skills-sync.ts"

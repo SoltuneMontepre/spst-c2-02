@@ -19,7 +19,10 @@ async function main() {
     typeof process.versions.bun === "string" &&
     process.versions.bun.length > 0;
 
-  if (isBunRuntime) {
+  const useBunServe =
+    isBunRuntime && process.env.NODE_ENV === "production";
+
+  if (useBunServe) {
     const { startBunServer } = await import("@/lib/realtime/ws-gateway-bun");
     startBunServer({ hostname, port, handle });
     console.log(`> Ready on http://${hostname}:${port} (realtime WS enabled, Bun)`);
