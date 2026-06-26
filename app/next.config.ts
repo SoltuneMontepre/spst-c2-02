@@ -2,10 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  output: "standalone",
-  outputFileTracingIncludes: {
-    "/*": ["./src/generated/prisma/**/*"],
-  },
   // Faster builds + smaller bundles (tree-shake icon packs).
   experimental: {
     optimizePackageImports: [

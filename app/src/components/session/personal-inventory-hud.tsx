@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { Presence, Role } from "@/generated/prisma/enums";
 import type { SelfState } from "@/lib/session-service";
-import type { SessionStreamState } from "@/hooks/use-session-stream";
+import type { SessionStreamState } from "@/components/realtime/session-realtime-provider";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { formatThousandDong } from "@/lib/money";
 import type { GovernmentRoundState, ProducerRoundState } from "@/lib/role-state";

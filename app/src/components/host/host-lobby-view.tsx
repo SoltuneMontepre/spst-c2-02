@@ -2,7 +2,7 @@
 
 import { Play } from "lucide-react";
 import { useSessionSnapshot, useSetReady } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionStream } from "@/components/realtime/session-realtime-provider";
 import { useHostControl } from "@/hooks/use-host-control";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { HostLobbyHeader } from "@/components/host/host-lobby-header";

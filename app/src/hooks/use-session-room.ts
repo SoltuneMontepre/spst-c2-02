@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { apiFetch, ApiClientError } from "./use-api";
+import { useSessionRealtimeOptional } from "@/components/realtime/session-realtime-provider";
 import type { SessionSnapshot, SessionResultView } from "@/lib/session-service";
 
 interface CreatedSession {
@@ -39,7 +40,7 @@ export function useJoinRoom() {
   });
 }
 
-/** Role-filtered snapshot; live updates via session SSE stream. */
+/** Role-filtered snapshot; live updates via session WebSocket. */
 export function useSessionSnapshot(sessionId: string) {
   return useQuery({
     queryKey: ["session", sessionId],
@@ -70,12 +71,17 @@ export function useSessionResult(sessionId: string, enabled: boolean) {
 export function useSetReady(sessionId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["session", sessionId] as const;
+  const realtime = useSessionRealtimeOptional();
   return useMutation({
-    mutationFn: (ready: boolean) =>
-      apiFetch(`/api/sessions/${sessionId}/ready`, {
+    mutationFn: async (ready: boolean) => {
+      if (realtime?.send({ op: "ready", ready })) {
+        return { ok: true };
+      }
+      return apiFetch(`/api/sessions/${sessionId}/ready`, {
         method: "POST",
         body: JSON.stringify({ ready }),
-      }),
+      });
+    },
     onMutate: async (ready) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);

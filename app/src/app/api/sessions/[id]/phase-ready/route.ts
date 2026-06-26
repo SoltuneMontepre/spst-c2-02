@@ -1,8 +1,5 @@
-import { z } from "zod";
 import { handle, currentUser, unauthorized } from "@/lib/api";
-import { setPhaseReady } from "@/lib/ai-host";
-
-const schema = z.object({ ready: z.boolean() });
+import { dispatchPhaseReady } from "@/lib/realtime/dispatch-phase-ready";
 
 export async function POST(
   request: Request,
@@ -12,8 +9,7 @@ export async function POST(
   if (!user) return unauthorized();
   const { id } = await params;
   return handle(async () => {
-    const { ready } = schema.parse(await request.json());
-    await setPhaseReady(user.id, id, ready);
-    return { ok: true };
+    const body = await request.json();
+    return dispatchPhaseReady(user.id, id, body);
   });
 }

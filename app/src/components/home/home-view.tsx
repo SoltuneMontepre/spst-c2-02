@@ -13,7 +13,7 @@ import { HomeRecentSessions } from "@/components/home/home-recent-sessions";
 import { HomePublicRooms } from "@/components/home/home-public-rooms";
 import { RoomCancelledBanner } from "@/components/home/room-cancelled-banner";
 import { apiFetch } from "@/hooks/use-api";
-import { useHomeStream } from "@/hooks/use-home-stream";
+import { HomeRealtimeProvider } from "@/components/realtime/home-realtime-provider";
 import type { HomeDashboard } from "@/lib/session-service";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,8 +26,15 @@ const EMPTY_STATS = {
 } as const;
 
 export function HomeView({ displayName }: { displayName: string }) {
+  return (
+    <HomeRealtimeProvider>
+      <HomeViewContent displayName={displayName} />
+    </HomeRealtimeProvider>
+  );
+}
+
+function HomeViewContent({ displayName }: { displayName: string }) {
   const queryClient = useQueryClient();
-  useHomeStream();
 
   const { data, isLoading } = useQuery({
     queryKey: ["home-dashboard"],

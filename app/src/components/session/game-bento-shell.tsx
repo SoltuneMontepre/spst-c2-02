@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionStream } from "@/components/realtime/session-realtime-provider";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { ZoneNav } from "@/components/session/zone-nav";
 import { GameAnnouncementBanner } from "@/components/session/game-announcement-banner";

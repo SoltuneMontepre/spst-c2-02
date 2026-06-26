@@ -4,7 +4,7 @@ import { Clock, Wifi } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { RoleBadge } from "@/components/lobby/role-badge";
 import { useCountdown, formatClock } from "@/hooks/use-countdown";
-import type { SessionStreamState } from "@/hooks/use-session-stream";
+import type { SessionStreamState } from "@/components/realtime/session-realtime-provider";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { PHASE_LABELS } from "@/lib/labels";
 import { formatThousandDong } from "@/lib/money";

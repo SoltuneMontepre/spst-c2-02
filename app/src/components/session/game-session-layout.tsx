@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionStream, type SessionStreamState } from "@/components/realtime/session-realtime-provider";
 import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/session/game-sidebar";
 import { GameTopBar } from "@/components/session/game-top-bar";
 import { GameAnnouncementBanner } from "@/components/session/game-announcement-banner";

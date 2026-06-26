@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-# Phiên chợ giá trị — production image
-FROM oven/bun:1.2 AS deps
+# Phiên chợ giá trị — production image (custom server + WebSocket)
+FROM oven/bun:1.3 AS deps
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=locked \
     bun install --frozen-lockfile
 
-FROM oven/bun:1.2 AS builder
+FROM oven/bun:1.3 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json bun.lock* ./
@@ -21,7 +21,7 @@ COPY . .
 RUN --mount=type=cache,target=/app/.next/cache,sharing=locked \
     bun run build
 
-FROM node:22-alpine AS runner
+FROM oven/bun:1.3-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -31,14 +31,19 @@ RUN apk add --no-cache openssl \
     && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x docker-entrypoint.sh && chown nextjs:nodejs docker-entrypoint.sh
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/postcss.config.mjs ./postcss.config.mjs
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["bun", "server/bootstrap.ts"]

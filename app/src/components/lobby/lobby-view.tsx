@@ -8,7 +8,7 @@ import {
   useSetReady,
   useLeaveRoom,
 } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionStream } from "@/components/realtime/session-realtime-provider";
 import {
   useSelfRoleChange,
   type RoleChangeNotice,

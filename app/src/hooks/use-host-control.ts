@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiClientError } from "./use-api";
 import type { Role, ProductivityProfile } from "@/generated/prisma/enums";
+import { useSessionRealtimeOptional } from "@/components/realtime/session-realtime-provider";
 
 export type HostAction =
   | "start"
@@ -33,15 +34,22 @@ const STALE_HOST_CODES = new Set(["INVALID_STATE", "SESSION_LOCKED"]);
 export function useHostControl(sessionId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["session", sessionId] as const;
+  const realtime = useSessionRealtimeOptional();
 
   return useMutation({
-    mutationFn: (action: HostMutationAction) =>
-      apiFetch(`/api/sessions/${sessionId}/host`, {
+    mutationFn: async (action: HostMutationAction) => {
+      const body =
+        typeof action === "string" ? { action } : action;
+
+      if (realtime?.sendRaw({ op: "host", ...body })) {
+        return { ok: true };
+      }
+
+      return apiFetch(`/api/sessions/${sessionId}/host`, {
         method: "POST",
-        body: JSON.stringify(
-          typeof action === "string" ? { action } : action,
-        ),
-      }),
+        body: JSON.stringify(body),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({ queryKey: ["home-dashboard"] });

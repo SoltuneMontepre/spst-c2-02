@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/hooks/use-api";
+import { useSessionRealtimeOptional } from "@/components/realtime/session-realtime-provider";
 import type { SessionSnapshot } from "@/lib/session-service";
 
 /** TFT-style "ready" to fast-forward the current phase when everyone is done. */
@@ -19,12 +20,17 @@ export function PhaseReadyButton({
 }) {
   const queryClient = useQueryClient();
   const queryKey = ["session", sessionId] as const;
+  const realtime = useSessionRealtimeOptional();
   const mutation = useMutation({
-    mutationFn: (ready: boolean) =>
-      apiFetch(`/api/sessions/${sessionId}/phase-ready`, {
+    mutationFn: async (ready: boolean) => {
+      if (realtime?.send({ op: "phaseReady", ready })) {
+        return { ok: true };
+      }
+      return apiFetch(`/api/sessions/${sessionId}/phase-ready`, {
         method: "POST",
         body: JSON.stringify({ ready }),
-      }),
+      });
+    },
     onMutate: async (ready) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);

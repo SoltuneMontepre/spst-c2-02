@@ -1,3 +1,3 @@
 #!/bin/sh
 set -e
-exec node server.js
+exec bun server/bootstrap.ts

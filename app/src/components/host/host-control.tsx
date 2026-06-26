@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
-import { useSessionStream } from "@/hooks/use-session-stream";
+import { useSessionStream } from "@/components/realtime/session-realtime-provider";
 import { useHostControl } from "@/hooks/use-host-control";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { SessionNav } from "@/components/session/session-nav";

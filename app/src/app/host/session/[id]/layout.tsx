@@ -3,7 +3,7 @@ import { currentUser } from "@/lib/api";
 import { resolveSessionAccess } from "@/lib/session-access";
 import { SessionRealtimeShell } from "@/components/realtime/session-realtime-shell";
 
-export default async function SessionLayout({
+export default async function HostSessionLayout({
   children,
   params,
 }: {

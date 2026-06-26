@@ -1,8 +1,5 @@
-import { z } from "zod";
 import { handle, currentUser, unauthorized } from "@/lib/api";
-import { setReady } from "@/lib/session-service";
-
-const schema = z.object({ ready: z.boolean() });
+import { dispatchReady } from "@/lib/realtime/dispatch-ready";
 
 export async function POST(
   request: Request,
@@ -12,8 +9,7 @@ export async function POST(
   if (!user) return unauthorized();
   const { id } = await params;
   return handle(async () => {
-    const { ready } = schema.parse(await request.json());
-    await setReady(user.id, id, ready);
-    return { ok: true };
+    const body = await request.json();
+    return dispatchReady(user.id, id, body);
   });
 }
