@@ -6,11 +6,9 @@ import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
 import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { GamePhaseCta } from "@/components/session/game-phase-cta";
-import { EventPanel } from "@/components/session/event-panel";
-import { MarketSnapshotPanel } from "@/components/session/market-snapshot-panel";
+import { GameInsightPanel } from "@/components/session/game-insight-panel";
 import { MapZones } from "./map-zones";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
-import { PHASE_LABELS } from "@/lib/labels";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
 
@@ -36,39 +34,34 @@ export function MapShell({ sessionId }: { sessionId: string }) {
   const mapInteractive =
     data.status !== "INTRO" &&
     (data.phase === "DECISION" || data.phase === "MARKET_OPEN");
-  const phaseLabel = data.phase ? PHASE_LABELS[data.phase] : "";
 
   return (
     <GameSessionLayout
+      variant="map"
       sessionId={sessionId}
       activeZone="map"
-      title="Bản đồ chợ"
-      subtitle={`Chợ Thanh Long · Vòng ${data.currentRound}${phaseLabel ? ` · ${phaseLabel}` : ""}`}
       rightPanel={
-        <>
-          <EventPanel round={data.currentRound} />
-          <MarketSnapshotPanel stats={data.liveRoundStats} />
-        </>
+        <GameInsightPanel round={data.currentRound} stats={data.liveRoundStats} />
       }
     >
-      <div className="flex flex-col gap-4">
-        <GamePhaseCta
+      <GamePhaseCta
+        variant="map"
+        sessionId={sessionId}
+        phase={data.phase}
+        round={data.currentRound}
+        role={role}
+      />
+      {data.phase === "RECAP" && recapRound ? (
+        <RoundRecapCard sessionId={sessionId} round={recapRound} />
+      ) : (
+        <MapZones
           sessionId={sessionId}
-          phase={data.phase}
-          round={data.currentRound}
           role={role}
+          round={data.currentRound}
+          participants={data.participants}
+          interactive={mapInteractive}
         />
-        {data.phase === "RECAP" && recapRound ? (
-          <RoundRecapCard sessionId={sessionId} round={recapRound} />
-        ) : (
-          <MapZones
-            sessionId={sessionId}
-            role={role}
-            participants={data.participants}
-            interactive={mapInteractive}
-          />
-        )}
-      </div>
+      )}
     </GameSessionLayout>
   );
 }

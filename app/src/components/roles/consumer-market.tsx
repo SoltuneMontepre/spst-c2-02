@@ -1,11 +1,13 @@
 "use client";
 
+import { AlertCircle } from "lucide-react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useCommand } from "@/hooks/use-command";
 import { useState } from "react";
-import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { ZonePhaseGate } from "@/components/session/zone-phase-gate";
 import { RoleKpiRow } from "@/components/session/role-kpi-row";
+import { RoleTaskScreen } from "@/components/session/role-task-screen";
+import { ConsumerInsightPanel } from "@/components/session/role-insight-panels";
 import {
   MarketListingCard,
   MarketplaceFilters,
@@ -14,9 +16,15 @@ import {
 } from "./market-listing-card";
 import { OffersPanel } from "./offers-panel";
 import { formatThousandDong } from "@/lib/money";
-import { PHASE_LABELS } from "@/lib/labels";
 import type { ConsumerRoundState } from "@/lib/role-state";
-import { Card } from "@/components/ui/card";
+
+function priceRangeLabel(listings: { askPriceVnd: number }[]): string {
+  if (listings.length === 0) return "—";
+  const prices = listings.map((l) => l.askPriceVnd);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  return `${(min / 1000).toFixed(0)}k–${(max / 1000).toFixed(0)}k`;
+}
 
 export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
@@ -26,43 +34,13 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
 
   const state = data.self.roleState as ConsumerRoundState | null;
-  const listings = filterListings(data.market?.listings ?? [], filter);
+  const allListings = data.market?.listings ?? [];
+  const listings = filterListings(allListings, filter);
   const open = data.phase === "MARKET_OPEN";
   const role = data.self.role;
-  const phaseLabel = data.phase ? PHASE_LABELS[data.phase] : "";
   const unitValue = data.liveRoundStats?.unitValueVnd;
   const needTarget = state?.needTarget ?? 0;
   const fulfilled = state?.fulfilledUnits ?? 0;
-
-  const rightPanel = (
-    <>
-      <Card className="p-4">
-        <p className="text-sm font-semibold">Người tiêu dùng</p>
-        <p className="mt-2 text-2xl font-bold">
-          {data.self.balanceVnd != null
-            ? formatThousandDong(data.self.balanceVnd)
-            : "—"}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Nhu cầu: {fulfilled}/{needTarget} thùng
-        </p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{
-              width: needTarget > 0 ? `${(fulfilled / needTarget) * 100}%` : "0%",
-            }}
-          />
-        </div>
-      </Card>
-      <Card className="border-amber-200/80 bg-amber-50/80 p-4 dark:border-amber-900/40 dark:bg-amber-950/30">
-        <p className="text-xs font-bold uppercase">Giá niêm yết ≠ Giá TT</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Giá niêm yết chỉ là đề xuất — chỉ giao dịch thực tế mới xác lập giá thị trường.
-        </p>
-      </Card>
-    </>
-  );
 
   const marketContent = !open ? (
     <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
@@ -112,12 +90,19 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   );
 
   return (
-    <GameSessionLayout
+    <RoleTaskScreen
       sessionId={sessionId}
       activeZone="market"
-      title="Nhiệm vụ — Người tiêu dùng"
-      subtitle={`Vòng ${data.currentRound} · ${phaseLabel}`}
-      rightPanel={rightPanel}
+      role="CONSUMER"
+      round={data.currentRound}
+      phase={data.phase}
+      insight={
+        <ConsumerInsightPanel
+          balanceVnd={data.self.balanceVnd}
+          fulfilled={fulfilled}
+          needTarget={needTarget}
+        />
+      }
     >
       <ZonePhaseGate
         sessionId={sessionId}
@@ -126,50 +111,57 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
         phase={data.phase}
         round={data.currentRound}
       >
-        <div className="flex flex-col gap-4">
-          <RoleKpiRow
-            items={[
-              {
-                label: "Ví",
-                value:
-                  data.self.balanceVnd != null
-                    ? formatThousandDong(data.self.balanceVnd)
+        <RoleKpiRow
+          cols={3}
+          items={[
+            {
+              label: "Ví",
+              value:
+                data.self.balanceVnd != null
+                  ? formatThousandDong(data.self.balanceVnd)
+                  : "—",
+              hint: "Số dư hiện tại",
+            },
+            {
+              label: "Nhu cầu mua",
+              value: `${fulfilled}/${needTarget} thùng`,
+              hint:
+                fulfilled < needTarget
+                  ? `Cần mua thêm ${needTarget - fulfilled} thùng`
+                  : "Đã đủ nhu cầu",
+            },
+            {
+              label: "Giá TT tham chiếu",
+              value:
+                allListings.length > 0
+                  ? priceRangeLabel(allListings)
+                  : unitValue != null
+                    ? formatThousandDong(unitValue)
                     : "—",
-                hint: "Số dư hiện tại",
-              },
-              {
-                label: "Nhu cầu mua",
-                value: `${fulfilled}/${needTarget} thùng`,
-                hint:
-                  fulfilled < needTarget
-                    ? `Cần mua thêm ${needTarget - fulfilled} thùng`
-                    : "Đã đủ nhu cầu",
-              },
-              {
-                label: "Giá TT tham chiếu",
-                value: unitValue != null ? formatThousandDong(unitValue) : "—",
-                hint: "Mỏ neo giá trị",
-              },
-            ]}
-          />
+              hint: "Khoảng giá niêm yết",
+            },
+          ]}
+        />
 
-          <Card className="border-amber-200/80 bg-amber-50/80 p-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
+        <div className="flex items-center gap-2 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+          <span>
             Giá niêm yết chưa phải giá thị trường — chỉ giao dịch thực tế mới xác lập
             giá TT.
-          </Card>
-
-          {marketContent}
-
-          {open ? (
-            <OffersPanel
-              sessionId={sessionId}
-              stateVersion={data.stateVersion}
-              incoming={data.self.incomingOffers}
-              outgoing={data.self.outgoingOffers}
-            />
-          ) : null}
+          </span>
         </div>
+
+        {marketContent}
+
+        {open ? (
+          <OffersPanel
+            sessionId={sessionId}
+            stateVersion={data.stateVersion}
+            incoming={data.self.incomingOffers}
+            outgoing={data.self.outgoingOffers}
+          />
+        ) : null}
       </ZonePhaseGate>
-    </GameSessionLayout>
+    </RoleTaskScreen>
   );
 }

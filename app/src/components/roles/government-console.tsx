@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { AlertCircle } from "lucide-react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useCommand } from "@/hooks/use-command";
-import { GameSessionLayout } from "@/components/session/game-session-layout";
+import { RoleTaskScreen } from "@/components/session/role-task-screen";
+import { GovernmentInsightPanel } from "@/components/session/role-insight-panels";
 import { PolicyCard } from "./policy-card";
 import { Button } from "@/components/ui/button";
 import { POLICIES } from "@/lib/scenario";
 import { formatThousandDong } from "@/lib/money";
 import type { GovernmentRoundState } from "@/lib/role-state";
 import type { PolicyType } from "@/generated/prisma/enums";
-import { Card } from "@/components/ui/card";
-import { PHASE_LABELS } from "@/lib/labels";
 
 const DECISION_POLICIES: {
   type: PolicyType;
@@ -20,6 +20,7 @@ const DECISION_POLICIES: {
   costLabel: string;
   footer?: string;
   rounds?: number[];
+  marketOpenOnly?: boolean;
 }[] = [
   {
     type: "INFO_DISCLOSURE",
@@ -44,6 +45,14 @@ const DECISION_POLICIES: {
     rounds: [2, 3],
   },
   {
+    type: "EXPORT_PROMOTION",
+    title: "Xúc tiến xuất khẩu",
+    description: "15 giây đầu chợ mở: mua ~25% cung bán lẻ.",
+    costLabel: "120k Đ",
+    footer: "Chi phí cao, tác động dài hạn",
+    marketOpenOnly: true,
+  },
+  {
     type: "NONE",
     title: "Không can thiệp",
     description: "Thị trường tự điều chỉnh qua cung-cầu.",
@@ -63,62 +72,69 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
   const stats = data.liveRoundStats;
   const decisionOpen = data.phase === "DECISION" && data.currentRound >= 2;
   const exportOpen = data.phase === "MARKET_OPEN" && data.currentRound >= 2 && !used;
-  const phaseLabel = data.phase ? PHASE_LABELS[data.phase] : "";
   const budget = data.self.balanceVnd ?? 0;
 
-  const rightPanel = (
-    <>
-      <Card className="p-4 text-center">
-        <p className="text-3xl font-bold text-primary">{formatThousandDong(budget)}</p>
-        <p className="mt-1 text-sm text-muted-foreground">Ngân sách chính sách</p>
-      </Card>
-      <Card className="border-amber-200/80 bg-amber-50/80 p-4 dark:border-amber-900/40 dark:bg-amber-950/30">
-        <p className="text-xs font-bold uppercase">Quyền hạn nhà nước</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Nhà nước chỉ tác động gián tiếp qua cung, cầu và thông tin — không ấn định giá TT.
-        </p>
-      </Card>
-      <Card className="border-sky-200/80 bg-sky-50/80 p-4 dark:border-sky-900/40 dark:bg-sky-950/30">
-        <p className="text-xs font-bold uppercase">Quy luật giá trị</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Can thiệp cung-cầu không thay đổi giá trị xã hội của hàng hóa.
-        </p>
-      </Card>
-    </>
+  const visiblePolicies = DECISION_POLICIES.filter(
+    (p) => !p.rounds || p.rounds.includes(data.currentRound),
   );
 
+  const applyPolicy = () => {
+    if (selected === "EXPORT_PROMOTION") {
+      command.mutate({ action: "applyPolicy", policyType: "EXPORT_PROMOTION" });
+      return;
+    }
+    command.mutate({
+      action: "applyPolicy",
+      policyType: selected,
+      targetIds:
+        selected === "TECH_SUPPORT"
+          ? data.participants
+              .filter((x) => x.role === "PRODUCER")
+              .slice(0, 1)
+              .map((x) => x.id)
+          : undefined,
+    });
+  };
+
   return (
-    <GameSessionLayout
+    <RoleTaskScreen
       sessionId={sessionId}
       activeZone="task"
-      title="Nhiệm vụ — Nhà nước"
-      subtitle={`Vòng ${data.currentRound} · ${phaseLabel}`}
-      rightPanel={rightPanel}
+      role="GOVERNMENT"
+      round={data.currentRound}
+      phase={data.phase}
+      insight={<GovernmentInsightPanel budgetVnd={budget} />}
     >
       <div className="flex flex-col gap-4">
         {stats ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <StatCard label="Cung" value={`${stats.supplyQuantity} thùng`} tone="violet" />
-            <StatCard label="Cầu" value={`${stats.demandQuantity} thùng`} tone="sky" />
-            <StatCard
-              label="Tồn dự kiến"
-              value={`${stats.expectedInventory} thùng`}
-              tone="amber"
-            />
-            <StatCard
-              label="Giá trị GT"
-              value={formatThousandDong(stats.unitValueVnd)}
-              tone="muted"
-            />
-            <StatCard
-              label="Giá TT"
-              value={
-                stats.marketPriceVnd != null
-                  ? formatThousandDong(stats.marketPriceVnd)
-                  : "—"
-              }
-              tone="primary"
-            />
+          <div className="rounded-[14px] border border-border bg-surface p-4 shadow-sm">
+            <p className="text-sm font-semibold">
+              Dữ liệu thị trường tổng hợp — Vòng {data.currentRound}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2.5 lg:grid-cols-5">
+              <StatTile label="Cung" value={`${stats.supplyQuantity}`} sub="thùng" />
+              <StatTile label="Cầu" value={`${stats.demandQuantity}`} sub="thùng" />
+              <StatTile
+                label="Tồn dự kiến"
+                value={`${stats.expectedInventory}`}
+                sub="thùng"
+              />
+              <StatTile
+                label="GT"
+                value={formatThousandDong(stats.unitValueVnd)}
+                sub="TGLĐXHCT"
+              />
+              <StatTile
+                label="Giá TT"
+                value={
+                  stats.marketPriceVnd != null
+                    ? formatThousandDong(stats.marketPriceVnd)
+                    : "—"
+                }
+                sub="thị trường"
+                highlight
+              />
+            </div>
           </div>
         ) : null}
 
@@ -130,66 +146,47 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
           <p className="text-sm text-muted-foreground">
             Chính sách Nhà nước có hiệu lực từ vòng 2.
           </p>
-        ) : exportOpen ? (
-          <Card className="p-4">
-            <p className="font-medium">Xúc tiến xuất khẩu</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              15 giây đầu chợ mở: mua ~25% cung bán lẻ.
-            </p>
-            <Button
-              className="mt-3"
-              disabled={command.isPending}
-              onClick={() =>
-                command.mutate({ action: "applyPolicy", policyType: "EXPORT_PROMOTION" })
-              }
-            >
-              Kích hoạt xuất khẩu
-            </Button>
-          </Card>
-        ) : decisionOpen ? (
+        ) : decisionOpen || exportOpen ? (
           <>
             <p className="text-sm font-semibold">
               Chọn chính sách điều tiết cho vòng này
             </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {DECISION_POLICIES.filter(
-                (p) => !p.rounds || p.rounds.includes(data.currentRound),
-              ).map((p) => (
-                <PolicyCard
-                  key={p.type}
-                  title={p.title}
-                  description={p.description}
-                  costLabel={p.costLabel}
-                  footer={p.footer}
-                  selected={selected === p.type}
-                  onSelect={() => setSelected(p.type)}
-                  disabled={command.isPending}
-                />
-              ))}
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+              {visiblePolicies.map((p) => {
+                const cardDisabled =
+                  command.isPending ||
+                  (p.marketOpenOnly ? !exportOpen : !decisionOpen);
+                return (
+                  <PolicyCard
+                    key={p.type}
+                    policyType={p.type}
+                    title={p.title}
+                    description={p.description}
+                    costLabel={p.costLabel}
+                    footer={p.footer}
+                    selected={selected === p.type}
+                    onSelect={() => setSelected(p.type)}
+                    disabled={cardDisabled}
+                  />
+                );
+              })}
             </div>
-            <Card className="border-amber-200/80 bg-amber-50/80 p-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
-              Nhà nước không trực tiếp ấn định giá thị trường.
-            </Card>
-            <Button
-              size="lg"
-              className="w-full sm:w-auto"
-              disabled={command.isPending}
-              onClick={() =>
-                command.mutate({
-                  action: "applyPolicy",
-                  policyType: selected,
-                  targetIds:
-                    selected === "TECH_SUPPORT"
-                      ? data.participants
-                          .filter((x) => x.role === "PRODUCER")
-                          .slice(0, 1)
-                          .map((x) => x.id)
-                      : undefined,
-                })
-              }
-            >
-              Áp dụng chính sách
-            </Button>
+
+            <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+                <span>Nhà nước không trực tiếp ấn định giá thị trường.</span>
+              </div>
+              <Button
+                disabled={
+                  command.isPending ||
+                  (selected === "EXPORT_PROMOTION" ? !exportOpen : !decisionOpen)
+                }
+                onClick={applyPolicy}
+              >
+                Áp dụng chính sách
+              </Button>
+            </div>
           </>
         ) : (
           <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
@@ -197,30 +194,30 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
           </p>
         )}
       </div>
-    </GameSessionLayout>
+    </RoleTaskScreen>
   );
 }
 
-function StatCard({
+function StatTile({
   label,
   value,
-  tone,
+  sub,
+  highlight,
 }: {
   label: string;
   value: string;
-  tone: "violet" | "sky" | "amber" | "muted" | "primary";
+  sub: string;
+  highlight?: boolean;
 }) {
-  const tones = {
-    violet: "border-violet-200/80 bg-violet-50/50",
-    sky: "border-sky-200/80 bg-sky-50/50",
-    amber: "border-amber-200/80 bg-amber-50/50",
-    muted: "border-border bg-muted/20",
-    primary: "border-primary/30 bg-primary/5",
-  };
   return (
-    <Card className={`p-3 ${tones[tone]}`}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-bold">{value}</p>
-    </Card>
+    <div className="rounded-[10.5px] border border-border bg-muted/10 px-3 py-2.5 text-center">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p
+        className={`mt-0.5 font-mono text-xl font-bold ${highlight ? "text-primary" : ""}`}
+      >
+        {value}
+      </p>
+      <p className="text-[10px] text-muted-foreground">{sub}</p>
+    </div>
   );
 }

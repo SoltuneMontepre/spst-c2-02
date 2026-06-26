@@ -75,6 +75,56 @@ export function zoneLabelForRole(role: Role): string {
   return GAME_ZONES.find((z) => z.role === role)?.label ?? "Bản đồ";
 }
 
+export type MapZoneTheme = "green" | "rose" | "violet" | "amber" | "sky";
+
+export interface MapZoneDisplay {
+  role: Role | "ALL";
+  mapLabel: string;
+  mapHint: string;
+  theme: MapZoneTheme;
+}
+
+/** Map grid order and copy — Figma `17:777` game play frame. */
+export const MAP_ZONE_DISPLAY: MapZoneDisplay[] = [
+  {
+    role: "PRODUCER",
+    mapLabel: "Nông trại",
+    mapHint: "Sản xuất & dự trữ",
+    theme: "green",
+  },
+  {
+    role: "CONSUMER",
+    mapLabel: "Quầy bán lẻ",
+    mapHint: "Bán trực tiếp NTD",
+    theme: "rose",
+  },
+  {
+    role: "INTERMEDIARY",
+    mapLabel: "Phân phối",
+    mapHint: "Giao dịch bán sỉ",
+    theme: "violet",
+  },
+  {
+    role: "GOVERNMENT",
+    mapLabel: "Văn phòng Nhà nước",
+    mapHint: "Chính sách & điều tiết",
+    theme: "amber",
+  },
+  {
+    role: "ALL",
+    mapLabel: "Tháp quan sát",
+    mapHint: "Giám sát thị trường",
+    theme: "sky",
+  },
+];
+
+export function mapZoneDefForRole(role: Role | "ALL"): GameZoneDef | undefined {
+  if (role === "ALL") {
+    return GAME_ZONES.find((z) => z.screen === "observatory");
+  }
+  return GAME_ZONES.find((z) => z.role === role);
+}
+
 /** Nav items visible for a player role (map + tower + own task zone). */
 export function zonesForPlayer(role: Role | null): GameZoneDef[] {
   return GAME_ZONES.filter(

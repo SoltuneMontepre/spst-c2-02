@@ -7,9 +7,9 @@ import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/sessi
 import { GameTopBar } from "@/components/session/game-top-bar";
 import { GameAnnouncementBanner } from "@/components/session/game-announcement-banner";
 import { GamePhaseTimeline } from "@/components/session/game-phase-timeline";
-import { SessionRosterWall } from "@/components/session/session-roster-wall";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import type { GameScreen } from "@/lib/game-zones";
+import { cn } from "@/lib/utils";
 
 function navFromZone(zone: GameScreen, phase: string | null): GameNavItem {
   if (phase === "RECAP") return "recap";
@@ -19,6 +19,7 @@ function navFromZone(zone: GameScreen, phase: string | null): GameNavItem {
 export function GameSessionLayout({
   sessionId,
   activeZone,
+  variant = "default",
   title,
   subtitle,
   rightPanel,
@@ -26,6 +27,7 @@ export function GameSessionLayout({
 }: {
   sessionId: string;
   activeZone: GameScreen | "debrief";
+  variant?: "default" | "focused" | "map";
   title?: string;
   subtitle?: ReactNode;
   rightPanel?: ReactNode;
@@ -41,6 +43,8 @@ export function GameSessionLayout({
   const navItem: GameNavItem =
     activeZone === "debrief" ? "debrief" : navFromZone(activeZone, data.phase);
 
+  const isFocused = variant === "focused" || variant === "map";
+
   return (
     <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
       <div className="flex min-h-screen flex-col bg-background">
@@ -52,6 +56,8 @@ export function GameSessionLayout({
             status={data.status}
             phase={data.phase}
             isHost={data.isHost}
+            participants={data.participants}
+            sessionStatus={data.status}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">
@@ -62,16 +68,26 @@ export function GameSessionLayout({
               isHost={data.isHost}
             />
 
-            {activeZone !== "debrief" ? (
+            {activeZone !== "debrief" && !isFocused ? (
               <div className="border-b border-border px-4 py-3 sm:px-6">
                 <GameAnnouncementBanner sessionId={sessionId} data={data} />
                 <GamePhaseTimeline data={data} />
               </div>
             ) : null}
 
-            <div className="flex min-h-0 flex-1 gap-4 overflow-auto p-4 pb-20 sm:p-6 lg:pb-6">
-              <main className="min-w-0 flex-1">
-                {title ? (
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 overflow-auto pb-20 lg:pb-6",
+                isFocused ? "gap-0 p-0" : "gap-4 p-4 sm:p-6",
+              )}
+            >
+              <main
+                className={cn(
+                  "min-w-0 flex-1",
+                  isFocused && "flex flex-col gap-3.5 bg-[#f7f4ef] p-[17.5px]",
+                )}
+              >
+                {!isFocused && title ? (
                   <div className="mb-4">
                     <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
                       {title}
@@ -87,7 +103,14 @@ export function GameSessionLayout({
               </main>
 
               {rightPanel ? (
-                <aside className="hidden w-72 shrink-0 flex-col gap-4 lg:flex">
+                <aside
+                  className={cn(
+                    "hidden shrink-0 flex-col lg:flex",
+                    isFocused
+                      ? "w-[236px] border-l border-[#ede8e0] bg-[#fefcf9]"
+                      : "w-72 gap-4",
+                  )}
+                >
                   {rightPanel}
                 </aside>
               ) : null}
@@ -99,12 +122,6 @@ export function GameSessionLayout({
           sessionId={sessionId}
           active={navItem}
           role={data.self?.role ?? null}
-        />
-
-        <SessionRosterWall
-          sessionId={sessionId}
-          participants={data.participants}
-          sessionStatus={data.status}
         />
       </div>
     </SessionGuidanceScope>

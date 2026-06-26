@@ -12,8 +12,10 @@ import {
   Trophy,
 } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
+import type { ParticipantView } from "@/lib/session-service";
 import { zoneScreenForRole } from "@/lib/zone-phase";
 import { OpenProjectorButton } from "@/components/host/projector-mode-toggle";
+import { SessionRosterSidebar } from "@/components/session/session-roster-wall";
 import { cn } from "@/lib/utils";
 
 export type GameNavItem =
@@ -113,6 +115,8 @@ export function GameSidebar({
   status,
   phase,
   isHost,
+  participants,
+  sessionStatus,
 }: {
   sessionId: string;
   active: GameNavItem;
@@ -120,6 +124,8 @@ export function GameSidebar({
   status: string;
   phase: string | null;
   isHost?: boolean;
+  participants: ParticipantView[];
+  sessionStatus: string;
 }) {
   const router = useRouter();
   const recapActive = active === "recap" || phase === "RECAP";
@@ -167,7 +173,7 @@ export function GameSidebar({
   }
 
   return (
-    <aside className="hidden w-[210px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
+    <aside className="hidden min-h-0 w-[210px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
       <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Điều hướng phiên chơi">
         <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
           Phiên chơi
@@ -211,6 +217,11 @@ export function GameSidebar({
             </Link>
           );
         })}
+
+        <SessionRosterSidebar
+          participants={participants}
+          sessionStatus={sessionStatus}
+        />
       </nav>
 
       <div className="border-t border-border p-3">

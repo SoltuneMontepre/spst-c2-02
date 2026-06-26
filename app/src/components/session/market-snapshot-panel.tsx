@@ -4,9 +4,98 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 import type { LiveRoundStats } from "@/lib/session-service";
 import { formatThousandDong } from "@/lib/money";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-export function MarketSnapshotPanel({ stats }: { stats: LiveRoundStats | null }) {
+function InsightSnapshotRows({ stats }: { stats: LiveRoundStats }) {
+  const supplyExceeds = stats.supplyQuantity > stats.demandQuantity;
+  const priceBelowValue =
+    stats.marketPriceVnd != null && stats.marketPriceVnd < stats.unitValueVnd;
+  const priceAboveValue =
+    stats.marketPriceVnd != null && stats.marketPriceVnd > stats.unitValueVnd;
+
+  return (
+    <>
+      <div className="rounded-[14.5px] border border-stone-200/80 bg-white">
+        <div className="flex items-center justify-between border-b border-stone-100 px-2.5 py-2">
+          <span className="text-[11px] text-stone-500">Giá trị</span>
+          <div className="text-right">
+            <p className="font-mono text-xs font-bold text-stone-900">
+              {formatThousandDong(stats.unitValueVnd)}
+            </p>
+            <p className="text-[10px] text-stone-400">Neo cố định</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-b border-stone-100 px-2.5 py-2">
+          <span className="text-[11px] text-stone-500">Giá thị trường</span>
+          <div className="text-right">
+            <p className="font-mono text-xs font-bold text-stone-900">
+              {stats.marketPriceVnd != null
+                ? formatThousandDong(stats.marketPriceVnd)
+                : "—"}
+            </p>
+            {stats.marketPriceVnd != null ? (
+              <p
+                className={cn(
+                  "text-[10px]",
+                  priceBelowValue
+                    ? "text-amber-700"
+                    : priceAboveValue
+                      ? "text-emerald-700"
+                      : "text-stone-400",
+                )}
+              >
+                {priceBelowValue ? "↓ Đang giảm" : priceAboveValue ? "↑ Đang tăng" : "—"}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-b border-stone-100 px-2.5 py-2">
+          <span className="text-[11px] text-stone-500">Cung</span>
+          <p className="font-mono text-xs font-bold text-violet-700">
+            {stats.supplyQuantity} thùng
+          </p>
+        </div>
+        <div className="flex items-center justify-between px-2.5 py-2">
+          <span className="text-[11px] text-stone-500">Cầu</span>
+          <p className="font-mono text-xs font-bold text-sky-700">
+            {stats.demandQuantity} thùng
+          </p>
+        </div>
+      </div>
+
+      {supplyExceeds ? (
+        <div className="rounded-[14.5px] border border-[#fee685] bg-[#fffbeb] p-[15px]">
+          <p className="flex items-center gap-1 text-xs font-bold text-[#7b3306]">
+            Cung &gt; Cầu
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#bb4d00]">
+            Cung vượt cầu → giá TT có xu hướng giảm. Tác động lên giá cả, không lên
+            giá trị.
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export function MarketSnapshotPanel({
+  stats,
+  variant = "default",
+}: {
+  stats: LiveRoundStats | null;
+  variant?: "default" | "insight";
+}) {
   if (!stats) {
+    if (variant === "insight") {
+      return (
+        <div className="rounded-[14.5px] border border-stone-200/80 bg-white p-3">
+          <p className="text-[11px] text-stone-500">
+            Dữ liệu cập nhật khi chợ mở.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <Card className="p-4">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -17,6 +106,10 @@ export function MarketSnapshotPanel({ stats }: { stats: LiveRoundStats | null })
         </p>
       </Card>
     );
+  }
+
+  if (variant === "insight") {
+    return <InsightSnapshotRows stats={stats} />;
   }
 
   const supplyExceeds = stats.supplyQuantity > stats.demandQuantity;

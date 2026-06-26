@@ -1,7 +1,5 @@
 "use client";
 
-import { HomeRefreshButton } from "@/components/home/home-refresh-button";
-
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return "Chào buổi sáng";
@@ -20,7 +18,7 @@ function formatDateLine(): string {
 
 export function HomeDashboardHeader({ displayName }: { displayName: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-1">
+    <div className="py-1">
       <div className="flex min-w-0 flex-col gap-1">
         <p className="text-sm text-muted-foreground capitalize">{formatDateLine()}</p>
         <h1 className="text-2xl font-bold tracking-tight">
@@ -28,7 +26,6 @@ export function HomeDashboardHeader({ displayName }: { displayName: string }) {
           <span className="text-primary">{displayName}</span>
         </h1>
       </div>
-      <HomeRefreshButton />
     </div>
   );
 }

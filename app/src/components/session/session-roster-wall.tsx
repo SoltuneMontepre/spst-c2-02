@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, LogOut, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Users } from "lucide-react";
 import type { ParticipantView } from "@/lib/session-service";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { ParticipantAvatar } from "@/components/session/participant-avatar";
@@ -15,6 +15,96 @@ function presenceLabel(p: ParticipantView, inGame: boolean): string {
   if (p.presence === "OFFLINE") return "Ngoại tuyến";
   if (inGame && p.phaseReady) return "Sẵn sàng";
   return "Trực tuyến";
+}
+
+/** Danh sách người chơi nhúng trong sidebar điều hướng. */
+export function SessionRosterSidebar({
+  participants,
+  sessionStatus,
+  defaultOpen = true,
+}: {
+  participants: ParticipantView[];
+  sessionStatus: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const inGame = sessionStatus !== "LOBBY";
+  const online = participants.filter((p) => p.isBot || p.presence === "ONLINE").length;
+
+  return (
+    <div
+      className={cn(
+        "mt-4 flex flex-col gap-1",
+        open && "min-h-0 flex-1 overflow-hidden",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full shrink-0 items-center justify-between gap-1 rounded-lg px-2 py-1 transition-colors hover:bg-muted/50"
+        aria-expanded={open}
+        aria-controls="session-roster-sidebar-list"
+      >
+        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+          Người chơi · {online}/{participants.length}
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+
+      {open ? (
+        <ul
+          id="session-roster-sidebar-list"
+          className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+        >
+          {participants.map((p) => (
+            <li
+              key={p.id}
+              className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-muted/50"
+              title={`${p.displayName}${p.role ? ` · ${ROLE_LABELS[p.role]}` : ""} · ${presenceLabel(p, inGame)}`}
+            >
+              <ParticipantAvatar participant={p} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium leading-tight">
+                  {p.displayName}
+                  {p.isSelf ? (
+                    <span className="font-normal text-muted-foreground"> (bạn)</span>
+                  ) : null}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {p.role ? ROLE_LABELS[p.role] : "Chưa phân vai"}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div
+          id="session-roster-sidebar-list"
+          className="flex flex-wrap gap-1 px-1.5 pb-0.5"
+        >
+          {participants.slice(0, 8).map((p) => (
+            <span
+              key={p.id}
+              title={`${p.displayName}${p.role ? ` · ${ROLE_LABELS[p.role]}` : ""}`}
+            >
+              <ParticipantAvatar participant={p} size="sm" />
+            </span>
+          ))}
+          {participants.length > 8 ? (
+            <span className="flex size-9 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+              +{participants.length - 8}
+            </span>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Cột avatar dính mép phải màn hình + panel danh sách người chơi. */
