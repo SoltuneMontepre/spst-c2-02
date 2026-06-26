@@ -1,0 +1,34 @@
+[mcp_servers.doppler]
+command = "npx"
+args = [
+    "-y",
+    "@dopplerhq/mcp-server",
+]
+
+[mcp_servers.figma-desktop]
+url = "http://127.0.0.1:3845/mcp"
+
+[mcp_servers.filesystem]
+command = "npx"
+args = [
+    "@modelcontextprotocol/server-filesystem",
+    ".",
+]
+
+[mcp_servers.next-devtools]
+command = "npx"
+args = [
+    "-y",
+    "next-devtools-mcp@latest",
+]
+
+[mcp_servers.sequential-thinking]
+command = "npx"
+args = ["@modelcontextprotocol/server-sequential-thinking"]
+
+[mcp_servers.shadcn]
+command = "npx"
+args = [
+    "shadcn@latest",
+    "mcp",
+]

@@ -77,16 +77,14 @@ jobs:
           ref: main
           path: medifab
 
-      - name: Install yq
-        uses: mikefarah/yq@v4.47.1
-
       - name: Update image tag in Flux overlay
+        uses: mikefarah/yq@v4.47.1
         env:
           SHA: ${{ github.sha }}
-        run: |
-          OVERLAY="medifab/${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml"
-          test -f "$OVERLAY" || { echo "Missing $OVERLAY — merge thanh-long Flux manifests into medifab main first."; exit 1; }
-          yq -i '(.images[] | select(.name == "${{ env.IMAGE }}") | .newTag) = strenv(SHA)' "$OVERLAY"
+        with:
+          cmd: >-
+            yq -i '(.images[] | select(.name == "${{ env.IMAGE }}") | .newTag) = strenv(SHA)'
+            medifab/${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml
 
       - name: Commit and push manifest update to medifab
         working-directory: medifab
