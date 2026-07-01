@@ -1,0 +1,60 @@
+{
+  "projectId": "6a448c0b000409129d63",
+  "endpoint": "https://sgp.cloud.appwrite.io/v1",
+  "tablesDB": [
+    {
+      "$id": "6a448e96001f1f8cd381",
+      "name": "game_realtime",
+      "enabled": true
+    }
+  ],
+  "tables": [
+    {
+      "$id": "session_signals",
+      "databaseId": "6a448e96001f1f8cd381",
+      "name": "Session Signals",
+      "enabled": true,
+      "rowSecurity": true,
+      "$permissions": [],
+      "columns": [
+        {
+          "key": "stateVersion",
+          "type": "integer",
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "type",
+          "type": "varchar",
+          "size": 128,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "data",
+          "type": "text",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "$id": "home_signals",
+      "databaseId": "6a448e96001f1f8cd381",
+      "name": "Home Signals",
+      "enabled": true,
+      "rowSecurity": true,
+      "$permissions": [],
+      "columns": [
+        {
+          "key": "tick",
+          "type": "integer",
+          "required": true,
+          "array": false
+        }
+      ],
+      "indexes": []
+    }
+  ]
+}

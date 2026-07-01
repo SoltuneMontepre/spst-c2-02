@@ -3,6 +3,11 @@
 
 import { EventEmitter } from "node:events";
 import Redis from "ioredis";
+import {
+  publishHomePublicSignal,
+  publishHomeUserSignal,
+  publishSessionSignal,
+} from "./appwrite-realtime";
 import type { HomeDashboard, SessionSnapshot } from "./session-service";
 
 export interface GameEvent {
@@ -159,6 +164,7 @@ export async function publish(event: GameEvent): Promise<void> {
     }
   }
   void maybeNotifyHome(event).catch(() => {});
+  void publishSessionSignal(event).catch(() => {});
 }
 
 export function subscribe(sessionId: string, listener: Listener): () => void {
@@ -169,6 +175,7 @@ export function subscribe(sessionId: string, listener: Listener): () => void {
 /** Notify all home dashboards that the public lobby list may have changed. */
 export function notifyHomePublic(): void {
   emitHomePublic();
+  void publishHomePublicSignal().catch(() => {});
   const bus = getRedisBus();
   if (!bus) return;
   void bus.pub.publish(REDIS_HOME_PUBLIC, "1").catch((e) => {
@@ -179,6 +186,7 @@ export function notifyHomePublic(): void {
 /** Notify a single user's home dashboard to refresh. */
 export function notifyHomeUser(userId: string): void {
   emitHomeUser(userId);
+  void publishHomeUserSignal(userId).catch(() => {});
   const bus = getRedisBus();
   if (!bus) return;
   void bus.pub.publish(`${REDIS_HOME_USER_PREFIX}${userId}`, "1").catch((e) => {
