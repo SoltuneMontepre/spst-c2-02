@@ -108,6 +108,15 @@ export function ProducerSalesPanel({
         />
       </div>
 
+      <div className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
+        <p className="font-semibold text-success">
+          Tồn kho chờ bán: {maxQty} thùng
+        </p>
+        <p>
+          Đã sản xuất vòng này: {state.producedQuantity} thùng
+        </p>
+      </div>
+
       <div className="flex flex-col gap-[8.75px] pt-[17.5px]">
         <Button
           className="h-[37px] rounded-[14.5px] bg-danger text-[13px] font-bold hover:bg-danger/90"

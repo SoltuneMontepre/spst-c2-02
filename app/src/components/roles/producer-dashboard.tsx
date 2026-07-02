@@ -106,7 +106,7 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                   valueClassName: "text-success",
                 },
                 {
-                  label: "Có thể làm tối đa",
+                  label: "Có thể làm thêm",
                   value: `${maxCanProduce} thùng`,
                   hint: `Ví đủ ${fundsCapacity} thùng`,
                   valueClassName: "text-success",

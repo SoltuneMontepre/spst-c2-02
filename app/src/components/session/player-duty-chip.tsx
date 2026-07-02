@@ -65,12 +65,10 @@ export function PlayerDutyChip({
   variant?: "timeline" | "map";
   className?: string;
 }) {
-  const { participant, title, action, status, showPhaseReady } = entry;
+  const { participant, title, activityLabel, action, status, showPhaseReady } = entry;
   const isMap = variant === "map";
   const style = isMap ? MAP_DUTY_STATUS_STYLES[status] : DUTY_STATUS_STYLES[status];
-  const ariaLabel = `${participant.displayName}, ${title}. ${action}. ${style.label}.`;
-
-  const phaseLabel = participant.phaseReady ? "Sẵn sàng" : "Đang chơi";
+  const ariaLabel = `${participant.displayName}, ${activityLabel}. ${title}. ${action}.`;
 
   return (
     <div
@@ -79,23 +77,41 @@ export function PlayerDutyChip({
         compact ? "w-full" : "w-[min(100vw-2rem,16rem)]",
         style.card,
         !isMap && participant.isSelf && "ring-2 ring-primary",
+        isMap && participant.isSelf && "ring-2 ring-primary/30",
         className,
       )}
       aria-label={ariaLabel}
     >
       <div className="flex items-center gap-2">
         <ParticipantPresenceDot participant={participant} />
-        <span className="min-w-0 truncate text-sm font-semibold text-stone-900">
+        <span
+          className={cn(
+            "min-w-0 truncate text-sm font-semibold",
+            participant.isSelf && isMap ? "text-primary" : "text-stone-900",
+          )}
+        >
           {participant.displayName}
           {participant.isSelf ? (
             isMap ? (
-              <span className="font-normal text-stone-500"> (bạn)</span>
+              <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary ring-1 ring-primary/20 align-middle">
+                Bạn
+              </span>
             ) : (
               <span className="sr-only"> (bạn)</span>
             )
           ) : null}
         </span>
-        {participant.isBot ? (
+        {isMap ? (
+          <span
+            className={cn(
+              "ml-auto max-w-[9.5rem] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium",
+              style.pill,
+            )}
+            title={activityLabel}
+          >
+            {activityLabel}
+          </span>
+        ) : participant.isBot ? (
           <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
             Bot
           </span>
@@ -105,17 +121,6 @@ export function PlayerDutyChip({
             inGame={inGame}
             className="ml-auto"
           />
-        ) : showPhaseReady && isMap ? (
-          <span
-            className={cn(
-              "ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-              participant.phaseReady
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-stone-200/80 text-stone-800",
-            )}
-          >
-            {phaseLabel}
-          </span>
         ) : (
           <span
             className={cn(

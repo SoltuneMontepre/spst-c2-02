@@ -5,8 +5,6 @@ import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/session/game-sidebar";
 import { GameTopBar } from "@/components/session/game-top-bar";
-import { GameAnnouncementBanner } from "@/components/session/game-announcement-banner";
-import { GamePhaseTimeline } from "@/components/session/game-phase-timeline";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import type { GameScreen } from "@/lib/game-zones";
 import { cn } from "@/lib/utils";
@@ -65,23 +63,13 @@ export function GameSessionLayout({
               streamState={streamState}
             />
 
-            {activeZone !== "debrief" && !isFocused ? (
-              <div className="border-b border-border px-4 py-3 sm:px-6">
-                <GameAnnouncementBanner sessionId={sessionId} data={data} />
-                <GamePhaseTimeline data={data} />
-              </div>
-            ) : null}
-
-            <div
-              className={cn(
-                "flex min-h-0 flex-1 overflow-auto pb-20 lg:pb-6",
-                isFocused ? "gap-0 p-0" : "gap-4 p-4 sm:p-6",
-              )}
-            >
+            <div className="flex min-h-0 flex-1 overflow-auto pb-20 lg:pb-6">
               <main
                 className={cn(
                   "min-w-0 flex-1",
-                  isFocused && "flex flex-col gap-3.5 bg-[#f7f4ef] p-[17.5px]",
+                  isFocused
+                    ? "flex flex-col gap-3.5 bg-[#f7f4ef] p-[17.5px]"
+                    : "p-4 sm:p-6",
                 )}
               >
                 {!isFocused && title ? (
@@ -105,7 +93,7 @@ export function GameSessionLayout({
                     "hidden shrink-0 flex-col lg:flex",
                     isFocused
                       ? "w-[236px] border-l border-[#ede8e0] bg-[#fefcf9]"
-                      : "w-72 gap-4",
+                      : "w-72 gap-4 p-4 sm:p-6",
                   )}
                 >
                   {rightPanel}

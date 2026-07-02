@@ -65,6 +65,7 @@ export interface RoleSummary {
   role: Role;
   count: number;
   title: string;
+  activityLabel: string;
   action: string;
   status: DutyStatus;
 }
@@ -72,9 +73,46 @@ export interface RoleSummary {
 export interface PlayerTimelineEntry {
   participant: ParticipantView;
   title: string;
+  activityLabel: string;
   action: string;
   status: DutyStatus;
   showPhaseReady: boolean;
+}
+
+function activityLabelForRole(params: {
+  role: Role;
+  phase: string | null;
+  round: number;
+  status: DutyStatus;
+}): string {
+  const { role, phase, round, status } = params;
+
+  if (phase === "EVENT") return "Đang đọc biến cố";
+  if (phase === "SETTLEMENT") return "Đang chốt sổ";
+  if (phase === "RECAP") return "Đang tổng kết";
+  if (!phase) return "Đang chờ";
+
+  if (phase === "DECISION") {
+    if (role === "PRODUCER") return "Đang sản xuất";
+    if (role === "CONSUMER") return "Chờ chợ mở";
+    if (role === "INTERMEDIARY") return "Chờ nguồn hàng";
+    if (role === "GOVERNMENT") {
+      if (round < 2) return "Đang quan sát";
+      return "Đang điều tiết";
+    }
+  }
+
+  if (phase === "MARKET_OPEN") {
+    if (role === "PRODUCER") return "Đang bán hàng";
+    if (role === "CONSUMER") return "Đang mua hàng";
+    if (role === "INTERMEDIARY") return "Đang phân phối";
+    if (role === "GOVERNMENT") {
+      if (round < 2) return "Đang quan sát";
+      return "Đang xuất khẩu";
+    }
+  }
+
+  return status === "done" ? "Đã xong" : status === "active" ? "Đang làm" : "Đang chờ";
 }
 
 function questForParticipant(
@@ -153,6 +191,12 @@ export function buildPlayerEntries(
       return {
         participant,
         title: quest.title,
+        activityLabel: activityLabelForRole({
+          role: participant.role,
+          phase: snapshot.phase,
+          round: snapshot.currentRound,
+          status,
+        }),
         action: quest.action,
         status,
         showPhaseReady,
@@ -184,6 +228,7 @@ export function buildRoleSummaries(
 
   return ROLE_ORDER.filter((role) => byRole.has(role)).map((role) => {
     const entries = byRole.get(role)!;
+    const status = aggregateRoleStatus(entries.map((e) => e.status));
     const template = getRoleQuest({
       role,
       phase: snapshot.phase,
@@ -196,8 +241,14 @@ export function buildRoleSummaries(
       role,
       count: entries.length,
       title: template.title,
+      activityLabel: activityLabelForRole({
+        role,
+        phase: snapshot.phase,
+        round: snapshot.currentRound,
+        status,
+      }),
       action: template.action,
-      status: aggregateRoleStatus(entries.map((e) => e.status)),
+      status,
     };
   });
 }

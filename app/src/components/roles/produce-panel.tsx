@@ -86,6 +86,10 @@ export function ProducePanel({
   const expectedRevenue = qty * unitValueVnd(currentRound);
   const expectedProfit = expectedRevenue - cost;
   const canProduce = phase === "DECISION" && qty > 0 && qty <= remaining && !inputLocked;
+  const producedProgress =
+    productionCapacity > 0
+      ? `${state.producedQuantity}/${productionCapacity} thùng`
+      : `${state.producedQuantity} thùng`;
 
   useEffect(() => {
     setQty((current) => Math.min(current, remaining));
@@ -123,7 +127,10 @@ export function ProducePanel({
         />
       </div>
       <div className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
-        <p className="font-semibold text-foreground">Có thể làm tối đa: {remaining} thùng</p>
+        <p className="font-semibold text-success">
+          Đã sản xuất vòng này: {producedProgress}
+        </p>
+        <p className="font-semibold text-foreground">Có thể làm thêm: {remaining} thùng</p>
         <p>Sức sản xuất còn lại: {capacityRemaining}/{productionCapacity} thùng</p>
         <p>Ví đủ: {fundsRemaining} thùng · Chi phí {formatCompactVnd(unitCost)}/thùng</p>
       </div>

@@ -13,6 +13,7 @@ import {
   getPhaseSteps,
   isInGameTimelineStatus,
 } from "@/lib/phase-timeline";
+import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { cn } from "@/lib/utils";
 
@@ -114,9 +115,74 @@ function PhaseStepper({
   );
 }
 
+function MapRoleActivityRow({
+  summaries,
+}: {
+  summaries: ReturnType<typeof buildRoleSummaries>;
+}) {
+  if (summaries.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-stone-200/70 pt-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+        Vai đang làm gì
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {summaries.map((summary) => {
+          const style = DUTY_STATUS_STYLES[summary.status];
+
+          return (
+            <div
+              key={summary.role}
+              className={cn(
+                "flex min-w-[9.75rem] items-center gap-2 rounded-[10.5px] border bg-white/75 px-2.5 py-2",
+                summary.status === "active" && "border-[#c94a2d]/25 bg-[#c94a2d]/10",
+                summary.status === "done" && "border-emerald-200 bg-emerald-50/75",
+                summary.status === "waiting" && "border-stone-200/80",
+              )}
+              title={`${ROLE_SHORT_LABELS[summary.role]}: ${summary.activityLabel}`}
+              aria-label={`${ROLE_SHORT_LABELS[summary.role]}: ${summary.activityLabel}`}
+            >
+              <span className={cn("size-2 shrink-0 rounded-full", style.dot)} aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-[11px] font-bold text-stone-900">
+                    {ROLE_SHORT_LABELS[summary.role]}
+                  </span>
+                  {summary.count > 1 ? (
+                    <span className="shrink-0 text-[10px] font-semibold text-stone-500">
+                      x{summary.count}
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  className={cn(
+                    "block truncate text-[10px] font-semibold",
+                    summary.status === "active" && "text-[#c94a2d]",
+                    summary.status === "done" && "text-emerald-700",
+                    summary.status === "waiting" && "text-stone-600",
+                  )}
+                >
+                  {summary.activityLabel}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export type GamePhaseStepperStripData = Pick<
   SessionSnapshot,
-  "status" | "phase" | "currentRound" | "self"
+  | "status"
+  | "phase"
+  | "currentRound"
+  | "self"
+  | "market"
+  | "autoHost"
+  | "participants"
 >;
 
 export function GamePhaseStepperStrip({
@@ -131,6 +197,7 @@ export function GamePhaseStepperStrip({
   const isIntro = data.status === "INTRO";
   const introHint = isIntro ? getIntroTimelineHint(data) : null;
   const isMap = variant === "map";
+  const mapRoleSummaries = isMap && !isIntro ? buildRoleSummaries(data) : [];
 
   const content = (
     <>
@@ -159,6 +226,7 @@ export function GamePhaseStepperStrip({
           <PhaseStepper phase={data.phase} variant={variant} />
         </div>
       )}
+      {isMap && !isIntro ? <MapRoleActivityRow summaries={mapRoleSummaries} /> : null}
     </>
   );
 
