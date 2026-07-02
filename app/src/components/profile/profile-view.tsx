@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { SessionNav } from "@/components/session/session-nav";
 import { ProfileSummaryCard, ProfileStatsCard } from "@/components/profile/profile-summary-card";
 import { ProfileInfoForm } from "@/components/profile/profile-info-form";
 import { ProfileSecurityCard } from "@/components/profile/profile-security-card";
@@ -29,9 +28,7 @@ export function ProfileView({ displayName }: { displayName: string }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <SessionNav displayName={displayName} sessionLabel="Hồ sơ cá nhân" />
-
-      <main className="grid w-full flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6 lg:px-8">
+      <main className="mx-auto grid w-full flex-1 max-w-7xl grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6 lg:px-8">
         <div className="col-span-12">
           <h1 className="text-2xl font-bold tracking-tight">Hồ sơ cá nhân</h1>
         </div>

@@ -1,4 +1,4 @@
-import { AppwriteException, Permission, Role } from "node-appwrite";
+import { AppwriteException, ID, Permission, Role } from "node-appwrite";
 import { db } from "./db";
 import { appwriteConfig } from "./appwrite-config";
 import { getAppwriteTablesDB } from "./appwrite-server";
@@ -28,7 +28,33 @@ function userReadPermissions(userIds: string[]): string[] {
   return userIds.map((id) => Permission.read(Role.user(id)));
 }
 
-/** Upsert session_signals row so Appwrite Realtime notifies room members. */
+function serializeEventData(data: unknown): string | null {
+  if (data === undefined || data === null) return null;
+  return typeof data === "string" ? data : JSON.stringify(data);
+}
+
+function appwriteEventData(event: GameEvent, data: string | null): Record<string, unknown> {
+  return {
+    sessionId: event.sessionId,
+    stateVersion: event.stateVersion,
+    type: event.type,
+    ...(data === null ? {} : { data }),
+  };
+}
+
+function appwriteSignalData(event: GameEvent, data: string | null): Record<string, unknown> {
+  return {
+    stateVersion: event.stateVersion,
+    type: event.type,
+    ...(data === null ? {} : { data }),
+  };
+}
+
+function errorMessage(e: unknown): string {
+  return (e as AppwriteException).message ?? (e as Error).message ?? String(e);
+}
+
+/** Create a durable event row and update the latest signal row for room members. */
 export async function publishSessionSignal(event: GameEvent): Promise<void> {
   if (!isServerAppwriteEnabled()) return;
   const tables = getAppwriteTablesDB();
@@ -37,29 +63,40 @@ export async function publishSessionSignal(event: GameEvent): Promise<void> {
   try {
     const readerIds = await sessionReaderUserIds(event.sessionId);
     const permissions = userReadPermissions(readerIds);
-    const data =
-      event.data === undefined
-        ? null
-        : typeof event.data === "string"
-          ? event.data
-          : JSON.stringify(event.data);
+    const data = serializeEventData(event.data);
 
-    await tables.upsertRow({
-      databaseId: appwriteConfig.databaseId,
-      tableId: appwriteConfig.sessionSignalsTableId,
-      rowId: event.sessionId,
-      data: {
-        stateVersion: event.stateVersion,
-        type: event.type,
-        data,
-      },
-      permissions,
-    });
+    const results = await Promise.allSettled([
+      tables.createRow({
+        databaseId: appwriteConfig.databaseId,
+        tableId: appwriteConfig.sessionEventsTableId,
+        rowId: ID.unique(),
+        data: appwriteEventData(event, data),
+        permissions,
+      }),
+      tables.upsertRow({
+        databaseId: appwriteConfig.databaseId,
+        tableId: appwriteConfig.sessionSignalsTableId,
+        rowId: event.sessionId,
+        data: appwriteSignalData(event, data),
+        permissions,
+      }),
+    ]);
+
+    const [eventResult, signalResult] = results;
+    if (eventResult.status === "rejected") {
+      console.error(
+        "Appwrite session event publish failed:",
+        errorMessage(eventResult.reason),
+      );
+    }
+    if (signalResult.status === "rejected") {
+      console.error(
+        "Appwrite session signal publish failed:",
+        errorMessage(signalResult.reason),
+      );
+    }
   } catch (e) {
-    console.error(
-      "Appwrite session signal publish failed:",
-      (e as AppwriteException).message ?? (e as Error).message,
-    );
+    console.error("Appwrite session realtime publish failed:", errorMessage(e));
   }
 }
 

@@ -6,7 +6,7 @@ import { Sparkles } from "lucide-react";
 export function AiHostNarration({ text }: { text: string | null | undefined }) {
   if (!text) return null;
   return (
-    <div className="flex gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+    <div className="flex gap-2 rounded-[14px] border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
       <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-primary">

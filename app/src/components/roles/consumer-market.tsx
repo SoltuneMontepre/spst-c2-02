@@ -14,9 +14,11 @@ import {
   filterListings,
   type MarketplaceFilter,
 } from "./market-listing-card";
+import { MarketTransactionDialog } from "./market-transaction-dialog";
 import { OffersPanel } from "./offers-panel";
 import { formatThousandDong } from "@/lib/money";
 import type { ConsumerRoundState } from "@/lib/role-state";
+import type { ListingView } from "@/lib/session-service";
 
 function priceRangeLabel(listings: { askPriceVnd: number }[]): string {
   if (listings.length === 0) return "—";
@@ -30,7 +32,10 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
   const command = useCommand(sessionId, data?.stateVersion);
   const [filter, setFilter] = useState<MarketplaceFilter>("all");
-  const [offerPrices, setOfferPrices] = useState<Record<string, number>>({});
+  const [selectedListing, setSelectedListing] = useState<ListingView | null>(
+    null,
+  );
+
   if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
 
   const state = data.self.roleState as ConsumerRoundState | null;
@@ -43,11 +48,11 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   const fulfilled = state?.fulfilledUnits ?? 0;
 
   const marketContent = !open ? (
-    <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-[14px] bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
       Danh sách quầy sẽ hiện khi giai đoạn «Chợ mở».
     </p>
   ) : listings.length === 0 ? (
-    <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
+    <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
       <p className="font-medium text-foreground">Chưa có quầy niêm yết</p>
       <p className="mt-2 text-muted-foreground">
         Nhà sản xuất và trung gian đang đưa hàng lên chợ.
@@ -59,29 +64,12 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {listings.map((l) => {
           const affordable = (data.self?.balanceVnd ?? 0) >= l.askPriceVnd;
-          const defaultOffer = Math.max(1000, l.askPriceVnd - 2000);
           return (
             <MarketListingCard
               key={l.id}
               listing={l}
               unitValueVnd={unitValue}
-              affordable={affordable}
-              pending={command.isPending}
-              offerPrice={offerPrices[l.id] ?? defaultOffer}
-              onOfferPriceChange={(price) =>
-                setOfferPrices((prev) => ({ ...prev, [l.id]: price }))
-              }
-              onBuy={() =>
-                command.mutate({ action: "buy", listingId: l.id, quantity: 1 })
-              }
-              onOffer={() =>
-                command.mutate({
-                  action: "offer",
-                  listingId: l.id,
-                  quantity: 1,
-                  offerPriceVnd: offerPrices[l.id] ?? defaultOffer,
-                })
-              }
+              onClick={() => setSelectedListing(l)}
             />
           );
         })}
@@ -162,6 +150,34 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
           />
         ) : null}
       </ZonePhaseGate>
+
+      {selectedListing ? (
+        <MarketTransactionDialog
+          listing={selectedListing}
+          unitValueVnd={unitValue}
+          affordable={(data.self?.balanceVnd ?? 0) >= selectedListing.askPriceVnd}
+          pending={command.isPending}
+          balanceVnd={data.self?.balanceVnd ?? 0}
+          onBuy={(quantity) => {
+            command.mutate({
+              action: "buy",
+              listingId: selectedListing.id,
+              quantity,
+            });
+            setSelectedListing(null);
+          }}
+          onOffer={(quantity, offerPriceVnd) => {
+            command.mutate({
+              action: "offer",
+              listingId: selectedListing.id,
+              quantity,
+              offerPriceVnd,
+            });
+            setSelectedListing(null);
+          }}
+          onClose={() => setSelectedListing(null)}
+        />
+      ) : null}
     </RoleTaskScreen>
   );
 }

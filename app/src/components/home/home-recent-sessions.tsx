@@ -164,6 +164,14 @@ function RecentSessionRow({ session }: { session: HomeRecentSession }) {
     ? ROLE_LABELS[session.role as Role]
     : "Chưa phân vai";
 
+  const href = session.isActive
+    ? session.isHost
+      ? hostSessionHref({ id: session.sessionId, status: session.status })
+      : session.isJoined
+        ? playerSessionHref({ id: session.sessionId, status: session.status })
+        : historySessionHref(session)
+    : historySessionHref(session);
+
   return (
     <SessionListRow
       code={session.code}
@@ -173,13 +181,8 @@ function RecentSessionRow({ session }: { session: HomeRecentSession }) {
       icon={<Store className="size-4 text-primary" aria-hidden />}
       statusBadge={<SessionStatusPill status={session.status} isActive={session.isActive} />}
       badges={session.role ? <RoleBadge role={session.role} /> : null}
-      href={
-        session.isHost
-          ? hostSessionHref({ id: session.sessionId, status: session.status })
-          : session.isJoined
-            ? playerSessionHref({ id: session.sessionId, status: session.status })
-            : historySessionHref(session)
-      }
+      href={href}
+      linkLabel={session.isActive ? "Tham gia phòng" : "Coi lại lịch sử"}
     />
   );
 }

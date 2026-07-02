@@ -13,6 +13,34 @@ import { hostPause, hostEnd } from "./game-service";
 const disconnectTimers = new Map<string, NodeJS.Timeout>();
 const hostOfflineTimers = new Map<string, NodeJS.Timeout>();
 
+function participantTimerKey(sessionId: string, participantId: string): string {
+  return `${sessionId}:${participantId}`;
+}
+
+function clearParticipantTimer(sessionId: string, participantId: string): void {
+  const key = participantTimerKey(sessionId, participantId);
+  const existing = disconnectTimers.get(key);
+  if (existing) clearTimeout(existing);
+  disconnectTimers.delete(key);
+}
+
+function scheduleStaleHeartbeat(
+  userId: string,
+  sessionId: string,
+  participantId: string,
+): void {
+  const key = participantTimerKey(sessionId, participantId);
+  disconnectTimers.set(
+    key,
+    setTimeout(() => {
+      disconnectTimers.delete(key);
+      void markOffline(userId, sessionId).catch((e) =>
+        console.error("heartbeat stale:", (e as Error).message),
+      );
+    }, DISCONNECT_BOT_TAKEOVER_SEC * 1000),
+  );
+}
+
 async function bump(sessionId: string, type: string, data?: unknown): Promise<void> {
   const s = await db.gameSession.update({
     where: { id: sessionId },
@@ -42,14 +70,13 @@ export async function heartbeat(
   });
   if (!participant) throw new ApiError("FORBIDDEN", 403);
 
-  const key = `${sessionId}:${participant.id}`;
-  const existing = disconnectTimers.get(key);
-  if (existing) clearTimeout(existing);
-  disconnectTimers.delete(key);
+  clearParticipantTimer(sessionId, participant.id);
 
   // Reclaim from bot takeover at action boundary.
   const controlMode =
     participant.controlMode === "BOT_TAKEOVER" ? "HUMAN" : participant.controlMode;
+  const shouldBroadcast =
+    participant.presence !== "ONLINE" || participant.controlMode !== controlMode;
 
   await db.participant.update({
     where: { id: participant.id },
@@ -61,11 +88,15 @@ export async function heartbeat(
     },
   });
 
-  await bump(sessionId, "participant:presence", {
-    participantId: participant.id,
-    userId,
-    presence: "ONLINE",
-  });
+  scheduleStaleHeartbeat(userId, sessionId, participant.id);
+
+  if (shouldBroadcast) {
+    await bump(sessionId, "participant:presence", {
+      participantId: participant.id,
+      userId,
+      presence: "ONLINE",
+    });
+  }
   return { controlMode };
 }
 
@@ -75,6 +106,7 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
     where: { sessionId, userId, isBot: false },
   });
   if (!participant) return;
+  clearParticipantTimer(sessionId, participant.id);
 
   await db.participant.update({
     where: { id: participant.id },
@@ -86,7 +118,7 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
 
   // Lobby: not-ready after 15s (FR-ROOM-03).
   if (session.status === "LOBBY") {
-    const key = `${sessionId}:${participant.id}`;
+    const key = participantTimerKey(sessionId, participant.id);
     disconnectTimers.set(
       key,
       setTimeout(async () => {
@@ -108,7 +140,7 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
   if (
     !["LOBBY", "CREATED", "COMPLETED", "INCOMPLETE", "CANCELLED"].includes(session.status)
   ) {
-    const key = `${sessionId}:${participant.id}`;
+    const key = participantTimerKey(sessionId, participant.id);
     disconnectTimers.set(
       key,
       setTimeout(async () => {

@@ -3,19 +3,57 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { Channel, Realtime } from "appwrite";
+import { Channel } from "appwrite";
 import type { HomeDashboard } from "@/lib/session-service";
 import { apiFetch } from "./use-api";
 import { useAppwriteSession } from "./use-appwrite-session";
 import { appwriteConfig } from "@/lib/appwrite-config";
 import {
-  getAppwriteBrowserClient,
+  getAppwriteRealtimeClient,
   isAppwriteRealtimeEnabled,
 } from "@/lib/appwrite-client";
 
 export type HomeStreamState = "connecting" | "connected" | "disconnected";
 
-/** Appwrite Realtime or SSE fallback for home dashboard invalidation. */
+const APPWRITE_SUBSCRIBE_TIMEOUT_MS = 3_000;
+
+type RealtimeSubscription = { unsubscribe: () => Promise<void> };
+
+function subscribeWithTimeout<T extends RealtimeSubscription>(
+  subscribePromise: Promise<T>,
+  shouldKeep: () => boolean,
+): Promise<T> {
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  subscribePromise
+    .then((sub) => {
+      if (timedOut || !shouldKeep()) void sub.unsubscribe();
+    })
+    .catch(() => {});
+
+  return new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      reject(new Error("Appwrite realtime subscribe timed out"));
+    }, APPWRITE_SUBSCRIBE_TIMEOUT_MS);
+
+    subscribePromise.then(
+      (sub) => {
+        if (timedOut) return;
+        if (timer) clearTimeout(timer);
+        resolve(sub);
+      },
+      (error) => {
+        if (timedOut) return;
+        if (timer) clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** Appwrite Realtime with SSE fallback for home dashboard invalidation. */
 export function useHomeStream(): HomeStreamState {
   const useAppwrite = isAppwriteRealtimeEnabled();
   const appwriteReady = useAppwriteSession();
@@ -26,8 +64,6 @@ export function useHomeStream(): HomeStreamState {
   const wasDisconnected = useRef(false);
 
   useEffect(() => {
-    if (useAppwrite && !appwriteReady) return;
-
     const queryKey = ["home-dashboard"] as const;
 
     const applyDashboard = (dashboard: HomeDashboard) => {
@@ -42,47 +78,10 @@ export function useHomeStream(): HomeStreamState {
 
     refetchDashboard();
 
-    if (useAppwrite && userId) {
-      let closed = false;
-      const client = getAppwriteBrowserClient();
-      const realtime = new Realtime(client);
-      const subscriptions: Array<{ unsubscribe: () => Promise<void> }> = [];
-
-      const subscribeRow = (rowId: string) =>
-        realtime.subscribe(
-          Channel.tablesdb(appwriteConfig.databaseId)
-            .table(appwriteConfig.homeSignalsTableId)
-            .row(rowId)
-            .update(),
-          () => {
-            if (!closed) refetchDashboard();
-          },
-        );
-
-      void Promise.all([subscribeRow("public"), subscribeRow(userId)])
-        .then((subs) => {
-          if (closed) {
-            subs.forEach((s) => void s.unsubscribe());
-            return;
-          }
-          subscriptions.push(...subs);
-          if (wasDisconnected.current) refetchDashboard();
-          wasDisconnected.current = false;
-          setStreamState("connected");
-        })
-        .catch(() => {
-          wasDisconnected.current = true;
-          setStreamState("disconnected");
-        });
-
-      return () => {
-        closed = true;
-        subscriptions.forEach((s) => void s.unsubscribe());
-        setStreamState("connecting");
-      };
-    }
-
-    const source = new EventSource("/api/me/home-stream");
+    let closed = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let source: EventSource | null = null;
+    let appwriteSubs: Array<{ unsubscribe: () => Promise<void> }> = [];
 
     const onSnapshot = (e: Event) => {
       try {
@@ -93,19 +92,90 @@ export function useHomeStream(): HomeStreamState {
       }
     };
 
-    source.addEventListener("snapshot", onSnapshot);
-    source.addEventListener("open", () => {
-      if (wasDisconnected.current) refetchDashboard();
-      wasDisconnected.current = false;
-      setStreamState("connected");
-    });
-    source.addEventListener("error", () => {
-      wasDisconnected.current = true;
-      setStreamState("disconnected");
-    });
+    const setupSSE = () => {
+      if (closed || source) return;
+      const newSource = new EventSource("/api/me/home-stream");
+      newSource.addEventListener("snapshot", onSnapshot);
+      newSource.addEventListener("open", () => {
+        if (closed) return;
+        if (wasDisconnected.current) refetchDashboard();
+        wasDisconnected.current = false;
+        setStreamState("connected");
+      });
+      newSource.addEventListener("error", () => {
+        if (!closed) {
+          wasDisconnected.current = true;
+          setStreamState("disconnected");
+        }
+      });
+      source = newSource;
+    };
+
+    const teardownSSE = () => {
+      if (source) {
+        source.close();
+        source = null;
+      }
+    };
+
+    const setupAppwrite = async () => {
+      if (closed || appwriteSubs.length > 0 || !useAppwrite || !appwriteReady || !userId) return;
+      const pendingSubs: RealtimeSubscription[] = [];
+      try {
+        const realtime = getAppwriteRealtimeClient();
+
+        const subscribeRow = async (rowId: string) => {
+          const sub = await subscribeWithTimeout(
+            realtime.subscribe(
+              Channel.tablesdb(appwriteConfig.databaseId)
+                .table(appwriteConfig.homeSignalsTableId)
+                .row(rowId)
+                .update(),
+              () => {
+                if (!closed) refetchDashboard();
+              },
+            ),
+            () => !closed && !source,
+          );
+          pendingSubs.push(sub);
+          return sub;
+        };
+
+        const subs = await Promise.all([subscribeRow("public"), subscribeRow(userId)]);
+        if (closed) {
+          subs.forEach((s) => void s.unsubscribe());
+          return;
+        }
+        appwriteSubs = subs;
+        if (wasDisconnected.current) refetchDashboard();
+        wasDisconnected.current = false;
+        setStreamState("connected");
+
+        // Appwrite is active — drop SSE to avoid duplicate updates
+        teardownSSE();
+      } catch {
+        pendingSubs.forEach((s) => void s.unsubscribe());
+        if (!closed) {
+          wasDisconnected.current = true;
+          setStreamState("disconnected");
+          setupSSE();
+        }
+      }
+    };
+
+    if (useAppwrite && appwriteReady && userId) {
+      void setupAppwrite();
+    } else if (useAppwrite) {
+      fallbackTimer = setTimeout(setupSSE, 3000);
+    } else {
+      setupSSE();
+    }
 
     return () => {
-      source.close();
+      closed = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      teardownSSE();
+      appwriteSubs.forEach((s) => void s.unsubscribe());
       setStreamState("connecting");
     };
   }, [queryClient, useAppwrite, appwriteReady, userId]);

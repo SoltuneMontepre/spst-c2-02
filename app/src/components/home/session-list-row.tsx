@@ -11,6 +11,7 @@ export function SessionListRow({
   statusBadge,
   icon,
   href,
+  linkLabel = "Tham gia phòng",
   actions,
   highlight,
 }: {
@@ -21,6 +22,7 @@ export function SessionListRow({
   statusBadge?: ReactNode;
   icon?: ReactNode;
   href?: string;
+  linkLabel?: string;
   actions?: ReactNode;
   highlight?: "host" | "joined";
 }) {
@@ -63,7 +65,7 @@ export function SessionListRow({
                 href={href}
                 className={cn(buttonVariants({ size: "sm" }), "whitespace-nowrap")}
               >
-                Tham gia phòng
+                {linkLabel}
               </Link>
             ) : null}
             {actions}

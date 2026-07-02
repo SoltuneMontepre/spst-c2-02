@@ -2,9 +2,6 @@
   "plugins": {
     "figma": {
       "enabled": true
-    },
-    "appwrite-plugin": {
-      "enabled": true
     }
   }
 }

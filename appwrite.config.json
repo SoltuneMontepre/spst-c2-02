@@ -40,6 +40,50 @@
       "indexes": []
     },
     {
+      "$id": "session_events",
+      "databaseId": "6a448e96001f1f8cd381",
+      "name": "Session Events",
+      "enabled": true,
+      "rowSecurity": true,
+      "$permissions": [],
+      "columns": [
+        {
+          "key": "sessionId",
+          "type": "varchar",
+          "size": 64,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "stateVersion",
+          "type": "integer",
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "type",
+          "type": "varchar",
+          "size": 128,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "data",
+          "type": "text",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "session_version",
+          "type": "key",
+          "columns": ["sessionId", "stateVersion"],
+          "orders": ["asc", "asc"]
+        }
+      ]
+    },
+    {
       "$id": "home_signals",
       "databaseId": "6a448e96001f1f8cd381",
       "name": "Home Signals",

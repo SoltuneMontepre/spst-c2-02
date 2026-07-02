@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, User } from "lucide-react";
-import { SessionNav } from "@/components/session/session-nav";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { HomeDashboardHeader } from "@/components/home/home-dashboard-header";
 import { HomeHeroCards } from "@/components/home/home-hero-cards";
@@ -44,12 +43,6 @@ export function HomeView({ displayName }: { displayName: string }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <SessionNav
-        displayName={displayName}
-        sessionLabel="Trang chủ"
-        hideHomeLink
-      />
-
       <main className="grid w-full flex-1 grid-cols-12 gap-4 p-4 pb-10 sm:gap-5 sm:p-6 lg:px-8">
         <div className="col-span-12">
           <Suspense fallback={null}>

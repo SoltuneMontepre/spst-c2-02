@@ -8,5 +8,5 @@ export async function GET(
   const user = await currentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  return handle(() => getSnapshot(user.id, id));
+  return handle(() => getSnapshot(user.id, id), { "cache-control": "no-store" });
 }

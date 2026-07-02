@@ -208,7 +208,7 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
               ) : result?.aiDebrief ? (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-2xl font-bold tabular-nums text-primary ring-1 ring-primary/25">
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-primary/15 text-2xl font-bold tabular-nums text-primary ring-1 ring-primary/25">
                       {result.aiDebrief.overall.grade}
                       <span className="text-sm font-semibold text-primary/70">/10</span>
                     </span>

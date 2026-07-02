@@ -50,7 +50,7 @@ export function DebriefParticipantPeek({
   incomplete: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/80 bg-muted/25 p-3">
+    <div className="rounded-[14px] border border-border/80 bg-muted/25 p-3">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         Đang xem
       </p>

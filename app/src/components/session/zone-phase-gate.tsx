@@ -75,7 +75,7 @@ export function ZonePhaseGate({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-4 text-sm">
+      <div className="flex gap-3 rounded-[14px] border border-amber-500/40 bg-amber-500/5 px-4 py-4 text-sm">
         <AlertCircle className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />
         <div>
           <p className="font-semibold text-foreground">{title}</p>

@@ -22,7 +22,7 @@ export function BentoTile({
   return (
     <article
       className={cn(
-        "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm",
+        "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[14px] border border-border bg-surface shadow-sm",
         colSpan,
         rowSpan,
         className,

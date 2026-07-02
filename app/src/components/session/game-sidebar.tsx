@@ -15,7 +15,6 @@ import type { Role } from "@/generated/prisma/enums";
 import type { ParticipantView } from "@/lib/session-service";
 import { zoneScreenForRole } from "@/lib/zone-phase";
 import { OpenProjectorButton } from "@/components/host/projector-mode-toggle";
-import { SessionRosterSidebar } from "@/components/session/session-roster-wall";
 import { cn } from "@/lib/utils";
 
 export type GameNavItem =
@@ -40,13 +39,13 @@ function playNavItems(sessionId: string, role: Role | null) {
   return [
     {
       id: "map" as const,
-      label: "Bản đồ",
+      label: "Bản đồ chợ",
       href: `/session/${sessionId}/map`,
       icon: Map,
     },
     {
       id: "task" as const,
-      label: "Nhiệm vụ",
+      label: "Nhiệm vụ vai trò",
       href: taskHref(sessionId, role),
       icon: ClipboardList,
     },
@@ -58,7 +57,7 @@ function playNavItems(sessionId: string, role: Role | null) {
     },
     {
       id: "observatory" as const,
-      label: "Quan sát",
+      label: "Quan sát thị trường",
       href: `/session/${sessionId}/observatory`,
       icon: Telescope,
     },
@@ -115,7 +114,6 @@ export function GameSidebar({
   status,
   phase,
   isHost,
-  participants,
   sessionStatus,
 }: {
   sessionId: string;
@@ -124,24 +122,13 @@ export function GameSidebar({
   status: string;
   phase: string | null;
   isHost?: boolean;
-  participants: ParticipantView[];
   sessionStatus: string;
 }) {
   const router = useRouter();
   const recapActive = active === "recap" || phase === "RECAP";
   const debriefActive = active === "debrief" || status === "DEBRIEF" || status === "COMPLETED";
 
-  const playItems = playNavItems(sessionId, role).map((item) => ({
-    ...item,
-    label:
-      item.id === "map"
-        ? "Bản đồ chợ"
-        : item.id === "task"
-          ? "Nhiệm vụ vai trò"
-          : item.id === "market"
-            ? "Giao dịch"
-            : "Quan sát thị trường",
-  }));
+  const playItems = playNavItems(sessionId, role);
 
   const resultItems: {
     id: GameNavItem;
@@ -165,7 +152,7 @@ export function GameSidebar({
 
   function navClass(isActive: boolean) {
     return cn(
-      "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+      "flex items-center gap-[10.5px] rounded-[14px] px-[10.5px] py-[8.75px] text-[13px] font-semibold transition-colors",
       isActive
         ? "bg-secondary text-primary"
         : "text-foreground hover:bg-muted/60",
@@ -175,7 +162,7 @@ export function GameSidebar({
   return (
     <aside className="hidden min-h-0 w-[210px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
       <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Điều hướng phiên chơi">
-        <p className="px-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+        <p className="px-[10.5px] pb-1 text-[9px] font-bold uppercase tracking-[1.35px] text-muted-foreground">
           Phiên chơi
         </p>
         {playItems.map((item) => {
@@ -193,13 +180,13 @@ export function GameSidebar({
               href={item.href}
               className={navClass(isActive)}
             >
-              <Icon className="size-4 shrink-0" aria-hidden />
+              <Icon className="size-[16px] shrink-0" aria-hidden />
               {item.label}
             </Link>
           );
         })}
 
-        <p className="mt-4 px-2 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+        <p className="mt-4 px-[10.5px] pb-1 text-[9px] font-bold uppercase tracking-[1.35px] text-muted-foreground">
           Kết quả
         </p>
         {resultItems.map((item) => {
@@ -212,16 +199,11 @@ export function GameSidebar({
               href={item.href}
               className={navClass(isActive)}
             >
-              <Icon className="size-4 shrink-0" aria-hidden />
+              <Icon className="size-[16px] shrink-0" aria-hidden />
               {item.label}
             </Link>
           );
         })}
-
-        <SessionRosterSidebar
-          participants={participants}
-          sessionStatus={sessionStatus}
-        />
       </nav>
 
       <div className="border-t border-border p-3">
@@ -232,10 +214,10 @@ export function GameSidebar({
         ) : null}
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          className="flex w-full items-center gap-[10.5px] rounded-[14px] px-[10.5px] py-[8.75px] text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           onClick={() => router.push("/home")}
         >
-          <LogOut className="size-4 shrink-0" aria-hidden />
+          <LogOut className="size-[15px] shrink-0" aria-hidden />
           Thoát phiên
         </button>
       </div>

@@ -9,7 +9,7 @@ import { HelpHint } from "@/components/learning/help-hint";
 export function PlayerStatusBar({ self }: { self: SelfState | null }) {
   if (!self) return null;
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-2.5 text-sm">
+    <div className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 py-2.5 text-sm">
       <span className="font-medium">
         {self.role ? ROLE_LABELS[self.role] : "Quan sát viên"}
         <HelpHint text="Mỗi vai có mục tiêu điểm khác nhau: lợi nhuận, hiệu ích, hay điểm xã hội." />

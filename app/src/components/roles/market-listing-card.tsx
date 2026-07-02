@@ -1,8 +1,6 @@
 "use client";
 
 import type { ListingView } from "@/lib/session-service";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,21 +12,11 @@ const SELLER_LABELS: Record<string, string> = {
 export function MarketListingCard({
   listing,
   unitValueVnd,
-  affordable,
-  pending,
-  offerPrice,
-  onOfferPriceChange,
-  onBuy,
-  onOffer,
+  onClick,
 }: {
   listing: ListingView;
   unitValueVnd?: number | null;
-  affordable: boolean;
-  pending: boolean;
-  offerPrice: number;
-  onOfferPriceChange: (price: number) => void;
-  onBuy: () => void;
-  onOffer: () => void;
+  onClick?: () => void;
 }) {
   const delta =
     unitValueVnd != null ? listing.askPriceVnd - unitValueVnd : null;
@@ -36,16 +24,20 @@ export function MarketListingCard({
   const priceK = (listing.askPriceVnd / 1000).toFixed(0);
 
   return (
-    <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface p-4 shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface p-4 shadow-sm text-left hover:border-primary/30 transition-colors w-full"
+    >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-semibold">{listing.sellerName}</p>
-          <span className="mt-1 inline-block rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold">
+          <p className="font-semibold text-sm">{listing.sellerName}</p>
+          <span className="mt-1 inline-block rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
             {sellerLabel}
           </span>
         </div>
         <div className="text-right">
-          <p className="font-mono text-3xl font-bold leading-none text-primary">
+          <p className="font-mono text-[22px] font-bold leading-none text-[#c94a2d]">
             {priceK}
           </p>
           <p className="mt-0.5 text-[10px] text-muted-foreground">nghìn Đ/thùng</p>
@@ -59,7 +51,7 @@ export function MarketListingCard({
           <span
             className={cn(
               "ml-auto font-medium",
-              delta < 0 ? "text-success" : delta > 0 ? "text-primary" : "",
+              delta < 0 ? "text-success" : delta > 0 ? "text-[#c94a2d]" : "",
             )}
           >
             {delta < 0
@@ -71,38 +63,15 @@ export function MarketListingCard({
         ) : null}
       </div>
 
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <Button disabled={!affordable || pending} onClick={onBuy} size="sm">
-          Mua ngay
-        </Button>
-        {affordable && listing.askPriceVnd > 1000 ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            onClick={onOffer}
-          >
-            Trả giá
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" disabled>
-            Trả giá
-          </Button>
-        )}
+      <div className="mt-auto flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground">
+          Nhấn để giao dịch
+        </span>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+          Mua / Trả giá
+        </span>
       </div>
-      {affordable && listing.askPriceVnd > 1000 ? (
-        <Input
-          type="number"
-          step={1000}
-          min={1000}
-          max={listing.askPriceVnd}
-          value={offerPrice}
-          onChange={(e) => onOfferPriceChange(Number(e.target.value))}
-          className="h-8 text-xs"
-          aria-label={`Giá đề nghị cho ${listing.sellerName}`}
-        />
-      ) : null}
-    </div>
+    </button>
   );
 }
 

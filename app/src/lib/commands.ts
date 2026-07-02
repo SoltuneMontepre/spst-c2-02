@@ -73,7 +73,7 @@ export async function runCommand<T>(args: RunCommandArgs<T>): Promise<T> {
       return out;
     });
 
-    await bumpAndPublish(args.sessionId, args.eventType);
+    await bumpAndPublish(args.sessionId, args.eventType, result);
     return result;
   } catch (err) {
     // Duplicate clientActionId → return the original response (TECH-IDEMPOTENCY).
@@ -95,11 +95,15 @@ export async function runCommand<T>(args: RunCommandArgs<T>): Promise<T> {
   }
 }
 
-async function bumpAndPublish(sessionId: string, type: string): Promise<void> {
+async function bumpAndPublish(
+  sessionId: string,
+  type: string,
+  data?: unknown,
+): Promise<void> {
   const s = await db.gameSession.update({
     where: { id: sessionId },
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
-  await publish({ sessionId, type, stateVersion: s.stateVersion });
+  await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }

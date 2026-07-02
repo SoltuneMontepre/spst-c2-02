@@ -56,13 +56,15 @@ export function mapServiceError(err: unknown): ApiError | null {
   }
 }
 
-/** Wrap a handler, mapping zod and known errors to JSON responses. */
+/** Wrap a handler, mapping zod and known errors to JSON responses.
+ *  @param headers Optional response headers (e.g. cache-control). */
 export async function handle<T>(
   fn: () => Promise<T>,
+  headers?: Record<string, string>,
 ): Promise<NextResponse> {
   try {
     const result = await fn();
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers });
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json(

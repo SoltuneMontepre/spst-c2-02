@@ -54,7 +54,7 @@ export function GameAnnouncementBanner({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-2xl border border-primary/35 bg-background shadow-md",
+        "overflow-hidden rounded-[14px] border border-primary/35 bg-background shadow-md",
         "bg-gradient-to-r from-primary/20 via-primary/10 to-background",
       )}
       aria-label="Thông báo vòng và giai đoạn"

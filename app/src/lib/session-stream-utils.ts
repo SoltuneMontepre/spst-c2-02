@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { SessionSnapshot } from "./session-service";
 import type { GameEvent, StreamSnapshotPayload } from "./events";
-import type { Presence, Role } from "@/generated/prisma/enums";
+import type { ControlMode, Presence, Role } from "@/generated/prisma/enums";
 
 export const SESSION_LIFECYCLE_EVENTS = new Set([
   "session:started",
@@ -20,14 +20,16 @@ const SESSION_DELTA_PATCH_EVENTS = new Set([
   "participant:ready",
   "participant:presence",
   "participant:phase_ready",
+  "participant:role_set",
+  "bot:control_changed",
+  "round:phase_changed",
+  "session:paused",
+  "session:resumed",
+  "session:extended",
+  "session:auto_host",
 ]);
 
-export function parseSessionSignalRow(row: Record<string, unknown>): GameEvent | null {
-  const sessionId = String(row.$id ?? "");
-  const type = String(row.type ?? "");
-  const stateVersion = Number(row.stateVersion ?? 0);
-  if (!sessionId || !type || !Number.isFinite(stateVersion)) return null;
-
+function parseEventData(row: Record<string, unknown>): unknown {
   let data: unknown;
   const raw = row.data;
   if (raw == null || raw === "") {
@@ -42,14 +44,34 @@ export function parseSessionSignalRow(row: Record<string, unknown>): GameEvent |
     data = raw;
   }
 
+  return data;
+}
+
+function parseSessionEventRowBase(
+  row: Record<string, unknown>,
+  sessionId: string,
+): GameEvent | null {
+  const type = String(row.type ?? "");
+  const stateVersion = Number(row.stateVersion ?? 0);
+  if (!sessionId || !type || !Number.isFinite(stateVersion)) return null;
+
+  const data = parseEventData(row);
   return { sessionId, type, stateVersion, data };
+}
+
+export function parseSessionSignalRow(row: Record<string, unknown>): GameEvent | null {
+  return parseSessionEventRowBase(row, String(row.$id ?? ""));
+}
+
+export function parseSessionEventRow(row: Record<string, unknown>): GameEvent | null {
+  return parseSessionEventRowBase(row, String(row.sessionId ?? ""));
 }
 
 export function patchSessionSnapshot(
   old: SessionSnapshot | undefined,
   event: GameEvent,
 ): SessionSnapshot | undefined {
-  if (!old) return old;
+  if (!old) return undefined;
   if (event.stateVersion < old.stateVersion) return old;
 
   if (event.type === "participant:ready" && event.data) {
@@ -57,7 +79,7 @@ export function patchSessionSnapshot(
       participantId?: string;
       ready: boolean;
     };
-    if (!participantId) return old;
+    if (!participantId) return undefined;
     return {
       ...old,
       participants: old.participants.map((p) =>
@@ -71,7 +93,7 @@ export function patchSessionSnapshot(
       participantId?: string;
       presence: Presence;
     };
-    if (!participantId) return old;
+    if (!participantId) return undefined;
     return {
       ...old,
       participants: old.participants.map((p) =>
@@ -85,7 +107,7 @@ export function patchSessionSnapshot(
       participantId?: string;
       phaseReady: boolean;
     };
-    if (!participantId) return old;
+    if (!participantId) return undefined;
     return {
       ...old,
       participants: old.participants.map((p) =>
@@ -125,7 +147,63 @@ export function patchSessionSnapshot(
     }
   }
 
-  return old;
+  if (event.type === "bot:control_changed" && event.data) {
+    const { participantId, controlMode } = event.data as {
+      participantId?: string;
+      controlMode?: ControlMode;
+    };
+    if (!participantId || !controlMode) return undefined;
+    return {
+      ...old,
+      participants: old.participants.map((p) =>
+        p.id === participantId ? { ...p, controlMode } : p,
+      ),
+    };
+  }
+
+  if (event.type === "round:phase_changed" && event.data) {
+    const { phase, phaseEndsAt, paused, phaseExtensions } = event.data as {
+      phase?: string | null;
+      phaseEndsAt?: string | null;
+      paused?: boolean;
+      phaseExtensions?: number;
+    };
+    if (phase === undefined) return undefined;
+    return {
+      ...old,
+      phase,
+      phaseEndsAt: phaseEndsAt === undefined ? old.phaseEndsAt : phaseEndsAt,
+      paused: paused ?? old.paused,
+      phaseExtensions: phaseExtensions ?? old.phaseExtensions,
+    };
+  }
+
+  if (
+    (event.type === "session:paused" ||
+      event.type === "session:resumed" ||
+      event.type === "session:extended") &&
+    event.data
+  ) {
+    const { paused, phaseEndsAt, phaseExtensions } = event.data as {
+      paused?: boolean;
+      phaseEndsAt?: string | null;
+      phaseExtensions?: number;
+    };
+    return {
+      ...old,
+      paused: paused ?? old.paused,
+      phaseEndsAt: phaseEndsAt === undefined ? old.phaseEndsAt : phaseEndsAt,
+      phaseExtensions: phaseExtensions ?? old.phaseExtensions,
+    };
+  }
+
+  if (event.type === "session:auto_host" && event.data) {
+    const { autoHost } = event.data as { autoHost?: boolean };
+    if (autoHost === undefined) return undefined;
+    return { ...old, autoHost };
+  }
+
+  return undefined;
 }
 
 export function applySessionSnapshot(
@@ -148,21 +226,6 @@ export function applySessionGameEvent(
     return;
   }
 
-  if (event.type === "participant:role_set") {
-    const patched = patchSessionSnapshot(
-      queryClient.getQueryData<SessionSnapshot>(queryKey),
-      event,
-    );
-    if (patched) {
-      queryClient.setQueryData(queryKey, {
-        ...patched,
-        stateVersion: Math.max(patched.stateVersion, event.stateVersion),
-      });
-    }
-    void queryClient.refetchQueries({ queryKey });
-    return;
-  }
-
   if (!SESSION_DELTA_PATCH_EVENTS.has(event.type)) {
     void queryClient.refetchQueries({ queryKey });
     return;
@@ -177,5 +240,7 @@ export function applySessionGameEvent(
       ...patched,
       stateVersion: Math.max(patched.stateVersion, event.stateVersion),
     });
+  } else {
+    void queryClient.refetchQueries({ queryKey });
   }
 }

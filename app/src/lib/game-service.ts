@@ -617,7 +617,12 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
     data: { phase },
   });
   if (timed && phaseEndsAt) scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
-  await touch(sessionId, "round:phase_changed", { phase });
+  await touch(sessionId, "round:phase_changed", {
+    phase,
+    phaseEndsAt: phaseEndsAt?.toISOString() ?? null,
+    paused: false,
+    phaseExtensions: 0,
+  });
   void import("./ai-host").then((m) =>
     Promise.all([m.resetPhaseReady(sessionId), m.announcePhase(sessionId)]),
   );
@@ -698,6 +703,11 @@ async function scheduleIntroAdvance(sessionId: string): Promise<void> {
   });
   scheduleAdvance(sessionId, INTRO_DURATION_SEC * 1000);
   void import("./ai-host").then((m) => m.announcePhase(sessionId));
+  await touch(sessionId, "round:phase_changed", {
+    phase: null,
+    phaseEndsAt: phaseEndsAt.toISOString(),
+    paused: false,
+  });
 }
 
 /** Force next phase (timer skip / all-ready fast-forward). */
@@ -759,7 +769,10 @@ export async function hostPause(hostUserId: string, sessionId: string): Promise<
     where: { id: sessionId },
     data: { paused: true, pausedRemainingMs: remaining, phaseEndsAt: null },
   });
-  await touch(sessionId, "session:paused");
+  await touch(sessionId, "session:paused", {
+    paused: true,
+    phaseEndsAt: null,
+  });
 }
 
 export async function hostResume(hostUserId: string, sessionId: string): Promise<void> {
@@ -772,7 +785,10 @@ export async function hostResume(hostUserId: string, sessionId: string): Promise
     data: { paused: false, pausedRemainingMs: null, phaseEndsAt },
   });
   scheduleAdvance(sessionId, remaining);
-  await touch(sessionId, "session:resumed");
+  await touch(sessionId, "session:resumed", {
+    paused: false,
+    phaseEndsAt: phaseEndsAt.toISOString(),
+  });
 }
 
 export async function hostExtend(hostUserId: string, sessionId: string): Promise<void> {
@@ -784,25 +800,35 @@ export async function hostExtend(hostUserId: string, sessionId: string): Promise
 
   if (s.paused) {
     if (s.pausedRemainingMs == null) throw new ApiError("CANNOT_EXTEND", 409);
-    await db.gameSession.update({
+    const updated = await db.gameSession.update({
       where: { id: sessionId },
       data: {
         pausedRemainingMs: s.pausedRemainingMs + PHASE_EXTENSION_SEC * 1000,
         phaseExtensions: { increment: 1 },
       },
+      select: { phaseExtensions: true },
     });
-    await touch(sessionId, "session:extended");
+    await touch(sessionId, "session:extended", {
+      paused: true,
+      phaseEndsAt: null,
+      phaseExtensions: updated.phaseExtensions,
+    });
     return;
   }
 
   if (!s.phaseEndsAt) throw new ApiError("CANNOT_EXTEND", 409);
   const phaseEndsAt = new Date(s.phaseEndsAt.getTime() + PHASE_EXTENSION_SEC * 1000);
-  await db.gameSession.update({
+  const updated = await db.gameSession.update({
     where: { id: sessionId },
     data: { phaseEndsAt, phaseExtensions: { increment: 1 } },
+    select: { phaseExtensions: true },
   });
   scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
-  await touch(sessionId, "session:extended");
+  await touch(sessionId, "session:extended", {
+    paused: false,
+    phaseEndsAt: phaseEndsAt.toISOString(),
+    phaseExtensions: updated.phaseExtensions,
+  });
 }
 
 export async function hostEnd(hostUserId: string, sessionId: string): Promise<void> {

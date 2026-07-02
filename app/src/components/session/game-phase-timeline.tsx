@@ -124,7 +124,7 @@ function RoleSummaryRow({
         return (
           <div
             key={summary.role}
-            className={cn("rounded-xl border p-3", style.card)}
+            className={cn("rounded-[14px] border p-3", style.card)}
           >
             <div className="flex flex-wrap items-center gap-2">
               <RoleBadge role={summary.role} />
@@ -178,7 +178,7 @@ function PlayerChipRow({
           <li key={participant.id} className="shrink-0">
             <div
               className={cn(
-                "flex w-[min(100vw-2rem,16rem)] flex-col gap-1.5 rounded-xl border p-3",
+                "flex w-[min(100vw-2rem,16rem)] flex-col gap-1.5 rounded-[14px] border p-3",
                 style.card,
                 participant.isSelf && "ring-2 ring-primary",
               )}
@@ -252,7 +252,7 @@ export function GamePhaseTimeline({
 
   return (
     <section
-      className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface shadow-sm"
+      className="mt-3 overflow-hidden rounded-[14px] border border-border bg-surface shadow-sm"
       aria-label="Tiến trình giai đoạn và nhiệm vụ"
     >
       <div className="border-b border-border px-4 py-3">

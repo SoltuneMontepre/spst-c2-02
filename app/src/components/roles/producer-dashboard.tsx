@@ -1,16 +1,14 @@
 "use client";
 
-import { Factory, Store } from "lucide-react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { ZonePhaseGate } from "@/components/session/zone-phase-gate";
 import { RoleKpiRow } from "@/components/session/role-kpi-row";
 import { TransactionHistoryTable } from "@/components/session/transaction-history-table";
-import { RoleTaskScreen, RoleActionCard } from "@/components/session/role-task-screen";
+import { RoleTaskScreen } from "@/components/session/role-task-screen";
 import { ProducerInsightPanel } from "@/components/session/role-insight-panels";
 import { ProducePanel } from "./produce-panel";
-import { SellPanel } from "./sell-panel";
 import { OffersPanel } from "./offers-panel";
-import { WholesalePanel } from "./wholesale-panel";
+import { ProducerSalesPanel } from "./producer-sales-panel";
 import { unitValueVnd } from "@/lib/economy";
 import { formatThousandDong } from "@/lib/money";
 import type { ProducerRoundState } from "@/lib/role-state";
@@ -85,9 +83,8 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
               ]}
             />
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {data.phase === "DECISION" || data.phase === "MARKET_OPEN" ? (
-                <RoleActionCard title="Sản xuất" icon={Factory}>
+            {data.phase === "DECISION" || data.phase === "MARKET_OPEN" ? (
+              <div className="grid gap-4 sm:grid-cols-[repeat(2,277px)]">
                   <ProducePanel
                     sessionId={sessionId}
                     state={state}
@@ -98,29 +95,17 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                     phaseEndsAt={data.phaseEndsAt}
                     paused={data.paused}
                   />
-                </RoleActionCard>
-              ) : null}
-
-              {data.phase === "MARKET_OPEN" ? (
-                <RoleActionCard title="Bán hàng" icon={Store}>
-                  <WholesalePanel
+                  <ProducerSalesPanel
                     sessionId={sessionId}
+                    state={state}
+                    balanceVnd={data.self.balanceVnd ?? 0}
                     stateVersion={data.stateVersion}
+                    currentRound={data.currentRound}
+                    phase={data.phase}
                     inventory={data.self.inventory}
-                    offers={data.market?.wholesaleOffers ?? []}
-                    role="PRODUCER"
                   />
-                  <div className="mt-3">
-                    <SellPanel
-                      sessionId={sessionId}
-                      stateVersion={data.stateVersion}
-                      inventory={data.self.inventory}
-                      listings={data.self.listings}
-                    />
-                  </div>
-                </RoleActionCard>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             {data.phase === "MARKET_OPEN" ? (
               <OffersPanel

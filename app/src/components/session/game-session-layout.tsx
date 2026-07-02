@@ -56,7 +56,6 @@ export function GameSessionLayout({
             status={data.status}
             phase={data.phase}
             isHost={data.isHost}
-            participants={data.participants}
             sessionStatus={data.status}
           />
 
@@ -64,8 +63,6 @@ export function GameSessionLayout({
             <GameTopBar
               data={data}
               streamState={streamState}
-              sessionId={sessionId}
-              isHost={data.isHost}
             />
 
             {activeZone !== "debrief" && !isFocused ? (

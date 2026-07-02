@@ -8,10 +8,10 @@ Rules for implementing Figma designs in this codebase using the Figma MCP. Read 
 | ----------------------- | -------------------------------------------------------------------------------------------------------- |
 | **File**                | [Design-Thanh-Long-Market](https://www.figma.com/design/R1oT2bmKxlIhvZ50JdSDCX/Design-Thanh-Long-Market) |
 | **fileKey**             | `R1oT2bmKxlIhvZ50JdSDCX`                                                                                 |
-| **Canvas page**         | `Dev-work` (`0:1`) — legacy; **`Dev-work-refactor`** (`64:2620`) for mobile + desktop frames |
-| **Desktop section**     | `68:117` — `Desktop — 1440` (y≈5200 on `64:2620`)                                          |
-| **Landing (logged-in)** | `5:2` / `64:2621` — `Landing / Logged In` (1440)                                             |
-| **Session lobby**       | `38:422` mobile · `78:153` desktop — `Session / Lobby`                                       |
+| **Canvas page**         | `Dev-work` (`0:1`) — legacy; **`Dev-work-refactor`** (`64:2620`) for mobile + desktop frames             |
+| **Desktop section**     | `68:117` — `Desktop — 1440` (y≈5200 on `64:2620`)                                                        |
+| **Landing (logged-in)** | `5:2` / `64:2621` — `Landing / Logged In` (1440)                                                         |
+| **Session lobby**       | `38:422` mobile · `78:153` desktop — `Session / Lobby`                                                   |
 
 ### Figma component library (off-canvas symbols)
 
@@ -124,7 +124,10 @@ Fonts loaded in `src/app/layout.tsx`:
 
 ```tsx
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 ```
 
 | Role                 | Tailwind                               | Notes                         |
@@ -151,70 +154,6 @@ No dedicated spacing variables — use Tailwind scale:
 | Card padding            | `p-5` (Card), `px-5 py-4` (BentoTile header) |
 | Grid gap                | `gap-4` (bento), `gap-5` (feature grids)     |
 | Nav height              | `h-14` (SessionNav)                          |
-
----
-
-## 2. Component Library
-
-### Architecture
-
-- **Primitives** — `src/components/ui/` (shadcn-inspired, hand-rolled; no `components.json`).
-- **Feature components** — grouped by domain under `src/components/`:
-  - `landing/` — marketing page sections
-  - `auth/` — login, register, forgot, reset
-  - `lobby/` — waiting room
-  - `session/` — in-game shell, map, nav, HUD
-  - `roles/` — role-specific dashboards and panels
-  - `host/` — host projector controls
-  - `learning/` — tutorial, guidance, pedagogy widgets
-  - `observatory/` — price/value charts
-  - `home/`, `profile/` — account flows
-- **Shared** — `brand.tsx`, `app-header.tsx`, `providers.tsx`
-
-### UI primitives (`src/components/ui/`)
-
-| Component   | Path             | Notes                                                                                                   |
-| ----------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
-| `Button`    | `button.tsx`     | CVA variants: `primary`, `secondary`, `outline`, `ghost`, `destructive`; sizes `sm`, `md`, `lg`, `icon` |
-| `Card`      | `card.tsx`       | `rounded-2xl border border-border bg-surface shadow-sm`                                                 |
-| `BentoTile` | `bento-tile.tsx` | Section container with header + body; accepts `colSpan` for grid                                        |
-| `Input`     | `input.tsx`      | `h-11 rounded-lg`                                                                                       |
-| `Label`     | `label.tsx`      | Form labels                                                                                             |
-| `Field`     | `field.tsx`      | Label + children + error (`text-danger`)                                                                |
-| `Stepper`   | `stepper.tsx`    | +/- numeric control with Lucide icons                                                                   |
-
-### Component patterns
-
-**CVA + `cn` utility** — standard for variants:
-
-```tsx
-import { cva } from "class-variance-authority";
-import { cn } from "@/lib/utils";
-
-// cn = twMerge(clsx(...))  →  src/lib/utils.ts
-```
-
-**Link styled as button** — use `buttonVariants` on `<Link>`:
-
-```tsx
-<Link href={ctaHref} className={cn(buttonVariants({ size: "lg" }))}>
-  {ctaLabel}
-</Link>
-```
-
-**Bento grid layout** (lobby example from `lobby-view.tsx`):
-
-```tsx
-<div className="grid grid-cols-12 gap-4 lg:items-start">
-  <BentoTile colSpan="col-span-12 lg:col-span-3" … />
-  <BentoTile colSpan="col-span-12 lg:col-span-6 lg:col-start-4" … />
-  <BentoTile colSpan="col-span-12 lg:col-span-3 lg:col-start-10" … />
-</div>
-```
-
-### Documentation / Storybook
-
-None. Component contracts are inferred from TypeScript props and Figma frame names. No `.figma.ts` Code Connect files exist yet — create them per `/figma-code-connect` skill when mapping stabilizes.
 
 ---
 
@@ -263,7 +202,13 @@ Currently only `public/dragonfruit.svg` — brand mark and hero image.
 
 ```tsx
 // SVG/brand — next/image
-<Image src="/dragonfruit.svg" alt="Thanh Long Market" width={28} height={28} priority />;
+<Image
+  src="/dragonfruit.svg"
+  alt="Thanh Long Market"
+  width={28}
+  height={28}
+  priority
+/>;
 
 // Metadata icons — src/app/layout.tsx
 icons: {
@@ -410,24 +355,24 @@ app/
 
 ### Key screen → file map
 
-| Screen | Mobile (`64:2620`) | Desktop (`68:117` or top row) | Code entry |
-| ------ | ------------------ | ----------------------------- | ---------- |
-| Landing | `64:2621` (1440) | — (reference) | `src/app/page.tsx` → `landing/*` |
-| Auth / Login | `64:3072` | `78:117` | `src/app/auth/page.tsx` → `auth/*` |
-| Auth / Forgot | `64:2754` | `78:2036` (top row) | `src/app/auth/forgot/page.tsx` |
-| Auth / Reset | `64:3421` | `78:268` | `src/app/auth/reset/page.tsx` |
-| Profile | `64:3425` | `78:280` | `src/app/profile/page.tsx` |
-| Home / Hub | `100:97` | `98:97` | `src/app/home/page.tsx` → `home/home-view.tsx` |
-| Create Room / Step 1 | — | `109:22` | `src/app/home/create/page.tsx` → `create-room/create-room-config-view.tsx` |
-| Create Room / Step 2 | — | `110:22` | `src/app/home/create/[sessionId]/page.tsx` → `create-room/create-room-preview-view.tsx` |
-| Host / Lobby Dashboard | — | `111:22` | `src/app/host/session/[id]/page.tsx` → `host/host-lobby-view.tsx` (LOBBY) |
-| Session / Lobby | `64:3108` | `78:153` | `src/app/session/[id]/lobby/page.tsx` → `lobby/lobby-view.tsx` |
-| Host / Control Panel | `64:2770` | `86:421` (top row) | `src/app/host/session/[id]/page.tsx` → `host/host-control.tsx` |
-| Session / Map | `64:3454` | `82:1309` | `src/app/session/[id]/map/page.tsx` → `session/map-shell.tsx` |
-| Session / Market | `64:3825` | `82:97` | `src/app/session/[id]/market/page.tsx` → `session/role-task.tsx` |
-| Session / Task | `64:4166` | `82:470` | `src/app/session/[id]/task/page.tsx` → `session/role-task.tsx` |
-| Session / Observatory | `64:4537` | `82:891` | `src/app/session/[id]/observatory/page.tsx` → `observatory/*` |
-| Session / Debrief | `64:4913` | `86:97` | `src/app/session/[id]/debrief/page.tsx` → `session/debrief-view.tsx` |
+| Screen                 | Mobile (`64:2620`) | Desktop (`68:117` or top row) | Code entry                                                                              |
+| ---------------------- | ------------------ | ----------------------------- | --------------------------------------------------------------------------------------- |
+| Landing                | `64:2621` (1440)   | — (reference)                 | `src/app/page.tsx` → `landing/*`                                                        |
+| Auth / Login           | `64:3072`          | `78:117`                      | `src/app/auth/page.tsx` → `auth/*`                                                      |
+| Auth / Forgot          | `64:2754`          | `78:2036` (top row)           | `src/app/auth/forgot/page.tsx`                                                          |
+| Auth / Reset           | `64:3421`          | `78:268`                      | `src/app/auth/reset/page.tsx`                                                           |
+| Profile                | `64:3425`          | `78:280`                      | `src/app/profile/page.tsx`                                                              |
+| Home / Hub             | `100:97`           | `98:97`                       | `src/app/home/page.tsx` → `home/home-view.tsx`                                          |
+| Create Room / Step 1   | —                  | `109:22`                      | `src/app/home/create/page.tsx` → `create-room/create-room-config-view.tsx`              |
+| Create Room / Step 2   | —                  | `110:22`                      | `src/app/home/create/[sessionId]/page.tsx` → `create-room/create-room-preview-view.tsx` |
+| Host / Lobby Dashboard | —                  | `111:22`                      | `src/app/host/session/[id]/page.tsx` → `host/host-lobby-view.tsx` (LOBBY)               |
+| Session / Lobby        | `64:3108`          | `78:153`                      | `src/app/session/[id]/lobby/page.tsx` → `lobby/lobby-view.tsx`                          |
+| Host / Control Panel   | `64:2770`          | `86:421` (top row)            | `src/app/host/session/[id]/page.tsx` → `host/host-control.tsx`                          |
+| Session / Map          | `64:3454`          | `82:1309`                     | `src/app/session/[id]/map/page.tsx` → `session/map-shell.tsx`                           |
+| Session / Market       | `64:3825`          | `82:97`                       | `src/app/session/[id]/market/page.tsx` → `session/role-task.tsx`                        |
+| Session / Task         | `64:4166`          | `82:470`                      | `src/app/session/[id]/task/page.tsx` → `session/role-task.tsx`                          |
+| Session / Observatory  | `64:4537`          | `82:891`                      | `src/app/session/[id]/observatory/page.tsx` → `observatory/*`                           |
+| Session / Debrief      | `64:4913`          | `86:97`                       | `src/app/session/[id]/debrief/page.tsx` → `session/debrief-view.tsx`                    |
 
 ---
 
