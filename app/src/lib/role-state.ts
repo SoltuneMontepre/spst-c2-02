@@ -4,7 +4,13 @@ import type { ProductivityProfile } from "@/generated/prisma/enums";
 
 export interface ProducerRoundState {
   kind: "PRODUCER";
+  scenarioVersion?: string;
   profile: ProductivityProfile;
+  /** User-facing simple rule: max buckets this supplier can make this round. */
+  productionCapacity?: number;
+  /** User-facing simple rule: cost for one bucket. */
+  unitCostVnd?: number;
+  /** Legacy/SRS explanation fields kept for old sessions and learning details. */
   individualLaborTime: number;
   individualUnitCostVnd: number;
   availableLaborPoints: number;

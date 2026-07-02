@@ -205,5 +205,5 @@ const EVENT_FALLBACK: Record<number, string> = {
   1: "Thị trường cơ sở — giá trị 10 nghìn Đồng là mốc so sánh.",
   2: "Được mùa — cung tăng, giá có thể chịu áp lực giảm.",
   3: "Thanh long viral — cầu tăng, chợ có thể nóng lên.",
-  4: "Công nghệ phổ biến — giá trị xã hội giảm còn 6 nghìn Đồng.",
+  4: "Công nghệ phổ biến — giá trị chuẩn giảm còn 6 nghìn Đồng.",
 };

@@ -236,7 +236,7 @@ model GameSession {
   code            String        @unique
   hostUserId      String
   status          SessionStatus @default(CREATED)
-  scenarioVersion String        @default("dragon-fruit-v1")
+  scenarioVersion String        @default("dragon-fruit-simple-v1")
   maxPlayers      Int           @default(10)
   totalRounds     Int           @default(4)
   autoAssignRoles Boolean       @default(true)

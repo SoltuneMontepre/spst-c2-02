@@ -38,7 +38,7 @@ export function ObservatoryView({ sessionId }: { sessionId: string }) {
       <Card className="border-amber-200/80 bg-amber-50/80 p-4 dark:border-amber-900/40 dark:bg-amber-950/30">
         <p className="text-xs font-bold uppercase">Giá trị = Mỏ neo</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Giá TT dao động quanh giá trị xã hội — không thay đổi khi cung-cầu biến động.
+          Giá TT dao động quanh giá trị chuẩn — không thay đổi khi cung-cầu biến động.
         </p>
       </Card>
       <Card className="p-4">

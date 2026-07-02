@@ -20,7 +20,7 @@ export const PHASE_BANNERS: Record<string, string> = {
 export const EVENT_COPY: Record<number, { title: string; body: string }> = {
   1: {
     title: "Thị trường cơ sở",
-    body: "Giá trị xã hội 10 nghìn Đồng/thùng — mốc so sánh cho cung-cầu.",
+    body: "Giá trị chuẩn 10 nghìn Đồng/thùng — mốc so sánh cho cung-cầu.",
   },
   2: {
     title: "Được mùa",
@@ -32,7 +32,7 @@ export const EVENT_COPY: Record<number, { title: string; body: string }> = {
   },
   4: {
     title: "Công nghệ phổ biến",
-    body: "TGLĐXHCT giảm còn 1; giá trị xã hội từ 10 xuống 6 nghìn Đồng/thùng.",
+    body: "Công nghệ phổ biến làm giá trị chuẩn giảm từ 10 xuống 6 nghìn Đồng/thùng.",
   },
 };
 
@@ -44,8 +44,8 @@ export const ROUND_NAMES: Record<number, string> = {
 };
 
 export const BADGE_LABELS: Record<string, string> = {
-  EFFICIENT_PRODUCER: "Nhà sản xuất hiệu quả",
-  WISE_CONSUMER: "Người tiêu dùng thông thái",
+  EFFICIENT_PRODUCER: "Nhà cung cấp hiệu quả",
+  WISE_CONSUMER: "Khách hàng thông thái",
   MARKET_CONNECTOR: "Cầu nối thị trường",
   BALANCED_REGULATOR: "Nhà điều tiết cân bằng",
 };

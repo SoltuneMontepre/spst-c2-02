@@ -60,15 +60,12 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
-<<<<<<< HEAD
           cache-from: |
             type=gha
             type=registry,ref=${{ env.IMAGE }}:buildcache
           cache-to: |
             type=gha,mode=max
             type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
-=======
->>>>>>> 669a36d (.github/workflows: Migrate workflows to Blacksmith runners (#1))
           provenance: false
           sbom: false
 

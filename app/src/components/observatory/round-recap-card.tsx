@@ -20,7 +20,7 @@ export function RoundRecapCard({
       : round.number === 3
         ? "Cầu vượt cung có xu hướng đẩy giá lên trên giá trị."
         : round.number === 4
-          ? "Năng suất tăng kéo giá trị xã hội xuống."
+          ? "Năng suất tăng kéo giá trị chuẩn xuống."
           : "Cung cân cầu, giá xấp xỉ giá trị.";
 
   const actual =

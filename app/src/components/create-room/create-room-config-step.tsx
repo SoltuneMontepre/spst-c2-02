@@ -164,7 +164,7 @@ export function CreateRoomConfigStep() {
                   Mục tiêu học tập
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Học sinh hiểu giá trị hàng hóa, giá thị trường và cách cung–cầu tác
+                  Học sinh hiểu giá trị chuẩn, giá thị trường và cách cung–cầu tác
                   động tới giá cả qua {config.totalRounds} vòng mô phỏng.
                 </p>
               </div>

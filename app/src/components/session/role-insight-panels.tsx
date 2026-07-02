@@ -1,11 +1,18 @@
 "use client";
 
 import { Landmark, Link2, ShoppingCart, Sprout } from "lucide-react";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { ECONOMY_LABELS, ROLE_LABELS } from "@/lib/display-labels";
 import { InsightSectionLabel } from "@/components/session/event-panel";
 import { formatThousandDong } from "@/lib/money";
 import type { ProducerRoundState } from "@/lib/role-state";
-import { unitValueVnd } from "@/lib/economy";
+import {
+  allowedProductionQuantity,
+  producerFundsCapacity,
+  producerProductionCapacity,
+  producerRemainingCapacity,
+  producerUnitCostVnd,
+  unitValueVnd,
+} from "@/lib/economy";
 
 function InsightStatGrid({
   items,
@@ -109,12 +116,26 @@ export function ProducerInsightPanel({
   round: number;
 }) {
   const social = unitValueVnd(round);
-  const advantage = social - state.individualUnitCostVnd;
+  const unitCost = producerUnitCostVnd(state);
+  const advantage = social - unitCost;
+  const productionCapacity = producerProductionCapacity(state);
+  const capacityRemaining = producerRemainingCapacity(state);
+  const walletCapacity = producerFundsCapacity(balanceVnd ?? 0, unitCost);
+  const maxCanProduce = allowedProductionQuantity({
+    productionCapacity,
+    producedQuantity: state.producedQuantity,
+    balanceVnd: balanceVnd ?? 0,
+    unitCostVnd: unitCost,
+    availableLaborPoints: state.availableLaborPoints,
+    individualLaborTime: state.individualLaborTime,
+    productionCap: state.productionCap,
+    individualUnitCostVnd: state.individualUnitCostVnd,
+  });
 
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
-      <InsightSectionLabel>Người sản xuất</InsightSectionLabel>
-      <InsightRoleCard role="Người sản xuất" icon={Sprout}>
+      <InsightSectionLabel>{ROLE_LABELS.PRODUCER}</InsightSectionLabel>
+      <InsightRoleCard role={ROLE_LABELS.PRODUCER} icon={Sprout}>
         <InsightStatGrid
           items={[
             {
@@ -124,8 +145,16 @@ export function ProducerInsightPanel({
                   : "—",
               label: "Ví",
             },
+            {
+              value: `${capacityRemaining}/${productionCapacity}`,
+              label: "Sức SX",
+            },
+            {
+              value: String(maxCanProduce),
+              label: "Có thể làm",
+            },
             { value: String(inventoryUnits), label: "Tồn kho" },
-            { value: String(producedQuantity), label: "Đã SX" },
+            { value: String(producedQuantity), label: "Đã làm" },
             { value: String(soldUnits), label: "Đã bán" },
           ]}
         />
@@ -135,28 +164,33 @@ export function ProducerInsightPanel({
       <InsightRowList
         rows={[
           {
-            label: "Chi phí cá biệt",
-            value: formatThousandDong(state.individualUnitCostVnd).replace(
+            label: "Chi phí mỗi thùng",
+            value: formatThousandDong(unitCost).replace(
               " nghìn Đồng",
               "k",
             ),
           },
           {
-            label: "TGLĐXHCT (GT)",
-            value: formatThousandDong(social).replace(" nghìn Đồng", "k"),
+            label: "Ví đủ làm",
+            value: `${walletCapacity} thùng`,
           },
           {
-            label: "Giá thị trường",
-            value: "—",
+            label: ECONOMY_LABELS.standardValue,
+            value: formatThousandDong(social).replace(" nghìn Đồng", "k"),
           },
         ]}
       />
 
       <InsightCallout
-        title="Giá trị hàng hóa"
-        body={`TGLĐXHCT = ${formatThousandDong(social)}. Chi phí cá biệt = ${formatThousandDong(state.individualUnitCostVnd)}.${
+        title="Vì sao chỉ làm được từng đó?"
+        body={`Bạn còn ${capacityRemaining} thùng sức sản xuất. Ví hiện đủ ${walletCapacity} thùng với chi phí ${formatThousandDong(unitCost)}/thùng. Vì vậy tối đa có thể làm là ${maxCanProduce} thùng.`}
+      />
+
+      <InsightCallout
+        title="Giải thích bài học"
+        body={`Giá trị chuẩn là ${formatThousandDong(social)}/thùng. Trong bài học, giá trị chuẩn tương ứng với TGLĐXHCT. Chi phí riêng của bạn là ${formatThousandDong(unitCost)}/thùng.${
           advantage > 0
-            ? ` Bạn có lợi thế ${formatThousandDong(advantage)}/thùng so với giá trị xã hội.`
+            ? ` Bạn có lợi thế ${formatThousandDong(advantage)}/thùng so với giá trị chuẩn.`
             : ""
         }`}
       />
@@ -174,11 +208,12 @@ export function ConsumerInsightPanel({
   needTarget: number;
 }) {
   const pct = needTarget > 0 ? Math.round((fulfilled / needTarget) * 100) : 0;
+  const missing = Math.max(0, needTarget - fulfilled);
 
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
-      <InsightSectionLabel>Người tiêu dùng</InsightSectionLabel>
-      <InsightRoleCard role="Người tiêu dùng" icon={ShoppingCart}>
+      <InsightSectionLabel>{ROLE_LABELS.CONSUMER}</InsightSectionLabel>
+      <InsightRoleCard role={ROLE_LABELS.CONSUMER} icon={ShoppingCart}>
         <InsightStatGrid
           items={[
             {
@@ -195,6 +230,15 @@ export function ConsumerInsightPanel({
           ]}
         />
       </InsightRoleCard>
+
+      <InsightInfoCard
+        title="Nên làm gì tiếp?"
+        body={
+          missing > 0
+            ? `Bạn còn cần mua ${missing} thùng. Khi chợ mở, chọn quầy có giá phù hợp rồi mua ngay hoặc trả giá.`
+            : "Bạn đã mua đủ nhu cầu vòng này. Có thể quan sát giá hoặc chờ tổng kết."
+        }
+      />
 
       <InsightSectionLabel>Nhu cầu mua</InsightSectionLabel>
       <div className="rounded-[14.5px] border border-stone-200/80 bg-white p-3">
@@ -233,8 +277,8 @@ export function IntermediaryInsightPanel({
 }) {
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
-      <InsightSectionLabel>Trung gian</InsightSectionLabel>
-      <InsightRoleCard role="Trung gian" icon={Link2}>
+      <InsightSectionLabel>{ROLE_LABELS.INTERMEDIARY}</InsightSectionLabel>
+      <InsightRoleCard role={ROLE_LABELS.INTERMEDIARY} icon={Link2}>
         <InsightStatGrid
           items={[
             {
@@ -259,8 +303,8 @@ export function IntermediaryInsightPanel({
       ) : null}
 
       <InsightCallout
-        title="Vai trò trung gian"
-        body="Trung gian kết nối cung và cầu, tạo tiện ích thời gian và địa điểm cho thị trường."
+        title="Luồng đại lý"
+        body="Mua sỉ từ nhà cung cấp, đưa hàng ra chợ bán lẻ cho khách hàng, rồi xem lãi/lỗ từ chênh lệch giá."
       />
     </div>
   );
@@ -269,7 +313,7 @@ export function IntermediaryInsightPanel({
 export function GovernmentInsightPanel({ budgetVnd }: { budgetVnd: number }) {
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
-      <InsightSectionLabel>Nhà nước</InsightSectionLabel>
+      <InsightSectionLabel>{ROLE_LABELS.GOVERNMENT}</InsightSectionLabel>
       <InsightRoleCard role={ROLE_LABELS.GOVERNMENT} icon={Landmark}>
         <div className="rounded-[10.5px] border border-stone-200/80 bg-stone-50/80 py-3 text-center">
           <p className="font-mono text-lg font-bold text-primary">
@@ -280,13 +324,13 @@ export function GovernmentInsightPanel({ budgetVnd }: { budgetVnd: number }) {
       </InsightRoleCard>
 
       <InsightInfoCard
-        title="Quyền hạn Nhà nước"
-        body="Không trực tiếp ấn định giá TT. Chính sách chỉ tác động gián tiếp lên cung-cầu."
+        title="Vấn đề → công cụ → tác động"
+        body="Xem cung-cầu đang lệch ở đâu, chọn một công cụ quản lý, rồi theo dõi giá và tồn kho thay đổi thế nào."
       />
 
       <InsightCallout
         title="Quy luật giá trị"
-        body="Nhà nước tác động gián tiếp cung-cầu nhưng không thay đổi giá trị xã hội của hàng hóa."
+        body="Cơ quan quản lý tác động gián tiếp cung-cầu nhưng không thay đổi giá trị chuẩn của hàng hóa."
       />
     </div>
   );

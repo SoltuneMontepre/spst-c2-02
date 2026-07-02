@@ -74,6 +74,12 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
               ]}
             />
 
+            <div className="rounded-[10.5px] border border-border bg-surface px-3 py-2.5 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">Luồng chính:</span>{" "}
+              mua sỉ từ nhà cung cấp → đưa ra chợ bán lẻ → theo dõi lãi/lỗ từ
+              chênh lệch giá.
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <RoleActionCard title="Đề nghị bán sỉ nhận được" icon={Inbox}>
                 <WholesalePanel
@@ -118,7 +124,7 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
 
             <TransactionHistoryTable
               transactions={data.recentTransactions}
-              title="Lịch sử giao dịch trung gian"
+              title="Lịch sử giao dịch đại lý"
               variant="intermediary"
             />
           </>

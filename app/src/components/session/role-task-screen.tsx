@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { Role } from "@/generated/prisma/enums";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { ROLE_LABELS, ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { ROLE_ICONS } from "@/components/lobby/role-distribution-dots";
 import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { PHASE_LABELS } from "@/lib/labels";
@@ -10,10 +10,10 @@ import type { GameScreen } from "@/lib/game-zones";
 import { cn } from "@/lib/utils";
 
 const ROLE_TABS: { role: Role; label: string }[] = [
-  { role: "PRODUCER", label: "Người SX" },
-  { role: "CONSUMER", label: "Người TD" },
-  { role: "INTERMEDIARY", label: "Trung gian" },
-  { role: "GOVERNMENT", label: "Nhà nước" },
+  { role: "PRODUCER", label: ROLE_SHORT_LABELS.PRODUCER },
+  { role: "CONSUMER", label: ROLE_SHORT_LABELS.CONSUMER },
+  { role: "INTERMEDIARY", label: ROLE_SHORT_LABELS.INTERMEDIARY },
+  { role: "GOVERNMENT", label: ROLE_SHORT_LABELS.GOVERNMENT },
 ];
 
 const ROLE_THEME: Record<Role, string> = {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Zap } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
 import { EVENT_COPY, ROUND_NAMES } from "@/lib/labels";
+import { getRoleQuest } from "@/lib/role-quest";
 import { getTaskZoneForPhase } from "@/lib/zone-phase";
 import { zoneLabelForRole } from "@/lib/game-zones";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,18 +15,32 @@ export function GamePhaseCta({
   phase,
   round,
   role,
+  roleState = null,
+  marketListingCount = 0,
   variant = "default",
 }: {
   sessionId: string;
   phase: string | null;
   round: number;
   role: Role | null;
+  roleState?: unknown;
+  marketListingCount?: number;
   variant?: "default" | "map";
 }) {
   if (phase !== "DECISION" && phase !== "MARKET_OPEN") return null;
 
   const event = EVENT_COPY[round];
   const taskZone = getTaskZoneForPhase(role, phase, round);
+  const missionTitle =
+    role != null
+      ? getRoleQuest({
+          role,
+          phase,
+          round,
+          roleState,
+          marketListingCount,
+        }).title
+      : null;
   const href =
     taskZone === "market"
       ? `/session/${sessionId}/market`
@@ -41,9 +56,16 @@ export function GamePhaseCta({
   if (variant === "map") {
     return (
       <div className="flex w-full flex-col gap-3 rounded-[14.5px] bg-gradient-to-r from-[#c94a2d] to-[#e06040] px-[17.5px] py-[10.5px] sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <Zap className="size-[15px] shrink-0 text-white" aria-hidden />
-          <p className="text-[13px] font-bold text-white">{phaseTitle}</p>
+          <div className="min-w-0">
+            <p className="text-[13px] font-bold text-white">{phaseTitle}</p>
+            {missionTitle ? (
+              <p className="mt-0.5 truncate text-[11px] font-medium text-white/80">
+                {missionTitle}
+              </p>
+            ) : null}
+          </div>
         </div>
         {taskZone ? (
           <Link

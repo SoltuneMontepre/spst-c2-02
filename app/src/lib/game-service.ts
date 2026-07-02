@@ -1,5 +1,6 @@
 import type { Role, RoundPhase, SessionStatus, ProductivityProfile } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
+import { ROLE_BOT_LABELS } from "@/lib/display-labels";
 import { db } from "./db";
 import { ApiError } from "./api";
 import { ensureHostParticipant } from "./lobby-seat";
@@ -14,13 +15,13 @@ import {
   PROFILE_ASSIGNMENT,
   ROUND_EVENTS,
   SCENARIO,
-  MAX_PLAYERS,
+  SCENARIO_VERSION,
   compositionSlots,
 } from "./scenario";
 import {
   effectiveLaborTime,
-  individualUnitCostVnd,
-  roundResources,
+  effectiveProductionCapacity,
+  effectiveUnitCostVnd,
   socialLaborTime,
   unitValueVnd,
 } from "./economy";
@@ -369,7 +370,7 @@ async function startSessionManual(
   const assigned = [...humans, ...lobbyBots];
   const counts = countRoles(assigned);
   if (counts.PRODUCER < 1 || counts.CONSUMER < 1) {
-    throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 sản xuất và 1 tiêu dùng");
+    throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 nhà cung cấp và 1 khách hàng");
   }
 
   const toCreate = missingRoleSlots(compositionSlots(humans.length), assigned);
@@ -425,10 +426,10 @@ async function startSessionManual(
 }
 
 const BOT_NAMES: Record<Role, string> = {
-  PRODUCER: "Bot Sản xuất",
-  CONSUMER: "Bot Tiêu dùng",
-  INTERMEDIARY: "Bot Trung gian",
-  GOVERNMENT: "Bot Nhà nước",
+  PRODUCER: ROLE_BOT_LABELS.PRODUCER,
+  CONSUMER: ROLE_BOT_LABELS.CONSUMER,
+  INTERMEDIARY: ROLE_BOT_LABELS.INTERMEDIARY,
+  GOVERNMENT: ROLE_BOT_LABELS.GOVERNMENT,
 };
 
 function botName(role: Role, index: number): string {
@@ -557,15 +558,18 @@ function buildRoleState(
 ): ProducerRoundState | ConsumerRoundState | IntermediaryRoundState | GovernmentRoundState {
   if (role === "PRODUCER" && profile) {
     const laborTime = effectiveLaborTime(profile, n);
-    const res = roundResources(n);
+    const productionCapacity = effectiveProductionCapacity(profile, n);
+    const unitCost = effectiveUnitCostVnd(profile, n);
     return {
       kind: "PRODUCER",
+      scenarioVersion: SCENARIO_VERSION,
       profile,
+      productionCapacity,
+      unitCostVnd: unitCost,
       individualLaborTime: laborTime,
-      individualUnitCostVnd:
-        n >= 4 ? 6000 : individualUnitCostVnd(profile),
-      availableLaborPoints: res.availableLaborPoints,
-      productionCap: res.productionCap,
+      individualUnitCostVnd: unitCost,
+      availableLaborPoints: productionCapacity * laborTime,
+      productionCap: productionCapacity,
       producedQuantity: 0,
       pendingUpgrade: null,
     };

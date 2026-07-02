@@ -1,10 +1,10 @@
-// Immutable scenario constants for dragon-fruit-v1 (SRS §5.1, §5.3, §5.7, §5.10).
+// Immutable scenario constants for the default simple scenario.
 // These live in config, never hard-coded across the client; host/users cannot edit.
 
 import type { ProductivityProfile, EventType } from "@/generated/prisma/enums";
 import type { Role } from "@/generated/prisma/enums";
 
-export const SCENARIO_VERSION = "dragon-fruit-v1";
+export const SCENARIO_VERSION = "dragon-fruit-simple-v1";
 
 export const SCENARIO = {
   version: SCENARIO_VERSION,
@@ -24,14 +24,14 @@ export const SCENARIO = {
   consumerBaseNeedUnits: 2, // base need target per consumer per round
 } as const;
 
-/** Per-profile individual labor time and capacity (SRS §5.3). */
+/** Per-profile production model. Labor fields remain for SRS explanations/legacy sessions. */
 export const PRODUCTIVITY_PROFILES: Record<
   ProductivityProfile,
-  { individualLaborTime: number; label: string }
+  { individualLaborTime: number; productionCapacity: number; label: string }
 > = {
-  TRADITIONAL: { individualLaborTime: 4, label: "Truyền thống" },
-  SOCIAL_AVERAGE: { individualLaborTime: 2, label: "Trung bình xã hội" },
-  PIONEER: { individualLaborTime: 1, label: "Tiên phong" },
+  TRADITIONAL: { individualLaborTime: 4, productionCapacity: 2, label: "Thủ công" },
+  SOCIAL_AVERAGE: { individualLaborTime: 2, productionCapacity: 4, label: "Cơ bản" },
+  PIONEER: { individualLaborTime: 1, productionCapacity: 6, label: "Hiện đại" },
 };
 
 /** Profile assignment order by producer count (SRS §3.3). */

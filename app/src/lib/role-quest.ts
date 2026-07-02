@@ -1,5 +1,7 @@
 import type { Role } from "@/generated/prisma/enums";
+import { ROLE_LABELS } from "@/lib/display-labels";
 import { zoneLabelForRole } from "@/lib/game-zones";
+import { producerProductionCapacity } from "@/lib/economy";
 import type {
   AnyRoleState,
   ConsumerRoundState,
@@ -7,13 +9,6 @@ import type {
   IntermediaryRoundState,
   ProducerRoundState,
 } from "@/lib/role-state";
-
-const ROLE_LABELS: Record<Role, string> = {
-  PRODUCER: "Người sản xuất",
-  CONSUMER: "Người tiêu dùng",
-  INTERMEDIARY: "Trung gian",
-  GOVERNMENT: "Nhà nước",
-};
 
 export interface RoleQuest {
   role: Role;
@@ -52,11 +47,11 @@ export function getRoleQuest(params: {
       return {
         ...waitBase,
         title: done ? "Đã đủ nhu cầu vòng này" : "Mua đủ thanh long cho nhu cầu",
-        objective: `Cần ${target} thùng để nhận hiệu ích (điểm người tiêu dùng).`,
+        objective: `Cần ${target} thùng để nhận hiệu ích (điểm khách hàng).`,
         action: done
           ? "Bạn có thể mua thêm hoặc chờ chuyển giai đoạn."
           : marketListingCount === 0
-            ? "Chờ nhà sản xuất/trung gian niêm yết — quầy sẽ hiện bên dưới khi có hàng."
+            ? "Chờ nhà cung cấp/đại lý niêm yết — quầy sẽ hiện bên dưới khi có hàng."
             : "Chọn quầy bên dưới → «Mua 1 thùng» hoặc gửi đề nghị giá thấp hơn.",
         progress: target > 0 ? { current, target, unit: "thùng" } : undefined,
         status: done ? "done" : "active",
@@ -68,7 +63,7 @@ export function getRoleQuest(params: {
         title: "Chuẩn bị cho chợ",
         objective: `Nhu cầu vòng ${round}: ${target} thùng thanh long.`,
         action:
-          "Giai đoạn «Ra quyết định» — bạn chờ nhà sản xuất. Khi «Chợ mở», vào Quầy chợ để mua.",
+          "Giai đoạn «Ra quyết định» — bạn chờ nhà cung cấp. Khi «Chợ mở», vào Quầy chợ để mua.",
         progress: target > 0 ? { current, target, unit: "thùng" } : undefined,
         status: "waiting",
       };
@@ -86,22 +81,17 @@ export function getRoleQuest(params: {
   if (role === "PRODUCER") {
     const ps = state?.kind === "PRODUCER" ? (state as ProducerRoundState) : null;
     const produced = ps?.producedQuantity ?? 0;
-    const cap = ps
-      ? Math.min(
-          Math.floor(ps.availableLaborPoints / ps.individualLaborTime),
-          ps.productionCap,
-        )
-      : 0;
+    const cap = ps ? producerProductionCapacity(ps) : 0;
 
     if (phase === "DECISION") {
       return {
         ...base,
         title: "Sản xuất thanh long",
-        objective: `Tối đa ~${cap} thùng vòng này (theo lao động & vốn).`,
+        objective: `Sức sản xuất vòng này: ${cap} thùng. Ví quyết định bạn có làm đủ mức đó không.`,
         action:
           produced > 0
-            ? "Đã sản xuất — có thể sản xuất thêm hoặc đầu tư nâng cấp trước khi hết giờ."
-            : "Chọn số thùng sản xuất bên dưới. 15 giây đầu có thể bị khóa nếu Nhà nước ban hành chính sách.",
+            ? "Đã sản xuất — có thể làm thêm nếu còn sức sản xuất và còn tiền."
+            : "Chọn số thùng sản xuất bên dưới. 15 giây đầu có thể bị khóa nếu cơ quan quản lý ban hành chính sách.",
         progress: cap > 0 ? { current: produced, target: cap, unit: "thùng" } : undefined,
         status: produced >= cap && cap > 0 ? "done" : "active",
       };
@@ -109,10 +99,10 @@ export function getRoleQuest(params: {
     if (phase === "MARKET_OPEN") {
       return {
         ...base,
-        title: "Bán hàng trên chợ",
-        objective: "Niêm yết giá lẻ hoặc bán buôn cho trung gian.",
-        action: "Đăng giá bán lẻ bên dưới, hoặc chấp nhận đề nghị mua từ người mua.",
-        progress: produced > 0 ? { current: produced, target: produced, unit: "đã SX" } : undefined,
+        title: "Đưa hàng ra chợ",
+        objective: "Bán lẻ cho khách hàng hoặc bán sỉ cho đại lý.",
+        action: "Chọn số thùng trong kho, rồi đưa ra chợ bán lẻ hoặc tạo đề nghị bán sỉ.",
+        progress: produced > 0 ? { current: produced, target: produced, unit: "đã làm" } : undefined,
         status: "active",
       };
     }
@@ -129,9 +119,9 @@ export function getRoleQuest(params: {
     if (phase === "MARKET_OPEN") {
       return {
         ...base,
-        title: "Mua buôn & bán lẻ",
-        objective: "Kết nối sản xuất với người tiêu dùng — kiếm chênh lệch.",
-        action: "Chấp nhận/đề nghị mua buôn, rồi niêm yết bán lẻ cho người tiêu dùng.",
+        title: "Mua sỉ rồi bán lẻ",
+        objective: "Mua từ nhà cung cấp, bán lại cho khách hàng và giữ chênh lệch.",
+        action: "Nhận đề nghị bán sỉ, thương lượng nếu cần, rồi niêm yết bán lẻ.",
         status: "active",
       };
     }
@@ -139,15 +129,15 @@ export function getRoleQuest(params: {
       return {
         ...base,
         title: "Chuẩn bị phân phối",
-        objective: "Chờ nhà sản xuất hoàn thành sản xuất.",
+        objective: "Chờ nhà cung cấp hoàn thành sản xuất.",
         action: "Khi chợ mở, vào Trung tâm phân phối để mua buôn và bán lẻ.",
         status: "waiting",
       };
     }
     return {
       ...base,
-      title: "Trung gian thị trường",
-      objective: "Mua từ sản xuất, bán cho người tiêu dùng.",
+        title: "Đại lý thị trường",
+        objective: "Mua từ nhà cung cấp, bán cho khách hàng.",
       action: "Chờ giai đoạn chợ mở để giao dịch.",
       status: "waiting",
     };
@@ -159,8 +149,8 @@ export function getRoleQuest(params: {
     if (phase === "DECISION" && round >= 2) {
       return {
         ...base,
-        title: used ? "Đã chọn chính sách" : "Chọn chính sách can thiệp",
-        objective: "Một chính sách mỗi vòng — ảnh hưởng cung, cầu hoặc thông tin.",
+        title: used ? "Đã chọn chính sách" : "Chọn công cụ quản lý",
+        objective: "Xem vấn đề thị trường, chọn công cụ, rồi theo dõi tác động.",
         action: used
           ? "Chờ chợ mở hoặc chuyển giai đoạn."
           : "Chọn chính sách bên dưới (hoặc «Không can thiệp»).",
@@ -187,7 +177,7 @@ export function getRoleQuest(params: {
     }
     return {
       ...base,
-      title: round < 2 ? "Quan sát vòng 1" : "Nhà nước",
+      title: round < 2 ? "Quan sát vòng 1" : "Quản lý thị trường",
       objective: round < 2 ? "Vòng 1 chưa có chính sách can thiệp." : "Theo dõi thị trường & ngân sách.",
       action: "Xem Tháp quan sát hoặc chờ giai đoạn ra quyết định.",
       status: "waiting",

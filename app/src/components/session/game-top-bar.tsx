@@ -1,10 +1,10 @@
 "use client";
 
 import { Clock, Wifi } from "lucide-react";
-import { RoleBadge } from "@/components/lobby/role-badge";
 import { useCountdown, formatClock } from "@/hooks/use-countdown";
 import type { SessionStreamState } from "@/hooks/use-session-stream";
 import type { SessionSnapshot } from "@/lib/session-service";
+import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { PHASE_LABELS } from "@/lib/labels";
 import { formatThousandDong } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -69,7 +69,7 @@ export function GameTopBar({
 
         {data.self?.role ? (
           <span className="rounded-full bg-secondary px-[8.75px] py-[3.5px] text-[11px] font-semibold text-accent">
-            {data.self.role}
+            {ROLE_SHORT_LABELS[data.self.role]}
           </span>
         ) : null}
 

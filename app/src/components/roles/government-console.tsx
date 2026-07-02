@@ -32,14 +32,14 @@ const DECISION_POLICIES: {
   {
     type: "COLD_STORAGE",
     title: "Kho lạnh dự trữ",
-    description: "Nhà nước mua 20 thùng để giảm dư cung.",
-    costLabel: formatThousandDong(POLICIES.COLD_STORAGE.perUnitCostVnd * 20),
+    description: `Bảo vệ tối đa ${POLICIES.COLD_STORAGE.maxUnits} thùng khỏi hư hỏng khi dư hàng.`,
+    costLabel: `${formatThousandDong(POLICIES.COLD_STORAGE.perUnitCostVnd)}/thùng`,
     footer: "Tốn ngân sách",
   },
   {
     type: "TECH_SUPPORT",
     title: "Hỗ trợ công nghệ",
-    description: "Giảm TGLĐ cá biệt cho NSX được chọn.",
+    description: "Giảm chi phí riêng cho nhà cung cấp được chọn.",
     costLabel: formatThousandDong(POLICIES.TECH_SUPPORT.fixedCostVnd),
     footer: "Tốn ngân sách",
     rounds: [2, 3],
@@ -120,9 +120,9 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
                 sub="thùng"
               />
               <StatTile
-                label="GT"
+                label="Giá trị chuẩn"
                 value={formatThousandDong(stats.unitValueVnd)}
-                sub="TGLĐXHCT"
+                sub="giá trị chuẩn"
               />
               <StatTile
                 label="Giá TT"
@@ -138,13 +138,19 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
           </div>
         ) : null}
 
+        <div className="rounded-[10.5px] border border-border bg-surface px-3 py-2.5 text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Cách chơi:</span>{" "}
+          xem cung-cầu đang lệch ở đâu → chọn một công cụ quản lý → quan sát giá,
+          tồn kho và nhu cầu thay đổi.
+        </div>
+
         {used ? (
           <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm">
             Đã áp dụng chính sách vòng này.
           </p>
         ) : data.currentRound < 2 ? (
           <p className="text-sm text-muted-foreground">
-            Chính sách Nhà nước có hiệu lực từ vòng 2.
+            Chính sách quản lý thị trường có hiệu lực từ vòng 2.
           </p>
         ) : decisionOpen || exportOpen ? (
           <>
@@ -175,7 +181,7 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
             <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-                <span>Nhà nước không trực tiếp ấn định giá thị trường.</span>
+                <span>Cơ quan quản lý không trực tiếp ấn định giá thị trường.</span>
               </div>
               <Button
                 disabled={

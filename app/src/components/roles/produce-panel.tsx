@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { unitValueVnd } from "@/lib/economy";
+import {
+  allowedProductionQuantity,
+  producerFundsCapacity,
+  producerProductionCapacity,
+  producerRemainingCapacity,
+  producerUnitCostVnd,
+  unitValueVnd,
+} from "@/lib/economy";
 import {
   isProducerInputLockedAt,
   producerInputLockRemainingSec,
@@ -61,19 +68,41 @@ export function ProducePanel({
     now,
   });
 
-  const capLabor = Math.floor(state.availableLaborPoints / state.individualLaborTime);
-  const remaining = Math.max(
-    0,
-    Math.min(
-      capLabor - state.producedQuantity,
-      state.productionCap - state.producedQuantity,
-      Math.floor(balanceVnd / state.individualUnitCostVnd),
-    ),
-  );
-  const cost = qty * state.individualUnitCostVnd;
+  const unitCost = producerUnitCostVnd(state);
+  const productionCapacity = producerProductionCapacity(state);
+  const capacityRemaining = producerRemainingCapacity(state);
+  const fundsRemaining = producerFundsCapacity(balanceVnd, unitCost);
+  const remaining = allowedProductionQuantity({
+    productionCapacity,
+    producedQuantity: state.producedQuantity,
+    balanceVnd,
+    unitCostVnd: unitCost,
+    availableLaborPoints: state.availableLaborPoints,
+    individualLaborTime: state.individualLaborTime,
+    productionCap: state.productionCap,
+    individualUnitCostVnd: state.individualUnitCostVnd,
+  });
+  const cost = qty * unitCost;
   const expectedRevenue = qty * unitValueVnd(currentRound);
   const expectedProfit = expectedRevenue - cost;
-  const canProduce = phase === "DECISION" && qty > 0 && !inputLocked;
+  const canProduce = phase === "DECISION" && qty > 0 && qty <= remaining && !inputLocked;
+
+  useEffect(() => {
+    setQty((current) => Math.min(current, remaining));
+  }, [remaining]);
+
+  const disabledReason =
+    inputLocked
+      ? errorMessage("PRODUCER_INPUT_LOCKED")
+      : phase !== "DECISION"
+        ? "Chỉ sản xuất ở giai đoạn ra quyết định."
+        : remaining <= 0
+          ? capacityRemaining <= 0
+            ? "Bạn đã dùng hết sức sản xuất của vòng này."
+            : "Ví hiện không đủ để làm thêm thùng nào."
+          : qty <= 0
+            ? "Chọn số thùng muốn làm."
+            : null;
 
   const commandError =
     command.isError && command.error instanceof ApiClientError
@@ -93,10 +122,15 @@ export function ProducePanel({
           onChange={setQty}
         />
       </div>
+      <div className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
+        <p className="font-semibold text-foreground">Có thể làm tối đa: {remaining} thùng</p>
+        <p>Sức sản xuất còn lại: {capacityRemaining}/{productionCapacity} thùng</p>
+        <p>Ví đủ: {fundsRemaining} thùng · Chi phí {formatCompactVnd(unitCost)}/thùng</p>
+      </div>
 
       <div className="pt-[17.5px]">
         <div className="border-b border-muted pb-[15px]">
-          <ProducerValueRow label="Chi phí SX:" value={formatCompactVnd(cost)} />
+          <ProducerValueRow label="Chi phí sản xuất:" value={formatCompactVnd(cost)} />
           <ProducerValueRow
             label="Doanh thu kỳ vọng:"
             value={formatCompactVnd(expectedRevenue)}
@@ -111,15 +145,17 @@ export function ProducePanel({
       </div>
 
       <div className="flex flex-col gap-2 pt-3.5">
-        {inputLocked ? (
-          <p className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
-            {errorMessage("PRODUCER_INPUT_LOCKED")}
-            {lockRemaining != null && lockRemaining > 0 ? ` Còn ~${lockRemaining}s.` : null}
-          </p>
-        ) : null}
         {state.pendingUpgrade ? (
           <p className="text-xs text-primary">
             Nâng cấp chờ áp dụng từ vòng sau: {state.pendingUpgrade}
+          </p>
+        ) : null}
+        {disabledReason ? (
+          <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            {disabledReason}
+            {inputLocked && lockRemaining != null && lockRemaining > 0
+              ? ` Còn ~${lockRemaining}s.`
+              : null}
           </p>
         ) : null}
         <Button

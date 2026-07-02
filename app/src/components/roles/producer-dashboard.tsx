@@ -9,8 +9,16 @@ import { ProducerInsightPanel } from "@/components/session/role-insight-panels";
 import { ProducePanel } from "./produce-panel";
 import { OffersPanel } from "./offers-panel";
 import { ProducerSalesPanel } from "./producer-sales-panel";
-import { unitValueVnd } from "@/lib/economy";
+import {
+  allowedProductionQuantity,
+  producerFundsCapacity,
+  producerProductionCapacity,
+  producerRemainingCapacity,
+  producerUnitCostVnd,
+  unitValueVnd,
+} from "@/lib/economy";
 import { formatThousandDong } from "@/lib/money";
+import { ECONOMY_LABELS } from "@/lib/display-labels";
 import type { ProducerRoundState } from "@/lib/role-state";
 
 export function ProducerDashboard({ sessionId }: { sessionId: string }) {
@@ -24,6 +32,27 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
   const soldUnits = data.recentTransactions
     .filter((t) => t.direction === "sell")
     .reduce((s, t) => s + t.quantity, 0);
+  const balance = data.self.balanceVnd ?? 0;
+  const unitCost = state?.kind === "PRODUCER" ? producerUnitCostVnd(state) : 0;
+  const productionCapacity =
+    state?.kind === "PRODUCER" ? producerProductionCapacity(state) : 0;
+  const capacityRemaining =
+    state?.kind === "PRODUCER" ? producerRemainingCapacity(state) : 0;
+  const fundsCapacity =
+    state?.kind === "PRODUCER" ? producerFundsCapacity(balance, unitCost) : 0;
+  const maxCanProduce =
+    state?.kind === "PRODUCER"
+      ? allowedProductionQuantity({
+          productionCapacity,
+          producedQuantity: state.producedQuantity,
+          balanceVnd: balance,
+          unitCostVnd: unitCost,
+          availableLaborPoints: state.availableLaborPoints,
+          individualLaborTime: state.individualLaborTime,
+          productionCap: state.productionCap,
+          individualUnitCostVnd: state.individualUnitCostVnd,
+        })
+      : 0;
 
   return (
     <RoleTaskScreen
@@ -55,30 +84,38 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
         {state?.kind === "PRODUCER" ? (
           <>
             <RoleKpiRow
+              cols={5}
               items={[
                 {
-                  label: "TGLĐ cá biệt",
-                  value: formatThousandDong(state.individualUnitCostVnd),
-                  hint: "Chi phí/thùng của bạn",
+                  label: "Ví",
+                  value:
+                    data.self.balanceVnd != null
+                      ? formatThousandDong(data.self.balanceVnd)
+                      : "—",
+                  hint: "Tiền còn lại",
                 },
                 {
-                  label: "TGLĐXHCT (GT)",
-                  value: formatThousandDong(social),
-                  hint: "Mỏ neo giá trị",
+                  label: "Chi phí mỗi thùng",
+                  value: formatThousandDong(unitCost),
+                  hint: "Tiền để làm 1 thùng",
+                },
+                {
+                  label: "Sức sản xuất còn",
+                  value: `${capacityRemaining} thùng`,
+                  hint: `Tổng vòng: ${productionCapacity} thùng`,
+                  valueClassName: "text-success",
+                },
+                {
+                  label: "Có thể làm tối đa",
+                  value: `${maxCanProduce} thùng`,
+                  hint: `Ví đủ ${fundsCapacity} thùng`,
+                  valueClassName: "text-success",
                 },
                 {
                   label: "Giá thị trường",
                   value: marketPrice != null ? formatThousandDong(marketPrice) : "—",
-                  hint:
-                    marketPrice != null && marketPrice < social
-                      ? `Thấp hơn GT ${formatThousandDong(social - marketPrice)}`
-                      : "Giá thị trường",
+                  hint: `${ECONOMY_LABELS.standardValue}: ${formatThousandDong(social)}`,
                   valueClassName: "text-primary",
-                },
-                {
-                  label: "Chi phí SX",
-                  value: formatThousandDong(state.individualUnitCostVnd),
-                  hint: "Nguyên liệu/thùng",
                 },
               ]}
             />

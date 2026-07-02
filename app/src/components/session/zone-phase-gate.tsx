@@ -57,10 +57,10 @@ export function ZonePhaseGate({
   if (isEarlyVisit && role === "CONSUMER" && phase === "DECISION") {
     title = `${phaseLabel} — Quầy chợ chưa mở`;
     body =
-      "Nhà sản xuất đang sản xuất và nhà nước có thể ban hành chính sách. Bạn sẽ mua hàng khi giai đoạn «Chợ mở».";
+      "Nhà cung cấp đang sản xuất và cơ quan quản lý có thể ban hành chính sách. Bạn sẽ mua hàng khi giai đoạn «Chợ mở».";
   } else if (activeZone === "task" && phase === "DECISION" && role === "GOVERNMENT" && round < 2) {
     title = `${phaseLabel} — Chưa có chính sách`;
-    body = "Vòng 1 chưa có can thiệp nhà nước. Theo dõi bản đồ hoặc Tháp quan sát.";
+    body = "Vòng 1 chưa có can thiệp quản lý. Theo dõi bản đồ hoặc Tháp quan sát.";
   } else if (phase === "EVENT") {
     title = `${phaseLabel} — Chờ công bố xong`;
     body = "Đọc biến cố vòng ở cột phải, sau đó làm theo nhiệm vụ.";

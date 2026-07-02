@@ -89,10 +89,10 @@ export function HistoryView() {
 
 function roleLabel(role: string) {
   switch (role) {
-    case "producer": return "Người SX";
-    case "consumer": return "Người tiêu dùng";
-    case "intermediary": return "Trung gian";
-    case "government": return "Nhà nước";
+    case "producer": return "Nhà cung cấp";
+    case "consumer": return "Khách hàng";
+    case "intermediary": return "Đại lý";
+    case "government": return "Quản lý";
     default: return role;
   }
 }

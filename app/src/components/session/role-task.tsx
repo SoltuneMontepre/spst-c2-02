@@ -9,7 +9,7 @@ import { ComingSoon } from "./coming-soon";
 
 const TITLES: Record<string, string> = {
   INTERMEDIARY: "Trung tâm phân phối",
-  GOVERNMENT: "Bảng chính sách Nhà nước",
+  GOVERNMENT: "Bảng chính sách quản lý",
 };
 
 /** Renders the dashboard for the player's role (task/market zones). */

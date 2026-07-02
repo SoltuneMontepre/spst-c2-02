@@ -2,11 +2,12 @@
 
 import type { ListingView } from "@/lib/session-service";
 import { Package } from "lucide-react";
+import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { cn } from "@/lib/utils";
 
 const SELLER_LABELS: Record<string, string> = {
-  PRODUCER: "Người SX",
-  INTERMEDIARY: "Trung gian",
+  PRODUCER: ROLE_SHORT_LABELS.PRODUCER,
+  INTERMEDIARY: ROLE_SHORT_LABELS.INTERMEDIARY,
 };
 
 export function MarketListingCard({
@@ -55,10 +56,10 @@ export function MarketListingCard({
             )}
           >
             {delta < 0
-              ? `↓ ${(Math.abs(delta) / 1000).toFixed(0)}k dưới GT`
+              ? `↓ ${(Math.abs(delta) / 1000).toFixed(0)}k dưới chuẩn`
               : delta > 0
-                ? `↑ ${(delta / 1000).toFixed(0)}k trên GT`
-                : "≈ GT"}
+                ? `↑ ${(delta / 1000).toFixed(0)}k trên chuẩn`
+                : "≈ chuẩn"}
           </span>
         ) : null}
       </div>
@@ -87,8 +88,8 @@ export function MarketplaceFilters({
   const tabs: { id: MarketplaceFilter; label: string }[] = [
     { id: "all", label: "Tất cả" },
     { id: "lowest", label: "Giá thấp nhất" },
-    { id: "producer", label: "Người SX" },
-    { id: "intermediary", label: "Trung gian" },
+    { id: "producer", label: ROLE_SHORT_LABELS.PRODUCER },
+    { id: "intermediary", label: ROLE_SHORT_LABELS.INTERMEDIARY },
   ];
 
   return (

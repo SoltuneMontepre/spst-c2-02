@@ -50,7 +50,7 @@ const BADGE_CATALOG: Array<{
 }> = [
   {
     id: "EFFICIENT_PRODUCER",
-    label: "Nhà SX hiệu quả",
+    label: "Nhà cung cấp hiệu quả",
     description: "Lợi nhuận cao nhất",
     badgeType: "EFFICIENT_PRODUCER",
   },
@@ -67,8 +67,8 @@ const BADGE_CATALOG: Array<{
   },
   {
     id: "WISE_CONSUMER",
-    label: "Người chơi mẫu",
-    description: "Tiêu dùng thông thái",
+    label: "Khách hàng thông thái",
+    description: "Mua đủ nhu cầu với chi phí hợp lý",
     badgeType: "WISE_CONSUMER",
   },
   {
@@ -85,7 +85,7 @@ const BADGE_CATALOG: Array<{
 ];
 
 const LEARNING_TOPICS = [
-  { id: "value", label: "Giá trị hàng hóa" },
+  { id: "value", label: "Giá trị chuẩn" },
   { id: "supply", label: "Cung-cầu & giá cả" },
   { id: "roles", label: "Vai trò thị trường" },
   { id: "law", label: "Quy luật giá trị" },
@@ -196,7 +196,7 @@ export async function getProfileDashboard(userId: string): Promise<ProfileDashbo
   }));
 
   // Override display labels for catalog entries that differ from BADGE_LABELS
-  badges[0]!.label = "Nhà SX hiệu quả";
+  badges[0]!.label = "Nhà cung cấp hiệu quả";
   badges[1]!.label = "Thương lượng giỏi";
   badges[2]!.label = "Nhà quan sát";
   badges[3]!.label = "Người chơi mẫu";

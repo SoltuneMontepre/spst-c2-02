@@ -15,9 +15,9 @@ export function CommodityCard({ listedUnits = 0 }: { listedUnits?: number }) {
           <p className="text-muted-foreground">Thực phẩm — thỏa mãn nhu cầu tiêu dùng.</p>
         </div>
         <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/40">
-          <p className="font-medium text-amber-900 dark:text-amber-200">Giá trị</p>
+          <p className="font-medium text-amber-900 dark:text-amber-200">Giá trị chuẩn</p>
           <p className="text-muted-foreground">
-            Lao động xã hội kết tinh trong hàng hóa (TGLĐXHCT).
+            Mốc so sánh giá; trong bài học tương ứng với TGLĐXHCT.
           </p>
         </div>
         <p className="text-xs text-muted-foreground">

@@ -13,7 +13,11 @@ import {
 } from "./market-service";
 import { createWholesaleOffer, respondWholesale } from "./wholesale-service";
 import { applyPolicy } from "./policy-service";
-import { allowedProductionQuantity, unitValueVnd, individualUnitCostVnd } from "./economy";
+import {
+  allowedProductionQuantity,
+  producerUnitCostVnd,
+  unitValueVnd,
+} from "./economy";
 import { POLICIES, UPGRADE_COSTS } from "./scenario";
 import type {
   ProducerRoundState,
@@ -83,10 +87,13 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
         }
 
         const allowed = allowedProductionQuantity({
+          productionCapacity: state.productionCapacity,
+          producedQuantity: state.producedQuantity,
           availableLaborPoints: state.availableLaborPoints,
           individualLaborTime: state.individualLaborTime,
           productionCap: state.productionCap,
           balanceVnd: bot.wallet.balanceVnd,
+          unitCostVnd: producerUnitCostVnd(state),
           individualUnitCostVnd: state.individualUnitCostVnd,
         });
         const qty = Math.max(allowed > 0 ? 1 : 0, Math.floor(allowed * 0.75));
@@ -170,7 +177,7 @@ export async function runBotMarket(sessionId: string): Promise<void> {
     for (const seller of producers) {
       const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
       const ask = Math.max(
-        pstate?.individualUnitCostVnd ?? price,
+        pstate ? producerUnitCostVnd(pstate) : price,
         price,
       );
       const lots = await tx.inventoryLot.findMany({

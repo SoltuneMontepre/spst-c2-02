@@ -11,6 +11,7 @@ import type {
 } from "./role-state";
 import { UPGRADE_COSTS, POLICIES } from "./scenario";
 import { isProducerInputLockedAt } from "./producer-input-lock";
+import { allowedProductionQuantity, producerUnitCostVnd } from "./economy";
 
 function requirePhase(ctx: CommandContext, phase: RoundPhase): void {
   if (ctx.session.phase !== phase) throw new ApiError("WRONG_PHASE", 409);
@@ -64,19 +65,21 @@ export async function produce(
     where: { participantId: ctx.participant.id },
   });
 
-  const capLabor = Math.floor(state.availableLaborPoints / state.individualLaborTime);
-  const remaining = Math.max(
-    0,
-    Math.min(
-      capLabor - state.producedQuantity,
-      state.productionCap - state.producedQuantity,
-      Math.floor(wallet.balanceVnd / state.individualUnitCostVnd),
-    ),
-  );
+  const unitCost = producerUnitCostVnd(state);
+  const remaining = allowedProductionQuantity({
+    productionCapacity: state.productionCapacity,
+    producedQuantity: state.producedQuantity,
+    balanceVnd: wallet.balanceVnd,
+    unitCostVnd: unitCost,
+    availableLaborPoints: state.availableLaborPoints,
+    individualLaborTime: state.individualLaborTime,
+    productionCap: state.productionCap,
+    individualUnitCostVnd: state.individualUnitCostVnd,
+  });
   if (quantity < 0 || quantity > remaining) throw new ApiError("INVALID_QUANTITY", 422);
   if (quantity === 0) return { produced: 0 };
 
-  const cost = quantity * state.individualUnitCostVnd;
+  const cost = quantity * unitCost;
   await tx.wallet.update({
     where: { participantId: ctx.participant.id },
     data: { balanceVnd: { decrement: cost } },
@@ -97,7 +100,7 @@ export async function produce(
       ownerParticipantId: ctx.participant.id,
       quantity,
       availableQuantity: quantity,
-      unitCostVnd: state.individualUnitCostVnd,
+      unitCostVnd: unitCost,
     },
   });
   await tx.roleState.update({

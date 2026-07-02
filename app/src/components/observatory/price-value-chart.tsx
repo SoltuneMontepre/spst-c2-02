@@ -159,7 +159,7 @@ export function PriceValueChart({
       ) : null}
 
       <text x={W - PAD} y={y(displayRounds[0]?.unitValueVnd ?? liveStats!.unitValueVnd)} fontSize={8} fill="var(--value)" textAnchor="end" dy={-4}>
-        GT
+        Chuẩn
       </text>
     </svg>
   );

@@ -74,7 +74,7 @@ export function getZonePanelCopy(params: {
     }
     return {
       title: zoneName,
-      description: `${phaseLabel} · Chợ chưa mở — người tiêu dùng chờ nhà sản xuất`,
+      description: `${phaseLabel} · Chợ chưa mở — khách hàng chờ nhà cung cấp`,
     };
   }
 
@@ -148,7 +148,7 @@ export function getMapPhaseHint(params: {
     if (!task) {
       return {
         title: "Ra quyết định — bạn chờ",
-        body: "Nhà sản xuất & nhà nước đang hành động. Khi «Chợ mở», vào Quầy chợ để mua đủ nhu cầu.",
+        body: "Nhà cung cấp và cơ quan quản lý đang hành động. Khi «Chợ mở», vào Quầy chợ để mua đủ nhu cầu.",
       };
     }
     return {

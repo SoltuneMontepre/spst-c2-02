@@ -20,7 +20,7 @@ const FEATURES = [
   {
     icon: Scale,
     title: "Bám sát lý thuyết",
-    body: "Mọi khái niệm truy vết tới slide Chương 2: TGLĐXHCT, cung–cầu, quy luật giá trị.",
+    body: "Mọi khái niệm truy vết tới slide Chương 2: giá trị chuẩn, cung–cầu, quy luật giá trị.",
   },
 ];
 

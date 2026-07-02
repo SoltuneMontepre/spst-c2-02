@@ -3,6 +3,7 @@
 import type { ProductivityProfile } from "@/generated/prisma/enums";
 import { PRODUCTIVITY_PROFILES, SCENARIO } from "./scenario";
 import { roundToThousandHalfUp } from "./money";
+import type { ProducerRoundState } from "./role-state";
 
 /** TGLĐXHCT for a round (SRS §5.7). */
 export function socialLaborTime(roundNumber: number): number {
@@ -27,6 +28,14 @@ export function individualUnitCostVnd(profile: ProductivityProfile): number {
   );
 }
 
+/** User-facing default scenario cost. Round 4 makes modern technique common. */
+export function effectiveUnitCostVnd(
+  profile: ProductivityProfile,
+  roundNumber: number,
+): number {
+  return roundNumber >= 4 ? individualUnitCostVnd("PIONEER") : individualUnitCostVnd(profile);
+}
+
 /** Round 4 forces everyone to laborTime=1; otherwise use the profile (SRS §5.4). */
 export function effectiveLaborTime(
   profile: ProductivityProfile,
@@ -34,6 +43,18 @@ export function effectiveLaborTime(
 ): number {
   if (roundNumber >= 4) return 1;
   return PRODUCTIVITY_PROFILES[profile].individualLaborTime;
+}
+
+/** User-facing default scenario capacity. Round 2 is bumper harvest; round 4 makes modern technique common. */
+export function effectiveProductionCapacity(
+  profile: ProductivityProfile,
+  roundNumber: number,
+): number {
+  const base =
+    roundNumber >= 4
+      ? PRODUCTIVITY_PROFILES.PIONEER.productionCapacity
+      : PRODUCTIVITY_PROFILES[profile].productionCapacity;
+  return roundNumber === 2 ? Math.ceil(base * 1.5) : base;
 }
 
 /** Per-round labor points + production cap; round 2 scales both by 1.5, ceil (SRS §5.7). */
@@ -53,21 +74,59 @@ export function roundResources(roundNumber: number): {
   };
 }
 
-/** Max quantity a producer may make this round (SRS §5.5). */
+export function producerUnitCostVnd(state: ProducerRoundState): number {
+  return state.unitCostVnd ?? state.individualUnitCostVnd;
+}
+
+export function producerProductionCapacity(state: ProducerRoundState): number {
+  if (state.productionCapacity != null) return Math.max(0, state.productionCapacity);
+  const laborCapacity =
+    state.individualLaborTime > 0
+      ? Math.floor(state.availableLaborPoints / state.individualLaborTime)
+      : 0;
+  return Math.max(0, Math.min(laborCapacity, state.productionCap));
+}
+
+export function producerRemainingCapacity(state: ProducerRoundState): number {
+  return Math.max(0, producerProductionCapacity(state) - state.producedQuantity);
+}
+
+export function producerFundsCapacity(balanceVnd: number, unitCostVnd: number): number {
+  if (unitCostVnd <= 0) return 0;
+  return Math.max(0, Math.floor(balanceVnd / unitCostVnd));
+}
+
+/** Max quantity a producer may still make this round. */
 export function allowedProductionQuantity(params: {
-  availableLaborPoints: number;
-  individualLaborTime: number;
-  productionCap: number;
+  productionCapacity?: number;
+  producedQuantity?: number;
   balanceVnd: number;
-  individualUnitCostVnd: number;
+  unitCostVnd?: number;
+  /** Legacy SRS fields for active sessions created before dragon-fruit-simple-v1. */
+  availableLaborPoints?: number;
+  individualLaborTime?: number;
+  productionCap?: number;
+  individualUnitCostVnd?: number;
 }): number {
-  const capacityByLabor = Math.floor(
-    params.availableLaborPoints / params.individualLaborTime,
-  );
-  const capacityByFunds = Math.floor(
-    params.balanceVnd / params.individualUnitCostVnd,
-  );
-  return Math.max(0, Math.min(capacityByLabor, params.productionCap, capacityByFunds));
+  const legacyLaborPoints = params.availableLaborPoints;
+  const legacyLaborTime = params.individualLaborTime;
+  const hasLegacyLaborFields = legacyLaborPoints != null && legacyLaborTime != null;
+  const legacyLaborCapacity =
+    hasLegacyLaborFields && legacyLaborTime > 0
+      ? Math.floor(legacyLaborPoints / legacyLaborTime)
+      : 0;
+  const legacyCapacity =
+    params.productionCap != null
+      ? hasLegacyLaborFields
+        ? Math.min(legacyLaborCapacity, params.productionCap)
+        : params.productionCap
+      : legacyLaborCapacity;
+  const capacity = Math.max(0, params.productionCapacity ?? legacyCapacity);
+  const produced = Math.max(0, params.producedQuantity ?? 0);
+  const remainingCapacity = Math.max(0, capacity - produced);
+  const unitCost = params.unitCostVnd ?? params.individualUnitCostVnd ?? 0;
+  const capacityByFunds = producerFundsCapacity(params.balanceVnd, unitCost);
+  return Math.max(0, Math.min(remainingCapacity, capacityByFunds));
 }
 
 export interface CompletedRetailTx {

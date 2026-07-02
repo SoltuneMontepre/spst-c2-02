@@ -55,7 +55,7 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
     <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
       <p className="font-medium text-foreground">Chưa có quầy niêm yết</p>
       <p className="mt-2 text-muted-foreground">
-        Nhà sản xuất và trung gian đang đưa hàng lên chợ.
+        Nhà cung cấp và đại lý đang đưa hàng lên chợ.
       </p>
     </div>
   ) : (
@@ -111,22 +111,22 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
               hint: "Số dư hiện tại",
             },
             {
-              label: "Nhu cầu mua",
-              value: `${fulfilled}/${needTarget} thùng`,
+              label: "Cần mua",
+              value: `${Math.max(0, needTarget - fulfilled)} thùng`,
               hint:
                 fulfilled < needTarget
-                  ? `Cần mua thêm ${needTarget - fulfilled} thùng`
+                  ? `Mục tiêu vòng: ${needTarget} thùng`
                   : "Đã đủ nhu cầu",
             },
             {
-              label: "Giá TT tham chiếu",
-              value:
+              label: "Đã mua",
+              value: `${fulfilled} thùng`,
+              hint:
                 allListings.length > 0
-                  ? priceRangeLabel(allListings)
+                  ? `Giá quầy: ${priceRangeLabel(allListings)}`
                   : unitValue != null
-                    ? formatThousandDong(unitValue)
-                    : "—",
-              hint: "Khoảng giá niêm yết",
+                    ? `Giá trị chuẩn: ${formatThousandDong(unitValue)}`
+                    : "Chờ quầy chợ",
             },
           ]}
         />

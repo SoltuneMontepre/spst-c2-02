@@ -1,10 +1,10 @@
 import { Sprout, ShoppingCart, Link2, Landmark, type LucideIcon } from "lucide-react";
 
 const ROLES: { icon: LucideIcon; title: string; body: string }[] = [
-  { icon: Sprout, title: "Người sản xuất", body: "Sản xuất, định giá và bán hàng; quản lý chi phí cá biệt để thực hiện giá trị." },
-  { icon: ShoppingCart, title: "Người tiêu dùng", body: "Đáp ứng nhu cầu với ngân sách hợp lý bằng mua ngay hoặc trả giá." },
-  { icon: Link2, title: "Trung gian", body: "Mua sỉ, chịu rủi ro lưu thông và niêm yết bán lẻ để kết nối hai phía." },
-  { icon: Landmark, title: "Nhà nước", body: "Đọc dữ liệu tổng hợp và dùng chính sách hữu hạn để cải thiện kết quả xã hội." },
+  { icon: Sprout, title: "Nhà cung cấp", body: "Sản xuất, định giá và bán hàng; quản lý chi phí riêng để thực hiện giá trị." },
+  { icon: ShoppingCart, title: "Khách hàng", body: "Đáp ứng nhu cầu với ngân sách hợp lý bằng mua ngay hoặc trả giá." },
+  { icon: Link2, title: "Đại lý phân phối", body: "Mua sỉ, chịu rủi ro lưu thông và niêm yết bán lẻ để kết nối hai phía." },
+  { icon: Landmark, title: "Cơ quan quản lý thị trường", body: "Đọc dữ liệu tổng hợp và dùng chính sách hữu hạn để cải thiện kết quả chung." },
 ];
 
 export function Roles() {

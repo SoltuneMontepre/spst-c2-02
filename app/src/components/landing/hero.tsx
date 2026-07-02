@@ -19,7 +19,7 @@ export function Hero({ ctaHref, ctaLabel }: { ctaHref: string; ctaLabel: string 
             Giá chạy, <span className="text-primary">giá trị</span> neo.
           </h1>
           <p className="max-w-md text-lg text-muted-foreground">
-            Vào vai người sản xuất, người tiêu dùng, trung gian hay Nhà nước trong một
+            Vào vai nhà cung cấp, khách hàng, đại lý phân phối hay cơ quan quản lý trong một
             phiên chợ thanh long thời gian thực — và tự tay tạo ra dữ liệu chứng minh quy
             luật giá trị và cung–cầu.
           </p>

@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { AlertTriangle, Minus, Plus, X } from "lucide-react";
+import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { cn } from "@/lib/utils";
 import { Stepper } from "@/components/ui/stepper";
 import type { ListingView } from "@/lib/session-service";
 
 const SELLER_LABELS: Record<string, string> = {
-  PRODUCER: "Người SX",
-  INTERMEDIARY: "Trung gian",
+  PRODUCER: ROLE_SHORT_LABELS.PRODUCER,
+  INTERMEDIARY: ROLE_SHORT_LABELS.INTERMEDIARY,
 };
 
 export function MarketTransactionDialog({
@@ -169,7 +170,7 @@ export function MarketTransactionDialog({
           {/* Delta badge */}
           {delta != null ? (
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">So với giá trị</span>
+              <span className="text-muted-foreground">So với chuẩn</span>
               <span
                 className={cn(
                   "font-medium",
@@ -177,10 +178,10 @@ export function MarketTransactionDialog({
                 )}
               >
                 {delta < 0
-                  ? `↓ ${(Math.abs(delta) / 1000).toFixed(0)}k dưới GT`
+                  ? `↓ ${(Math.abs(delta) / 1000).toFixed(0)}k dưới chuẩn`
                   : delta > 0
-                    ? `↑ ${(delta / 1000).toFixed(0)}k trên GT`
-                    : "≈ GT"}
+                    ? `↑ ${(delta / 1000).toFixed(0)}k trên chuẩn`
+                    : "≈ chuẩn"}
               </span>
             </div>
           ) : null}

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { unitValueVnd } from "@/lib/economy";
+import { producerUnitCostVnd, unitValueVnd } from "@/lib/economy";
 import { MIN_PRICE_VND } from "@/lib/money";
 import { UPGRADE_COSTS } from "@/lib/scenario";
 import {
@@ -51,7 +51,8 @@ export function ProducerSalesPanel({
   }, [maxQty]);
 
   const retailPrice = unitValueVnd(currentRound);
-  const wholesalePrice = Math.max(MIN_PRICE_VND, state.individualUnitCostVnd);
+  const unitCost = producerUnitCostVnd(state);
+  const wholesalePrice = Math.max(MIN_PRICE_VND, unitCost);
   const canSell = phase === "MARKET_OPEN" && Boolean(activeLot) && qty > 0;
 
   const upgradeCost =
@@ -69,6 +70,24 @@ export function ProducerSalesPanel({
     !state.pendingUpgrade &&
     state.profile !== "PIONEER" &&
     balanceVnd >= (discountedUpgrade ?? 0);
+  const sellDisabledReason =
+    phase !== "MARKET_OPEN"
+      ? "Chỉ đưa hàng ra chợ ở giai đoạn chợ mở."
+      : !activeLot
+        ? "Chưa có hàng trong kho. Hãy sản xuất trước."
+        : qty <= 0
+          ? "Chọn số thùng muốn đưa ra chợ."
+          : null;
+  const upgradeDisabledReason =
+    phase !== "DECISION"
+      ? "Chỉ nâng cấp ở giai đoạn ra quyết định."
+      : currentRound >= 4 || state.profile === "PIONEER"
+        ? "Bạn đang ở mức công nghệ cao nhất của vòng này."
+        : state.pendingUpgrade
+          ? "Nâng cấp đã được đặt, sẽ áp dụng từ vòng sau."
+          : discountedUpgrade && balanceVnd < discountedUpgrade
+            ? `Ví cần thêm ${formatCompactVnd(discountedUpgrade - balanceVnd)} để nâng cấp.`
+            : null;
 
   const commandError =
     command.isError && command.error instanceof ApiClientError
@@ -121,7 +140,7 @@ export function ProducerSalesPanel({
           }}
         >
           <Truck className="size-3.5" aria-hidden />
-          Bán sỉ cho trung gian
+          Bán sỉ cho đại lý
         </Button>
 
         <Button
@@ -135,6 +154,13 @@ export function ProducerSalesPanel({
           {discountedUpgrade ? ` (−${formatCompactVnd(discountedUpgrade)})` : ""}
         </Button>
       </div>
+
+      {sellDisabledReason || upgradeDisabledReason ? (
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {sellDisabledReason ? <p>{sellDisabledReason}</p> : null}
+          {upgradeDisabledReason ? <p>{upgradeDisabledReason}</p> : null}
+        </div>
+      ) : null}
 
       {state.pendingUpgrade ? (
         <p className="mt-2 text-xs text-primary">

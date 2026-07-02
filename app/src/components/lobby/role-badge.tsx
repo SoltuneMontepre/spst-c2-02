@@ -1,12 +1,8 @@
 import type { Role } from "@/generated/prisma/enums";
+import { ROLE_LABELS } from "@/lib/display-labels";
 import { cn } from "@/lib/utils";
 
-export const ROLE_LABELS: Record<Role, string> = {
-  PRODUCER: "Người sản xuất",
-  CONSUMER: "Người tiêu dùng",
-  INTERMEDIARY: "Trung gian",
-  GOVERNMENT: "Nhà nước",
-};
+export { ROLE_LABELS };
 
 export function RoleBadge({ role }: { role: Role | null }) {
   return (

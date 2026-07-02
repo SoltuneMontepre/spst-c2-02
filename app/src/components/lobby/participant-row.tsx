@@ -95,7 +95,7 @@ function ProfilePlaceholder() {
   return (
     <div
       className="flex h-[34px] items-center rounded-md border border-dashed border-border bg-muted/15 px-2 text-xs text-muted-foreground"
-      title="Chỉ áp dụng cho vai người sản xuất"
+      title="Chỉ áp dụng cho vai nhà cung cấp"
     >
       Không áp dụng
     </div>

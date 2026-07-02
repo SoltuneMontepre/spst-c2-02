@@ -7,6 +7,7 @@ import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redir
 import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { GamePhaseCta } from "@/components/session/game-phase-cta";
 import { GameInsightPanel } from "@/components/session/game-insight-panel";
+import { GamePhaseStepperStrip } from "@/components/session/game-phase-timeline";
 import { MapZones } from "./map-zones";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
 
@@ -50,7 +51,10 @@ export function MapShell({ sessionId }: { sessionId: string }) {
         phase={data.phase}
         round={data.currentRound}
         role={role}
+        roleState={data.self?.roleState ?? null}
+        marketListingCount={data.market?.listings.length ?? 0}
       />
+      <GamePhaseStepperStrip data={data} variant="map" />
       {data.phase === "RECAP" && recapRound ? (
         <RoundRecapCard sessionId={sessionId} round={recapRound} />
       ) : (
@@ -58,6 +62,11 @@ export function MapShell({ sessionId }: { sessionId: string }) {
           sessionId={sessionId}
           role={role}
           round={data.currentRound}
+          phase={data.phase}
+          status={data.status}
+          self={data.self}
+          market={data.market}
+          autoHost={data.autoHost}
           participants={data.participants}
           interactive={mapInteractive}
         />

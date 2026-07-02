@@ -1,6 +1,6 @@
 import type { Role } from "@/generated/prisma/enums";
 import type { SessionSnapshot } from "@/lib/session-service";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
+import { ROLE_LABELS } from "@/lib/display-labels";
 import { compositionTarget, MIN_PLAYERS, START_MIN_HUMANS } from "@/lib/scenario";
 
 function lobbyMinHumans(autoHost: boolean): number {
@@ -72,28 +72,28 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
     },
     {
       id: "has-producer",
-      label: "Có người sản xuất",
+      label: "Có nhà cung cấp",
       done: snapshot.autoAssignRoles
         ? humanCount >= MIN_PLAYERS || roleCounts.PRODUCER > 0
         : roleCounts.PRODUCER > 0,
     },
     {
       id: "has-consumer",
-      label: "Có người tiêu dùng",
+      label: "Có khách hàng",
       done: snapshot.autoAssignRoles
         ? humanCount >= MIN_PLAYERS || roleCounts.CONSUMER > 0
         : roleCounts.CONSUMER > 0,
     },
     {
       id: "has-intermediary",
-      label: "Có trung gian",
+      label: "Có đại lý",
       done: snapshot.autoAssignRoles
         ? humanCount >= MIN_PLAYERS || roleCounts.INTERMEDIARY > 0
         : roleCounts.INTERMEDIARY > 0,
     },
     {
       id: "has-government",
-      label: "Có nhà nước",
+      label: "Có cơ quan quản lý",
       done: snapshot.autoAssignRoles
         ? humanCount >= MIN_PLAYERS || roleCounts.GOVERNMENT > 0
         : roleCounts.GOVERNMENT > 0,

@@ -23,21 +23,21 @@ export function ValueShiftAnimation({ active }: { active: boolean }) {
     <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm transition-all duration-700">
       <p className="font-semibold">Công nghệ phổ biến</p>
       <p className="mt-2 text-muted-foreground">
-        TGLĐXHCT:{" "}
+        Giá trị chuẩn:{" "}
         <span className="font-mono font-bold text-foreground transition-all duration-700">
           {labor}
         </span>{" "}
-        giờ/thùng
+        giờ chuẩn/thùng
       </p>
       <p className="text-muted-foreground">
-        Giá trị xã hội:{" "}
+        Mốc giá tham chiếu:{" "}
         <span className="font-mono font-bold text-foreground transition-all duration-700">
           {formatThousandDong(value)}
         </span>
         /thùng
       </p>
       <p className="mt-2 text-xs">
-        Năng suất xã hội tăng làm giá trị đơn vị giảm — không phải do cung-cầu tạo ra giá trị.
+        Năng suất chung tăng làm giá trị chuẩn giảm — không phải do cung-cầu tạo ra giá trị.
       </p>
     </div>
   );

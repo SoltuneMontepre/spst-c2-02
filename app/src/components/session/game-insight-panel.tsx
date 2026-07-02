@@ -2,6 +2,7 @@
 
 import type { LiveRoundStats } from "@/lib/session-service";
 import { EventPanel, InsightSectionLabel } from "@/components/session/event-panel";
+import { MapPresenceLegend } from "@/components/session/map-zones";
 import { MarketSnapshotPanel } from "@/components/session/market-snapshot-panel";
 
 export function GameInsightPanel({
@@ -18,6 +19,8 @@ export function GameInsightPanel({
 
       <InsightSectionLabel>Snapshot thị trường</InsightSectionLabel>
       <MarketSnapshotPanel stats={stats} variant="insight" />
+
+      <MapPresenceLegend />
     </div>
   );
 }

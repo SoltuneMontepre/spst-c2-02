@@ -4,6 +4,7 @@ import type { BadgeType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { generateJson, isGeminiQuotaError } from "./ai";
 import { BADGE_LABELS, scoreLabel } from "./labels";
+import { ROLE_LABELS } from "./display-labels";
 import { formatThousandDong } from "./money";
 import type { ParticipantOutcome } from "./finalize";
 import type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
@@ -14,20 +15,13 @@ interface AiDebriefJson {
   participants: { participantId: string; grade: number; comment: string }[];
 }
 
-const ROLE_VI: Record<string, string> = {
-  PRODUCER: "Người sản xuất",
-  CONSUMER: "Người tiêu dùng",
-  INTERMEDIARY: "Trung gian",
-  GOVERNMENT: "Nhà nước",
-};
-
 function clampGrade(n: number): number {
   if (!Number.isFinite(n)) return 5;
   return Math.min(10, Math.max(1, Math.round(n)));
 }
 
 function formatOutcomeLine(o: ParticipantOutcome, badgeTypes: BadgeType[]): string {
-  const role = ROLE_VI[o.role] ?? o.role;
+  const role = ROLE_LABELS[o.role as keyof typeof ROLE_LABELS] ?? o.role;
   const metric = scoreLabel(o.role);
   const score =
     o.role === "GOVERNMENT" ? `${o.scoreVnd} điểm` : formatThousandDong(o.scoreVnd);
@@ -55,7 +49,7 @@ function fallbackReview(outcomes: ParticipantOutcome[]): AiDebriefReview {
     overall: {
       grade: 6,
       comment:
-        "Phiên đã kết thúc. Hãy so sánh giá thị trường với giá trị xã hội và cách từng vai phản ứng với cung–cầu.",
+        "Phiên đã kết thúc. Hãy so sánh giá thị trường với giá trị chuẩn và cách từng vai phản ứng với cung–cầu.",
     },
     participants: outcomes.map((o) => ({
       participantId: o.participantId,
@@ -123,7 +117,7 @@ export async function generateAiDebriefReview(input: {
           hit?.comment?.trim() ||
           (o.isBot
             ? `Bot ${o.displayName} hỗ trợ mô phỏng.`
-            : `Tham gia vai ${ROLE_VI[o.role] ?? o.role}.`),
+            : `Tham gia vai ${ROLE_LABELS[o.role as keyof typeof ROLE_LABELS] ?? o.role}.`),
       };
     });
 
@@ -132,7 +126,7 @@ export async function generateAiDebriefReview(input: {
         grade: clampGrade(raw.overall?.grade ?? 6),
         comment:
           raw.overall?.comment?.trim() ||
-          "Phiên mô phỏng cho thấy giá cả dao động quanh giá trị theo cung–cầu.",
+          "Phiên mô phỏng cho thấy giá cả dao động quanh giá trị chuẩn theo cung–cầu.",
       },
       participants,
     };

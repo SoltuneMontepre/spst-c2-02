@@ -51,7 +51,7 @@ function CompositionSummary({
         ))}
       </dl>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Gán vai cho từng người/bot. Hồ sơ sản xuất chỉ dành cho vai người sản xuất. Không
+        Gán vai cho từng người/bot. Hồ sơ sản xuất chỉ dành cho vai nhà cung cấp. Không
         đổi vai người đã bấm sẵn sàng.
       </p>
     </section>

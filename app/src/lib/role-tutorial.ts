@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
 import { GAME_ZONES } from "@/lib/game-zones";
+import { ROLE_LABELS } from "@/lib/display-labels";
 
 export interface RoleTutorialStep {
   title: string;
@@ -34,7 +35,7 @@ export interface RoleTutorialContent {
 }
 
 const THEORY =
-  "Giá trị hàng hóa = lượng lao động xã hội cần thiết. Năng suất cao hơn bình quân → lợi nhuận thặng dư.";
+  "Giá trị chuẩn là mốc để so sánh giá bán. Trong bài học, mốc này tương ứng với lượng lao động xã hội cần thiết.";
 
 function zoneIcon(role: Role): LucideIcon {
   return GAME_ZONES.find((z) => z.role === role)?.icon ?? Sprout;
@@ -50,24 +51,24 @@ const PRODUCER: RoleTutorialContent = {
   actions: [
     { icon: Sprout, label: "Sản xuất thùng thanh long", iconClassName: "bg-success/15 text-success" },
     { icon: Store, label: "Đưa ra chợ bán lẻ", iconClassName: "bg-blue-500/10 text-blue-600" },
-    { icon: Truck, label: "Bán sỉ cho trung gian", iconClassName: "bg-violet-500/10 text-violet-600" },
+    { icon: Truck, label: "Bán sỉ cho đại lý", iconClassName: "bg-violet-500/10 text-violet-600" },
     { icon: Zap, label: "Nâng cấp công nghệ", iconClassName: "bg-amber-500/10 text-amber-600" },
   ],
   steps: [
     {
       icon: Sprout,
       title: "Vai trò của bạn",
-      body: "Bạn là Người sản xuất – chủ nông trại thanh long. Bạn sở hữu nguồn cung và quyết định chiến lược sản xuất, định giá cho từng vòng chơi.",
+      body: `Bạn là ${ROLE_LABELS.PRODUCER} – chủ nông trại thanh long. Bạn sở hữu nguồn cung và quyết định chiến lược sản xuất, định giá cho từng vòng chơi.`,
     },
     {
       icon: BarChart3,
-      title: "Giá trị hàng hóa",
-      body: "Giá trị một thùng thanh long phụ thuộc vào thời gian lao động xã hội cần thiết (TGLĐXHCT) = 85k Đ — không phải thời gian cá biệt của bạn.",
+      title: "Giá trị chuẩn",
+      body: "Giá trị chuẩn của một thùng thanh long là mốc so sánh giá. Trong bài học, giá trị chuẩn tương ứng với TGLĐXHCT, không phải chi phí riêng của từng người chơi.",
     },
     {
       icon: Zap,
       title: "Hành động trong chợ",
-      body: "Mỗi vòng bạn có thể: Sản xuất thêm, bán sỉ cho trung gian, bán lẻ trực tiếp, hoặc đầu tư công nghệ để giảm chi phí cá biệt.",
+      body: "Mỗi vòng bạn có thể: Sản xuất thêm, bán sỉ cho đại lý, bán lẻ trực tiếp, hoặc đầu tư công nghệ để giảm chi phí riêng.",
     },
   ],
 };
@@ -78,7 +79,7 @@ const CONSUMER: RoleTutorialContent = {
     "Mua thanh long để đáp ứng nhu cầu vòng. So sánh giá và chọn kênh mua phù hợp.",
   theoryCallout: THEORY,
   goalCallout: (n) =>
-    `Đáp ứng nhu cầu tiêu dùng trong ${n} vòng với chi phí hợp lý — giá cả dao động quanh giá trị xã hội.`,
+    `Đáp ứng nhu cầu trong ${n} vòng với chi phí hợp lý — giá cả dao động quanh giá trị chuẩn.`,
   actions: [
     { icon: ShoppingCart, label: "Mua theo giá niêm yết", iconClassName: "bg-blue-500/10 text-blue-600" },
     { icon: Store, label: "Gửi đề nghị giá thấp hơn", iconClassName: "bg-success/15 text-success" },
@@ -88,12 +89,12 @@ const CONSUMER: RoleTutorialContent = {
     {
       icon: ShoppingCart,
       title: "Vai trò của bạn",
-      body: "Bạn là Người tiêu dùng — đại diện cầu trên thị trường. Mỗi vòng bạn cần đủ số thùng thanh long theo nhu cầu để nhận hiệu ích (điểm).",
+      body: `Bạn là ${ROLE_LABELS.CONSUMER} — đại diện phía mua trên thị trường. Mỗi vòng bạn cần đủ số thùng thanh long theo nhu cầu để nhận hiệu ích (điểm).`,
     },
     {
       icon: BarChart3,
       title: "Giá trị và giá cả",
-      body: "Giá trị xã hội phản ánh lao động cần thiết; giá giao dịch thực tế có thể cao hơn hoặc thấp hơn tùy cung-cầu. Đừng nhầm giá mua với giá trị hàng hóa.",
+      body: "Giá trị chuẩn là mốc so sánh; giá giao dịch thực tế có thể cao hơn hoặc thấp hơn tùy cung-cầu. Đừng nhầm giá mua với giá trị chuẩn.",
     },
     {
       icon: Store,
@@ -106,12 +107,12 @@ const CONSUMER: RoleTutorialContent = {
 const INTERMEDIARY: RoleTutorialContent = {
   zoneSubtitle: "Trung tâm phân phối",
   roleBlurb:
-    "Mua buôn từ nhà sản xuất, bán lẻ với biên lợi nhuận. Kết nối cung và cầu.",
+    "Mua buôn từ nhà cung cấp, bán lẻ với biên lợi nhuận. Kết nối cung và cầu.",
   theoryCallout: THEORY,
   goalCallout: (n) =>
     `Kiếm lợi nhuận từ chênh lệch mua buôn – bán lẻ trong ${n} vòng, quản lý tồn kho để tránh hàng hỏng.`,
   actions: [
-    { icon: Truck, label: "Mua buôn từ nhà sản xuất", iconClassName: "bg-violet-500/10 text-violet-600" },
+    { icon: Truck, label: "Mua buôn từ nhà cung cấp", iconClassName: "bg-violet-500/10 text-violet-600" },
     { icon: Store, label: "Niêm yết bán lẻ", iconClassName: "bg-blue-500/10 text-blue-600" },
     { icon: BarChart3, label: "Quản lý tồn kho", iconClassName: "bg-amber-500/10 text-amber-600" },
   ],
@@ -119,23 +120,23 @@ const INTERMEDIARY: RoleTutorialContent = {
     {
       icon: Link2,
       title: "Vai trò của bạn",
-      body: "Bạn là Trung gian — cầu nối giữa sản xuất và tiêu dùng. Mua buôn giá thấp, bán lẻ với biên lợi nhuận hợp lý.",
+      body: `Bạn là ${ROLE_LABELS.INTERMEDIARY} — cầu nối giữa nhà cung cấp và khách hàng. Mua buôn giá thấp, bán lẻ với biên lợi nhuận hợp lý.`,
     },
     {
       icon: BarChart3,
       title: "Giá trị và biên lợi nhuận",
-      body: "Lợi nhuận đến từ chênh lệch giữa giá mua buôn và giá bán lẻ. Giá cả vẫn dao động quanh giá trị xã hội — đừng chỉ đuổi giá mà bỏ qua rủi ro tồn kho.",
+      body: "Lợi nhuận đến từ chênh lệch giữa giá mua buôn và giá bán lẻ. Giá cả vẫn dao động quanh giá trị chuẩn — đừng chỉ đuổi giá mà bỏ qua rủi ro tồn kho.",
     },
     {
       icon: Truck,
       title: "Hành động trong chợ",
-      body: "Khi chợ mở: đề nghị mua buôn từ nhà sản xuất, niêm yết bán lẻ, chấp nhận đề nghị từ người tiêu dùng. Hàng không bán hết có thể hỏng cuối vòng.",
+      body: "Khi chợ mở: đề nghị mua buôn từ nhà cung cấp, niêm yết bán lẻ, chấp nhận đề nghị từ khách hàng. Hàng không bán hết có thể hỏng cuối vòng.",
     },
   ],
 };
 
 const GOVERNMENT: RoleTutorialContent = {
-  zoneSubtitle: "Bảng chính sách / Nhà nước",
+  zoneSubtitle: "Bảng chính sách / Quản lý thị trường",
   roleBlurb:
     "Can thiệp thị trường bằng chính sách từ vòng 2. Cân bằng lợi ích xã hội và ngân sách.",
   theoryCallout: THEORY,
@@ -150,17 +151,17 @@ const GOVERNMENT: RoleTutorialContent = {
     {
       icon: Landmark,
       title: "Vai trò của bạn",
-      body: "Bạn đại diện Nhà nước — can thiệp thị trường bằng chính sách (từ vòng 2). Vòng 1 chủ yếu quan sát cung-cầu và chuẩn bị.",
+      body: `Bạn đại diện ${ROLE_LABELS.GOVERNMENT} — can thiệp thị trường bằng chính sách (từ vòng 2). Vòng 1 chủ yếu quan sát cung-cầu và chuẩn bị.`,
     },
     {
       icon: BarChart3,
-      title: "Giá trị và vai trò nhà nước",
-      body: "Nhà nước không tạo giá trị hàng hóa trực tiếp nhưng ảnh hưởng điều kiện giao dịch: thông tin, hỗ trợ công nghệ, xuất khẩu. Mục tiêu là thị trường minh bạch và ổn định hơn.",
+      title: "Giá trị và vai trò quản lý",
+      body: "Cơ quan quản lý không tạo giá trị chuẩn trực tiếp nhưng ảnh hưởng điều kiện giao dịch: thông tin, hỗ trợ công nghệ, xuất khẩu. Mục tiêu là thị trường minh bạch và ổn định hơn.",
     },
     {
       icon: Landmark,
       title: "Hành động trong chợ",
-      body: "Mỗi vòng (từ vòng 2): chọn một chính sách hoặc không can thiệp. Giai đoạn MARKET_OPEN có thể xuất khẩu hàng tồn với giá ≤ giá trị xã hội.",
+      body: "Mỗi vòng (từ vòng 2): chọn một chính sách hoặc không can thiệp. Giai đoạn MARKET_OPEN có thể xuất khẩu hàng tồn với giá ≤ giá trị chuẩn.",
     },
   ],
 };

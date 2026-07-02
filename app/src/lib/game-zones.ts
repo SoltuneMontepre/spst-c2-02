@@ -47,7 +47,7 @@ export const GAME_ZONES: GameZoneDef[] = [
   },
   {
     screen: "task",
-    label: "Nhà nước",
+    label: "Cơ quan quản lý",
     hint: "Chính sách can thiệp",
     icon: Landmark,
     role: "GOVERNMENT",
@@ -95,7 +95,7 @@ export const MAP_ZONE_DISPLAY: MapZoneDisplay[] = [
   {
     role: "CONSUMER",
     mapLabel: "Quầy bán lẻ",
-    mapHint: "Bán trực tiếp NTD",
+    mapHint: "Bán trực tiếp khách hàng",
     theme: "rose",
   },
   {
@@ -106,7 +106,7 @@ export const MAP_ZONE_DISPLAY: MapZoneDisplay[] = [
   },
   {
     role: "GOVERNMENT",
-    mapLabel: "Văn phòng Nhà nước",
+    mapLabel: "Văn phòng quản lý",
     mapHint: "Chính sách & điều tiết",
     theme: "amber",
   },
