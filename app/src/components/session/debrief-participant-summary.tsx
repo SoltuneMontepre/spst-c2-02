@@ -7,6 +7,7 @@ import type { BadgeView, ParticipantView } from "@/lib/session-service";
 import type { ParticipantOutcome } from "@/lib/finalize";
 import type { AiDebriefParticipantReview } from "@/lib/debrief-review";
 import { BADGE_LABELS, scoreLabel } from "@/lib/labels";
+import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { formatThousandDong } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,19 @@ function AiGradePill({ grade, className }: { grade: number; className?: string }
       {grade}/10
     </span>
   );
+}
+
+function participantStatus(p: ParticipantView): {
+  label: string;
+  dotClassName: string;
+} {
+  if (p.isBot) {
+    return { label: "Bot", dotClassName: "bg-sky-500" };
+  }
+  if (p.presence === "ONLINE" || p.presence === undefined) {
+    return { label: "Trực tuyến", dotClassName: "bg-emerald-500" };
+  }
+  return { label: "Ngoại tuyến", dotClassName: "bg-muted-foreground/50" };
 }
 
 /** Góc nhỏ — hiện khi chọn một người trong roster. */
@@ -50,11 +64,22 @@ export function DebriefParticipantPeek({
   incomplete: boolean;
 }) {
   return (
-    <div className="rounded-[14px] border border-border/80 bg-muted/25 p-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Đang xem
-      </p>
-      <div className="flex items-start gap-2.5">
+    <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Đang xem
+        </p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {rank != null ? (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-secondary-foreground">
+              Hạng {rank}
+            </span>
+          ) : null}
+          {aiReview ? <AiGradePill grade={aiReview.grade} /> : null}
+        </div>
+      </div>
+
+      <div className="flex items-start gap-2.5 rounded-xl bg-muted/25 p-2.5">
         <ParticipantAvatar participant={participant} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">
@@ -72,10 +97,6 @@ export function DebriefParticipantPeek({
                 Bot
               </span>
             ) : null}
-            {rank != null ? (
-              <span className="text-[10px] text-muted-foreground">Hạng {rank}</span>
-            ) : null}
-            {aiReview ? <AiGradePill grade={aiReview.grade} /> : null}
           </div>
         </div>
       </div>
@@ -89,8 +110,8 @@ export function DebriefParticipantPeek({
       {waiting ? (
         <p className="mt-2 text-xs text-muted-foreground">Đang tính điểm…</p>
       ) : outcome ? (
-        <div className="mt-2.5 space-y-1.5 text-xs">
-          <p className="flex justify-between gap-2">
+        <div className="mt-3 space-y-2 text-xs">
+          <p className="flex justify-between gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2">
             <span className="text-muted-foreground">{scoreLabel(outcome.role)}</span>
             <span className="font-bold tabular-nums">{formatScore(outcome)}</span>
           </p>
@@ -144,24 +165,61 @@ export function DebriefParticipantRoster({
   });
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-2">
       {sorted.map((p) => {
         const selected = p.id === selectedId;
         const outcome = outcomesById.get(p.id);
+        const status = participantStatus(p);
         return (
           <button
             key={p.id}
             type="button"
             onClick={() => onSelect(p.id)}
             className={cn(
-              "rounded-full p-0.5 transition-transform hover:scale-105",
-              selected && "ring-2 ring-primary ring-offset-2 ring-offset-surface",
+              "group flex w-full items-center gap-2.5 rounded-xl border border-border/70 bg-surface px-2.5 py-2 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary/5",
+              selected && "border-primary/50 bg-primary/10 ring-1 ring-primary/20",
             )}
             title={`${p.displayName}${p.isBot ? " · Bot" : ""}${outcome ? ` · ${formatScore(outcome)}` : ""}`}
             aria-pressed={selected}
             aria-label={p.displayName}
           >
             <ParticipantAvatar participant={p} size="sm" />
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-foreground">
+                  {p.displayName}
+                </span>
+                {p.isSelf ? (
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    bạn
+                  </span>
+                ) : null}
+              </span>
+              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span
+                  className={cn("size-1.5 shrink-0 rounded-full", status.dotClassName)}
+                  aria-hidden
+                />
+                <span className="shrink-0">{status.label}</span>
+                {p.role ? (
+                  <span className="max-w-full truncate rounded-full bg-muted px-1.5 py-0.5 text-foreground">
+                    {ROLE_SHORT_LABELS[p.role as Role]}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              {selected ? (
+                <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                  Xem
+                </span>
+              ) : null}
+              {outcome ? (
+                <span className="max-w-[5.75rem] truncate text-[11px] font-bold tabular-nums text-foreground">
+                  {formatScore(outcome)}
+                </span>
+              ) : null}
+            </span>
           </button>
         );
       })}

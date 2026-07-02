@@ -130,24 +130,40 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
       title="Kết quả cuối"
       subtitle={STATUS_LABELS[snapshot.status]}
       rightPanel={
-        <BentoTile title="Tiếp theo" description="Khám phá thêm hoặc rời phiên">
-          <div className="flex flex-col gap-2">
-            <Link
-              href={`/session/${sessionId}/observatory`}
-              className={cn(buttonVariants({ variant: "outline" }), "w-full")}
-            >
-              Xem tháp quan sát chi tiết
-            </Link>
-            <Link href="/home" className={cn(buttonVariants(), "w-full")}>
-              Về trang chủ
-            </Link>
-          </div>
-        </BentoTile>
+        <>
+          <BentoTile title="Tiếp theo" description="Khám phá thêm hoặc rời phiên">
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/session/${sessionId}/observatory`}
+                className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+              >
+                Xem tháp quan sát chi tiết
+              </Link>
+              <Link href="/home" className={cn(buttonVariants(), "w-full")}>
+                Về trang chủ
+              </Link>
+            </div>
+          </BentoTile>
+
+          <BentoTile
+            title="Hướng dẫn"
+            description={guidance.title}
+            headerExtra={<TutorialToggle className="h-8 px-2 text-xs" />}
+          >
+            {guidanceOn ? (
+              <GuidancePanel content={guidance} embedded />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Mẹo đã ẩn. Bấm nút góc trên để hiện lại.
+              </p>
+            )}
+          </BentoTile>
+        </>
       }
     >
-      <div className="grid grid-cols-12 gap-4 lg:items-start">
+      <div className="grid grid-cols-12 gap-5 lg:items-start">
         {/* Trái — avatar + peek cá nhân nhỏ */}
-        <div className="col-span-12 flex flex-col gap-4 lg:col-span-3 lg:sticky lg:top-6 lg:self-start">
+        <div className="col-span-12 flex flex-col gap-4 lg:sticky lg:top-6 lg:col-span-4 lg:self-start 2xl:col-span-3">
           <BentoTile
             title="Tham gia phiên"
             description={`${humanCount} người · ${botCount} bot`}
@@ -158,20 +174,20 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
               onSelect={setSelectedId}
               outcomesById={outcomesById}
             />
-            <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-              <span className="mr-3 inline-flex items-center gap-1">
+            <div className="mt-3 flex flex-wrap gap-1.5 rounded-xl bg-muted/30 p-2 text-[10px] leading-relaxed text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
                 <span className="size-2 rounded-full bg-emerald-500" aria-hidden />
                 Trực tuyến
               </span>
-              <span className="mr-3 inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
                 <span className="size-2 rounded-full bg-muted-foreground/50" aria-hidden />
                 Ngoại tuyến
               </span>
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-1">
                 <span className="size-2 rounded-full bg-sky-500" aria-hidden />
                 Bot
               </span>
-            </p>
+            </div>
           </BentoTile>
 
           {selected ? (
@@ -189,7 +205,7 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
         </div>
 
         {/* Giữa — tổng quan & nhận xét chung */}
-        <div className="col-span-12 flex flex-col gap-4 lg:col-span-6">
+        <div className="col-span-12 flex flex-col gap-5 lg:col-span-8 2xl:col-span-9">
           <BentoTile
             title="Tổng quan phiên"
             description={STATUS_LABELS[snapshot.status]}

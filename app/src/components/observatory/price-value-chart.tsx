@@ -1,165 +1,168 @@
 import type { LiveRoundStats, RoundAnalytics } from "@/lib/session-service";
 
-const W = 320;
-const H = 170;
-const PAD = 34;
+const W = 620;
+const H = 210;
+const PAD_X = 48;
+const PAD_TOP = 18;
+const PAD_BOTTOM = 34;
+
+function compactVnd(amountVnd: number): string {
+  const thousands = amountVnd / 1000;
+  const text = Number.isInteger(thousands)
+    ? thousands.toString()
+    : thousands.toFixed(1);
+  return `${text}k`;
+}
 
 /** Two-line chart: social value (anchor) vs market price (SRS §5.9, UI-OBSERVATORY-01). */
 export function PriceValueChart({
   rounds,
   liveStats,
+  currentRound,
 }: {
   rounds: RoundAnalytics[];
   liveStats?: LiveRoundStats | null;
+  currentRound?: number;
 }) {
   if (rounds.length === 0 && !liveStats) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Chưa có dữ liệu vòng nào.
-      </p>
+      <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center">
+        <p className="max-w-xs text-sm text-muted-foreground">
+          Biểu đồ xuất hiện khi chợ mở và có dữ liệu giá.
+        </p>
+      </div>
     );
   }
 
-  const displayRounds =
-    rounds.length > 0
-      ? rounds
-      : liveStats
-        ? [
-            {
-              number: 0,
-              unitValueVnd: liveStats.unitValueVnd,
-              marketPriceVnd: liveStats.marketPriceVnd,
-              supplyQuantity: liveStats.supplyQuantity,
-              demandQuantity: liveStats.demandQuantity,
-              retailSoldQuantity: 0,
-              spoiledQuantity: 0,
-            },
-          ]
-        : [];
+  const displayRounds = [...rounds];
+  const finalRoundExists =
+    liveStats != null &&
+    currentRound != null &&
+    displayRounds.some((round) => round.number === currentRound);
 
-  const livePoint =
-    liveStats && rounds.length > 0
-      ? {
-          unitValueVnd: liveStats.unitValueVnd,
-          marketPriceVnd: liveStats.marketPriceVnd,
-        }
-      : null;
+  if (liveStats && !finalRoundExists) {
+    displayRounds.push({
+      number: currentRound ?? rounds.length + 1,
+      unitValueVnd: liveStats.unitValueVnd,
+      marketPriceVnd: liveStats.marketPriceVnd,
+      supplyQuantity: liveStats.supplyQuantity,
+      demandQuantity: liveStats.demandQuantity,
+      retailSoldQuantity: 0,
+      spoiledQuantity: 0,
+    });
+  }
 
-  const maxVnd = Math.max(
-    12000,
-    ...displayRounds.map((r) => Math.max(r.unitValueVnd, r.marketPriceVnd ?? 0)),
-    livePoint?.marketPriceVnd ?? 0,
-    livePoint?.unitValueVnd ?? 0,
-  );
-  const pointCount = displayRounds.length + (livePoint ? 1 : 0);
+  const values = displayRounds.flatMap((round) => [
+    round.unitValueVnd,
+    round.marketPriceVnd ?? round.unitValueVnd,
+  ]);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const spread = Math.max(4000, rawMax - rawMin);
+  const minVnd = Math.max(0, Math.floor((rawMin - spread * 0.25) / 1000) * 1000);
+  const maxVnd = Math.ceil((rawMax + spread * 0.25) / 1000) * 1000;
+  const innerW = W - PAD_X * 2;
+  const innerH = H - PAD_TOP - PAD_BOTTOM;
+
   const x = (i: number) =>
-    PAD + (pointCount === 1 ? 0 : (i * (W - 2 * PAD)) / (pointCount - 1));
-  const y = (v: number) => H - PAD - (v / maxVnd) * (H - 2 * PAD);
+    PAD_X + (displayRounds.length === 1 ? innerW / 2 : (i * innerW) / (displayRounds.length - 1));
+  const y = (v: number) =>
+    PAD_TOP + ((maxVnd - v) / Math.max(1, maxVnd - minVnd)) * innerH;
 
-  const valueLine = displayRounds.map((r, i) => `${x(i)},${y(r.unitValueVnd)}`).join(" ");
-  const priced = displayRounds
-    .map((r, i) => ({ r, i }))
-    .filter((p) => p.r.marketPriceVnd !== null);
-
-  const liveIndex = displayRounds.length;
-  const livePriceY = livePoint?.marketPriceVnd != null ? y(livePoint.marketPriceVnd) : null;
-  const lastPricedIndex =
-    priced.length > 0 ? priced[priced.length - 1].i : displayRounds.length > 0 ? 0 : null;
+  const yTicks = [maxVnd, Math.round((maxVnd + minVnd) / 2000) * 1000, minVnd];
+  const valueLine = displayRounds
+    .map((round, i) => `${x(i)},${y(round.unitValueVnd)}`)
+    .join(" ");
+  const pricePoints = displayRounds
+    .map((round, i) =>
+      round.marketPriceVnd == null ? null : `${x(i)},${y(round.marketPriceVnd)}`,
+    )
+    .filter((point): point is string => Boolean(point))
+    .join(" ");
 
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full"
+      className="h-full min-h-[190px] w-full"
       role="img"
       aria-label="Giá trị và giá thị trường"
     >
-      <text x={4} y={PAD} fontSize={9} fill="var(--muted-foreground)">
-        VND
-      </text>
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--border)" />
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--border)" />
+      {yTicks.map((tick) => (
+        <g key={tick}>
+          <line
+            x1={PAD_X}
+            y1={y(tick)}
+            x2={W - PAD_X}
+            y2={y(tick)}
+            stroke="var(--border)"
+            strokeDasharray="4 4"
+            opacity={0.8}
+          />
+          <text
+            x={PAD_X - 10}
+            y={y(tick)}
+            textAnchor="end"
+            dominantBaseline="middle"
+            fontSize={11}
+            fill="var(--muted-foreground)"
+          >
+            {compactVnd(tick)}
+          </text>
+        </g>
+      ))}
 
       <polyline
         points={valueLine}
         fill="none"
         stroke="var(--value)"
-        strokeWidth={2}
+        strokeWidth={1.5}
         strokeDasharray="5 4"
       />
 
-      {priced.map(({ r, i }, k) =>
-        k > 0 ? (
-          <line
-            key={`l-${r.number}`}
-            x1={x(priced[k - 1].i)}
-            y1={y(priced[k - 1].r.marketPriceVnd!)}
-            x2={x(i)}
-            y2={y(r.marketPriceVnd!)}
-            stroke="var(--price)"
-            strokeWidth={2}
-          />
-        ) : null,
-      )}
-
-      {livePoint && livePriceY != null && lastPricedIndex != null ? (
-        <line
-          x1={x(lastPricedIndex)}
-          y1={
-            displayRounds[lastPricedIndex]?.marketPriceVnd != null
-              ? y(displayRounds[lastPricedIndex].marketPriceVnd!)
-              : y(livePoint.unitValueVnd)
-          }
-          x2={x(liveIndex)}
-          y2={livePriceY}
+      {pricePoints ? (
+        <polyline
+          points={pricePoints}
+          fill="none"
           stroke="var(--price)"
-          strokeWidth={2}
-          strokeDasharray="4 3"
-          opacity={0.85}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={3}
         />
       ) : null}
 
-      {priced.map(({ r, i }) => (
-        <circle
-          key={`p-${r.number}`}
-          cx={x(i)}
-          cy={y(r.marketPriceVnd!)}
-          r={4}
-          fill="var(--price)"
-        />
+      {displayRounds.map((round, i) => (
+        <g key={round.number}>
+          {round.marketPriceVnd != null ? (
+            <circle
+              cx={x(i)}
+              cy={y(round.marketPriceVnd)}
+              r={4}
+              fill="var(--price)"
+              stroke="var(--surface)"
+              strokeWidth={2}
+            />
+          ) : null}
+          <text
+            x={x(i)}
+            y={H - 10}
+            textAnchor="middle"
+            fontSize={11}
+            fill="var(--muted-foreground)"
+          >
+            V{round.number}
+          </text>
+        </g>
       ))}
 
-      {livePoint && livePriceY != null ? (
-        <circle cx={x(liveIndex)} cy={livePriceY} r={5} fill="var(--price)" opacity={0.9} />
-      ) : null}
-
-      {displayRounds.map((r, i) => (
-        <text
-          key={`t-${r.number}`}
-          x={x(i)}
-          y={H - PAD + 14}
-          textAnchor="middle"
-          fontSize={10}
-          fill="var(--muted-foreground)"
-        >
-          V{r.number}
-        </text>
-      ))}
-
-      {livePoint ? (
-        <text
-          x={x(liveIndex)}
-          y={H - PAD + 14}
-          textAnchor="middle"
-          fontSize={10}
-          fill="var(--primary)"
-          fontWeight={600}
-        >
-          Live
-        </text>
-      ) : null}
-
-      <text x={W - PAD} y={y(displayRounds[0]?.unitValueVnd ?? liveStats!.unitValueVnd)} fontSize={8} fill="var(--value)" textAnchor="end" dy={-4}>
-        Chuẩn
+      <text
+        x={W - PAD_X}
+        y={y(displayRounds[displayRounds.length - 1]?.unitValueVnd ?? maxVnd)}
+        fontSize={11}
+        fill="var(--value)"
+        textAnchor="end"
+        dy={-6}
+      >
+        GT {compactVnd(displayRounds[displayRounds.length - 1]?.unitValueVnd ?? maxVnd)}
       </text>
     </svg>
   );

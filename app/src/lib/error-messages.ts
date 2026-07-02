@@ -19,6 +19,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   ROOM_NOT_FOUND: "Không tìm thấy phòng.",
   READ_ONLY_TAB: "Tab này chỉ xem. Tab khác đang điều khiển vai của bạn.",
   DUPLICATE_OFFER: "Bạn đã có một đề nghị đang mở cho quầy này.",
+  COUNTER_TOO_LOW: "Giá gửi lại không được thấp hơn giá sàn.",
+  MISSING_COUNTER_PRICE: "Vui lòng nhập giá gửi lại.",
   POLICY_ROUND_FORBIDDEN: "Chính sách chỉ áp dụng từ vòng 2.",
   POLICY_ALREADY_USED: "Cơ quan quản lý đã dùng chính sách trong vòng này.",
   UPGRADE_NOT_AVAILABLE: "Nâng cấp không khả dụng cho hồ sơ hoặc vòng hiện tại.",

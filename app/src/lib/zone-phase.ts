@@ -11,7 +11,7 @@ export function getTaskZoneForPhase(
   if (!role || !phase) return null;
   if (phase === "MARKET_OPEN") {
     if (role === "CONSUMER") return "market";
-    if (role === "PRODUCER" || role === "INTERMEDIARY") return "task";
+    if (role === "PRODUCER" || role === "INTERMEDIARY" || role === "GOVERNMENT") return "task";
     return "map";
   }
   if (phase === "DECISION") {

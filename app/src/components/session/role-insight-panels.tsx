@@ -302,6 +302,15 @@ export function IntermediaryInsightPanel({
         />
       ) : null}
 
+      <InsightInfoCard
+        title="Nên làm gì tiếp?"
+        body={
+          inventoryUnits > 0
+            ? `Bạn đã có ${inventoryUnits} thùng trong kho. Chuyển sang khung niêm yết bán lẻ để đưa hàng ra chợ.`
+            : "Chọn một đề nghị bán sỉ ở khung bên trái để nhập hàng trước."
+        }
+      />
+
       <InsightCallout
         title="Luồng đại lý"
         body="Mua sỉ từ nhà cung cấp, đưa hàng ra chợ bán lẻ cho khách hàng, rồi xem lãi/lỗ từ chênh lệch giá."

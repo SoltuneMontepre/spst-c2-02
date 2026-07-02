@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Inbox, Store } from "lucide-react";
+import { AlertTriangle, Inbox, Store, TrendingUp, Truck } from "lucide-react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { ZonePhaseGate } from "@/components/session/zone-phase-gate";
 import { RoleKpiRow } from "@/components/session/role-kpi-row";
@@ -11,6 +11,55 @@ import { SellPanel } from "./sell-panel";
 import { OffersPanel } from "./offers-panel";
 import { WholesalePanel } from "./wholesale-panel";
 import { formatThousandDong } from "@/lib/money";
+
+function IntermediaryFlowGuide() {
+  const steps = [
+    {
+      title: "Nhập hàng sỉ",
+      body: "Chọn đề nghị từ nhà cung cấp để đưa hàng vào tồn kho.",
+      icon: Truck,
+    },
+    {
+      title: "Niêm yết bán lẻ",
+      body: "Đưa tồn kho ra chợ để khách hàng có thể mua.",
+      icon: Store,
+    },
+    {
+      title: "Theo dõi lãi/lỗ",
+      body: "Lãi đến từ chênh lệch giữa giá mua sỉ và giá bán lẻ.",
+      icon: TrendingUp,
+    },
+  ];
+
+  return (
+    <div className="rounded-[14px] border border-border bg-surface p-3 shadow-sm">
+      <p className="text-sm font-semibold text-foreground">Bạn đang đóng vai đại lý</p>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <div
+              key={step.title}
+              className="flex gap-2 rounded-[10.5px] bg-muted/25 p-2.5"
+            >
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Icon className="size-3.5" aria-hidden />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-foreground">
+                  {index + 1}. {step.title}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                  {step.body}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
@@ -74,11 +123,7 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
               ]}
             />
 
-            <div className="rounded-[10.5px] border border-border bg-surface px-3 py-2.5 text-xs text-muted-foreground">
-              <span className="font-semibold text-foreground">Luồng chính:</span>{" "}
-              mua sỉ từ nhà cung cấp → đưa ra chợ bán lẻ → theo dõi lãi/lỗ từ
-              chênh lệch giá.
-            </div>
+            <IntermediaryFlowGuide />
 
             <div className="grid gap-4 lg:grid-cols-2">
               <RoleActionCard title="Đề nghị bán sỉ nhận được" icon={Inbox}>
@@ -88,6 +133,7 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
                   inventory={data.self.inventory}
                   offers={data.market?.wholesaleOffers ?? []}
                   role="INTERMEDIARY"
+                  balanceVnd={data.self.balanceVnd}
                 />
               </RoleActionCard>
 

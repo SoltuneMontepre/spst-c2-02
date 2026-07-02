@@ -47,6 +47,7 @@ export function GamePhaseCta({
       : taskZone === "task"
         ? `/session/${sessionId}/task`
         : `/session/${sessionId}/map`;
+  const showTaskLink = taskZone != null && !(variant === "map" && taskZone === "map");
 
   const phaseTitle =
     phase === "DECISION"
@@ -67,7 +68,7 @@ export function GamePhaseCta({
             ) : null}
           </div>
         </div>
-        {taskZone ? (
+        {showTaskLink ? (
           <Link
             href={href}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-[10.5px] border border-white/20 bg-white/15 px-[15px] py-[6.25px] text-[12px] font-bold text-white transition-colors hover:bg-white/25"
@@ -98,7 +99,7 @@ export function GamePhaseCta({
           ) : null}
         </div>
       </div>
-      {taskZone ? (
+      {showTaskLink ? (
         <Link
           href={href}
           className={cn(buttonVariants({ size: "lg" }), "shrink-0")}
