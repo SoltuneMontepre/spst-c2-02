@@ -15,6 +15,7 @@ import {
   ROUND_EVENTS,
   SCENARIO,
   SCENARIO_VERSION,
+  compositionTarget,
   compositionSlots,
 } from "./scenario";
 import {
@@ -114,10 +115,16 @@ export async function hostSetParticipantRole(
   role: Role | null,
   productivityProfile?: ProductivityProfile | null,
 ): Promise<void> {
-  await assertLobbyHost(hostUserId, sessionId);
+  const session = await assertLobbyHost(hostUserId, sessionId);
   const p = await db.participant.findFirst({ where: { id: participantId, sessionId } });
   if (!p) throw new ApiError("NOT_FOUND", 404);
   assertRoleEditable(p);
+
+  if (role && role !== p.role) {
+    const roleCount = await db.participant.count({ where: { sessionId, role } });
+    const target = compositionTarget(session.maxPlayers);
+    if (roleCount >= target[role]) throw new ApiError("ROLE_CAP_REACHED", 409);
+  }
 
   let profile: ProductivityProfile | null = null;
   if (role === "PRODUCER") {
@@ -138,13 +145,21 @@ export async function hostAddBot(
   role: Role,
   productivityProfile?: ProductivityProfile | null,
 ): Promise<void> {
-  await assertLobbyHost(hostUserId, sessionId);
-  const session = await db.gameSession.findUniqueOrThrow({
-    where: { id: sessionId },
-    select: { maxPlayers: true },
+  const session = await assertLobbyHost(hostUserId, sessionId);
+  const participants = await db.participant.findMany({
+    where: { sessionId },
+    select: { role: true },
   });
-  const count = await db.participant.count({ where: { sessionId } });
-  if (count >= session.maxPlayers) throw new ApiError("SESSION_FULL", 409);
+  if (participants.length >= session.maxPlayers) {
+    throw new ApiError("SESSION_FULL", 409);
+  }
+
+  const target = compositionTarget(session.maxPlayers);
+  const counts = countRoles(participants);
+  if (ROLES.some((candidate) => counts[candidate] > target[candidate])) {
+    throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
+  }
+  if (counts[role] >= target[role]) throw new ApiError("ROLE_CAP_REACHED", 409);
 
   const roleBotCount = await db.participant.count({
     where: { sessionId, isBot: true, role },
@@ -164,6 +179,84 @@ export async function hostAddBot(
     },
   });
   await touch(sessionId, "participant:bot_added", { role });
+}
+
+const ROLES: Role[] = ["PRODUCER", "CONSUMER", "INTERMEDIARY", "GOVERNMENT"];
+
+/** Fill every unoccupied target role slot with a lobby bot. */
+export async function hostAutoFillBots(
+  hostUserId: string,
+  sessionId: string,
+): Promise<void> {
+  const session = await assertLobbyHost(hostUserId, sessionId);
+  const participants = await db.participant.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+    select: { role: true, isBot: true },
+  });
+
+  if (participants.length >= session.maxPlayers) {
+    throw new ApiError("SESSION_FULL", 409);
+  }
+  if (participants.some((participant) => !participant.role)) {
+    throw new ApiError(
+      "NOT_ALL_ROLES_ASSIGNED",
+      409,
+      "Hãy gán vai cho mọi người chơi trước khi tự động thêm bot.",
+    );
+  }
+
+  const target = compositionTarget(session.maxPlayers);
+  const counts = countRoles(participants);
+  if (ROLES.some((role) => counts[role] > target[role])) {
+    throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
+  }
+
+  const missingRoles = ROLES.flatMap((role) =>
+    Array<Role>(target[role] - counts[role]).fill(role),
+  );
+  if (participants.length + missingRoles.length !== session.maxPlayers) {
+    throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
+  }
+
+  const producerProfiles =
+    PROFILE_ASSIGNMENT[target.PRODUCER] ?? PROFILE_ASSIGNMENT[2];
+  const roleBotCounts = ROLES.reduce(
+    (acc, role) => {
+      acc[role] = participants.filter(
+        (participant) => participant.isBot && participant.role === role,
+      ).length;
+      return acc;
+    },
+    { PRODUCER: 0, CONSUMER: 0, INTERMEDIARY: 0, GOVERNMENT: 0 } as Record<
+      Role,
+      number
+    >,
+  );
+  let producerIndex = counts.PRODUCER;
+
+  await db.participant.createMany({
+    data: missingRoles.map((role) => {
+      roleBotCounts[role]++;
+      return {
+        sessionId,
+        displayNameSnapshot: botName(role, roleBotCounts[role]),
+        role,
+        productivityProfile:
+          role === "PRODUCER"
+            ? producerProfileAt(producerProfiles, producerIndex++)
+            : null,
+        isBot: true,
+        controlMode: "BOT_PERMANENT" as const,
+        ready: true,
+        presence: "ONLINE" as const,
+      };
+    }),
+  });
+  await touch(sessionId, "participant:bot_added", {
+    autoFill: true,
+    count: missingRoles.length,
+  });
 }
 
 /** Host removes a lobby bot. */
@@ -403,6 +496,10 @@ async function startSessionManual(
   }
 
   const targetSlots = compositionSlots(targetCount);
+  const targetCounts = countRoles(targetSlots.map((role) => ({ role })));
+  if (ROLES.some((role) => counts[role] > targetCounts[role])) {
+    throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
+  }
   const toCreate = missingRoleSlots(targetSlots, assigned).slice(
     0,
     Math.max(0, targetSlots.length - assigned.length),
@@ -674,6 +771,10 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
     where: { sessionId, number: session.currentRound },
     data: { phase },
   });
+  await db.participant.updateMany({
+    where: { sessionId, isBot: false },
+    data: { phaseReady: false },
+  });
   if (timed && phaseEndsAt) scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
   await touch(sessionId, "round:phase_changed", {
     phase,
@@ -681,9 +782,7 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
     paused: false,
     phaseExtensions: 0,
   });
-  void import("./ai-host").then((m) =>
-    Promise.all([m.resetPhaseReady(sessionId), m.announcePhase(sessionId)]),
-  );
+  void import("./ai-host").then((m) => m.announcePhase(sessionId));
 }
 
 /** One forward step in the round/phase machine. */
@@ -720,6 +819,7 @@ async function transition(sessionId: string, auto: boolean): Promise<void> {
     case "MARKET_OPEN":
       await setPhase(sessionId, "SETTLEMENT");
       await settleRound(sessionId, n);
+      await touch(sessionId, "round:settled", { round: n });
       return;
     case "SETTLEMENT":
       await setPhase(sessionId, "RECAP");

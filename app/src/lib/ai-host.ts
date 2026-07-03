@@ -89,14 +89,6 @@ function phaseDurationMs(session: {
   return 45_000;
 }
 
-/** Reset phase-ready flags when entering a new phase. */
-export async function resetPhaseReady(sessionId: string): Promise<void> {
-  await db.participant.updateMany({
-    where: { sessionId, isBot: false },
-    data: { phaseReady: false },
-  });
-}
-
 /** Toggle human phase-ready during active phases. */
 export async function setPhaseReady(
   userId: string,

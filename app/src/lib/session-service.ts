@@ -180,8 +180,8 @@ export async function joinSession(
       presence: "ONLINE",
     },
   });
-  await bumpAndPublish(session.id, "participant:joined", { userId });
   await syncLobbySoloSince(session.id);
+  await bumpAndPublish(session.id, "participant:joined", { userId });
 
   return { sessionId: session.id, participantId: participant.id, code: session.code };
 }
@@ -1023,8 +1023,8 @@ export async function leaveSession(userId: string, sessionId: string): Promise<v
   if (session.status !== "LOBBY") throw new ApiError("SESSION_LOCKED", 409);
 
   await db.participant.deleteMany({ where: { sessionId, userId, isBot: false } });
-  await bumpAndPublish(sessionId, "participant:left", { userId });
   await syncLobbySoloSince(sessionId);
+  await bumpAndPublish(sessionId, "participant:left", { userId });
 }
 
 const FOUR_WEEKS_MS = 28 * 24 * 60 * 60 * 1000;

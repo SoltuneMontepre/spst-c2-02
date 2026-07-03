@@ -11,11 +11,13 @@ import { appwriteConfig } from "@/lib/appwrite-config";
 import {
   getAppwriteRealtimeClient,
   isAppwriteRealtimeEnabled,
+  onAppwriteRealtimeConnectionChange,
 } from "@/lib/appwrite-client";
 import {
   applySessionGameEvent,
   applySessionSnapshot,
   parseSessionEventRow,
+  parseSessionSignalRow,
 } from "@/lib/session-stream-utils";
 
 export type SessionStreamState = "connecting" | "connected" | "disconnected";
@@ -101,7 +103,7 @@ export function useSessionStream(
     let closed = false;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     let source: EventSource | null = null;
-    let appwriteSub: { unsubscribe: () => Promise<void> } | null = null;
+    let appwriteSubs: RealtimeSubscription[] = [];
     let lastEventVersion =
       queryClient.getQueryData<SessionSnapshot>(queryKey)?.stateVersion ?? 0;
 
@@ -162,38 +164,103 @@ export function useSessionStream(
       }
     };
 
+    const stopConnectionWatch = onAppwriteRealtimeConnectionChange((state) => {
+      if (closed || appwriteSubs.length === 0) return;
+
+      if (state === "open") {
+        void queryClient.refetchQueries({ queryKey });
+        wasDisconnected.current = false;
+        setStreamState("connected");
+        teardownSSE();
+        return;
+      }
+
+      wasDisconnected.current = true;
+      setStreamState("disconnected");
+      setupSSE();
+    });
+
     const setupAppwrite = async () => {
-      if (closed || appwriteSub || !useAppwrite || !appwriteReady) return;
+      if (
+        closed ||
+        appwriteSubs.length > 0 ||
+        !useAppwrite ||
+        !appwriteReady
+      ) {
+        return;
+      }
+      const pendingSubs: RealtimeSubscription[] = [];
       try {
         const realtime = getAppwriteRealtimeClient();
-        const channel = Channel.tablesdb(appwriteConfig.databaseId)
+        const eventsChannel = Channel.tablesdb(appwriteConfig.databaseId)
           .table(appwriteConfig.sessionEventsTableId)
           .row()
           .create();
+        const signalChannel = Channel.tablesdb(appwriteConfig.databaseId)
+          .table(appwriteConfig.sessionSignalsTableId)
+          .row();
 
-        const sub = await subscribeWithTimeout(
-          realtime.subscribe(channel, (response) => {
-            if (closed) return;
-            if (!response.events.some((e) => e.includes(".create"))) return;
+        const shouldKeep = () => !closed && !source;
 
-            const event = parseSessionEventRow(
-              response.payload as Record<string, unknown>,
-            );
-            if (!event || event.sessionId !== sessionId) return;
+        const track = async (
+          promise: Promise<RealtimeSubscription>,
+        ): Promise<RealtimeSubscription> => {
+          const sub = await promise;
+          pendingSubs.push(sub);
+          return sub;
+        };
 
-            applyEvent(event);
-          }, [Query.equal("sessionId", sessionId)]),
-          () => !closed && !source,
+        const eventSubPromise = track(
+          subscribeWithTimeout(
+            realtime.subscribe(eventsChannel, (response) => {
+              if (closed) return;
+
+              const event = parseSessionEventRow(
+                response.payload as Record<string, unknown>,
+              );
+              if (!event || event.sessionId !== sessionId) return;
+
+              applyEvent(event);
+            }, [Query.equal("sessionId", sessionId)]),
+            shouldKeep,
+          ),
         );
 
+        // The per-session signal is a second delivery path. It covers the first
+        // upsert as well as later updates; stateVersion de-duplicates it against
+        // the durable session_events row.
+        const signalSubPromise = track(
+          subscribeWithTimeout(
+            realtime.subscribe(signalChannel, (response) => {
+              if (closed) return;
+
+              const event = parseSessionSignalRow(
+                response.payload as Record<string, unknown>,
+              );
+              if (!event || event.sessionId !== sessionId) return;
+
+              applyEvent(event);
+            }, [Query.equal("$id", sessionId)]),
+            shouldKeep,
+          ),
+        );
+
+        const subs = await Promise.all([eventSubPromise, signalSubPromise]);
+
         if (closed) {
-          void sub.unsubscribe();
+          subs.forEach((sub) => void sub.unsubscribe());
           return;
         }
 
-        appwriteSub = sub;
-        if (wasDisconnected.current) {
-          void queryClient.refetchQueries({ queryKey });
+        appwriteSubs = subs;
+
+        // Close the snapshot-before-subscribe race and recover anything missed
+        // while Appwrite was reconnecting.
+        await queryClient.refetchQueries({ queryKey });
+        if (closed) {
+          subs.forEach((sub) => void sub.unsubscribe());
+          appwriteSubs = [];
+          return;
         }
         wasDisconnected.current = false;
         setStreamState("connected");
@@ -201,6 +268,7 @@ export function useSessionStream(
         // Appwrite is active — drop SSE to avoid duplicate updates
         teardownSSE();
       } catch {
+        pendingSubs.forEach((sub) => void sub.unsubscribe());
         if (!closed) {
           wasDisconnected.current = true;
           setStreamState("disconnected");
@@ -221,8 +289,10 @@ export function useSessionStream(
       closed = true;
       clearInterval(hb);
       if (fallbackTimer) clearTimeout(fallbackTimer);
+      stopConnectionWatch();
       teardownSSE();
-      if (appwriteSub) void appwriteSub.unsubscribe();
+      appwriteSubs.forEach((sub) => void sub.unsubscribe());
+      appwriteSubs = [];
       setStreamState("connecting");
     };
   }, [sessionId, queryClient, enabled, useAppwrite, appwriteReady]);

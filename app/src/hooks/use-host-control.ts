@@ -24,6 +24,7 @@ export type HostLobbyAction =
       productivityProfile?: ProductivityProfile | null;
     }
   | { action: "addBot"; role: Role; productivityProfile?: ProductivityProfile }
+  | { action: "autoFillBots" }
   | { action: "removeBot"; participantId: string };
 
 export type HostMutationAction = HostAction | HostLobbyAction;

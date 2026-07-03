@@ -149,6 +149,10 @@ async function maybeNotifyHome(event: GameEvent): Promise<void> {
 
 /** Broadcast an event to every subscriber of a session. Never throws — Redis failures fall back to local emit. */
 export async function publish(event: GameEvent): Promise<void> {
+  // Start the Appwrite write immediately and await the publication attempt
+  // before the mutation request completes instead of leaving it dependent on
+  // the lifetime of a background task.
+  const appwritePublish = publishSessionSignal(event);
   const bus = getRedisBus();
   if (!bus) {
     emitLocal(event);
@@ -163,8 +167,8 @@ export async function publish(event: GameEvent): Promise<void> {
       emitLocal(event);
     }
   }
+  await appwritePublish;
   void maybeNotifyHome(event).catch(() => {});
-  void publishSessionSignal(event).catch(() => {});
 }
 
 export function subscribe(sessionId: string, listener: Listener): () => void {

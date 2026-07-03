@@ -114,7 +114,8 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
   const manualComplete =
     !manualMode ||
     (humans.every((p) => p.role) &&
-      snapshot.participants.filter((p) => p.isBot).every((p) => p.role));
+      snapshot.participants.filter((p) => p.isBot).every((p) => p.role) &&
+      ROLE_ORDER.every((role) => roleCounts[role] <= target[role]));
 
   const canStart =
     allReady &&

@@ -1,4 +1,4 @@
-// Bot behavior (SRS §13). Deterministic heuristics under same rules as humans.
+// Bot behavior (SRS §13). Seeded variation keeps decisions reproducible.
 
 import type { Participant, Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
@@ -26,6 +26,131 @@ import type {
   GovernmentRoundState,
 } from "./role-state";
 
+type BotSession = Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>;
+type BotTemperament = "CAUTIOUS" | "BALANCED" | "BOLD";
+
+const BOT_TEMPERAMENTS: Record<
+  BotTemperament,
+  {
+    productionShare: [number, number];
+    upgradeBalanceShare: number;
+    askSteps: [number, number];
+    willingnessVnd: [number, number];
+    offerDiscountSteps: [number, number];
+    sellerConcessionSteps: [number, number];
+  }
+> = {
+  CAUTIOUS: {
+    productionShare: [0.55, 0.75],
+    upgradeBalanceShare: 0.3,
+    askSteps: [1, 2],
+    willingnessVnd: [16000, 18000],
+    offerDiscountSteps: [2, 3],
+    sellerConcessionSteps: [0, 1],
+  },
+  BALANCED: {
+    productionShare: [0.7, 0.9],
+    upgradeBalanceShare: 0.4,
+    askSteps: [0, 1],
+    willingnessVnd: [18000, 20000],
+    offerDiscountSteps: [1, 2],
+    sellerConcessionSteps: [1, 2],
+  },
+  BOLD: {
+    productionShare: [0.85, 1],
+    upgradeBalanceShare: 0.5,
+    askSteps: [-1, 1],
+    willingnessVnd: [19000, 20000],
+    offerDiscountSteps: [1, 1],
+    sellerConcessionSteps: [1, 3],
+  },
+};
+
+function seededUnit(...parts: Array<string | number>): number {
+  const seed = parts.join(":");
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  hash += hash << 13;
+  hash ^= hash >>> 7;
+  hash += hash << 3;
+  hash ^= hash >>> 17;
+  hash += hash << 5;
+  return (hash >>> 0) / 4294967296;
+}
+
+function seededInt(
+  min: number,
+  max: number,
+  ...parts: Array<string | number>
+): number {
+  if (max <= min) return min;
+  return min + Math.floor(seededUnit(...parts) * (max - min + 1));
+}
+
+function temperament(bot: Participant, session: BotSession): BotTemperament {
+  const options: BotTemperament[] = ["CAUTIOUS", "BALANCED", "BOLD"];
+  return options[seededInt(0, options.length - 1, session.id, session.currentRound, bot.id, "temperament")];
+}
+
+function botConfig(bot: Participant, session: BotSession) {
+  return BOT_TEMPERAMENTS[temperament(bot, session)];
+}
+
+function botInt(
+  bot: Participant,
+  session: BotSession,
+  purpose: string,
+  min: number,
+  max: number,
+): number {
+  return seededInt(min, max, session.id, session.currentRound, bot.id, purpose);
+}
+
+function botAskPrice(
+  bot: Participant,
+  session: BotSession,
+  purpose: string,
+  referencePriceVnd: number,
+  floorPriceVnd: number,
+): number {
+  const [minStep, maxStep] = botConfig(bot, session).askSteps;
+  const step = botInt(bot, session, purpose, minStep, maxStep);
+  return Math.max(floorPriceVnd, referencePriceVnd + step * 1000);
+}
+
+function intermediaryBidCeiling(
+  bot: Participant,
+  session: BotSession,
+  purpose: string,
+  referencePriceVnd: number,
+): number {
+  const range: Record<BotTemperament, [number, number]> = {
+    CAUTIOUS: [-1, 0],
+    BALANCED: [0, 1],
+    BOLD: [0, 2],
+  };
+  const [minStep, maxStep] = range[temperament(bot, session)];
+  return Math.max(
+    1000,
+    referencePriceVnd + botInt(bot, session, purpose, minStep, maxStep) * 1000,
+  );
+}
+
+function seededOrder<T extends { id: string }>(
+  items: T[],
+  session: BotSession,
+  purpose: string,
+): T[] {
+  return [...items].sort(
+    (a, b) =>
+      seededUnit(session.id, session.currentRound, a.id, purpose) -
+      seededUnit(session.id, session.currentRound, b.id, purpose),
+  );
+}
+
 async function bump(sessionId: string, type: string, data?: unknown): Promise<void> {
   const s = await db.gameSession.update({
     where: { id: sessionId },
@@ -35,7 +160,7 @@ async function bump(sessionId: string, type: string, data?: unknown): Promise<vo
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }
 
-function botCtx(bot: Participant, session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>) {
+function botCtx(bot: Participant, session: BotSession) {
   return { participant: bot, session };
 }
 
@@ -64,6 +189,7 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
       if (bot.role === "PRODUCER") {
         const state = bot.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
         if (!state || !bot.wallet) continue;
+        const config = botConfig(bot, session);
 
         // Upgrade if economical (§13.1).
         if (session.currentRound < 4 && !state.pendingUpgrade) {
@@ -77,7 +203,7 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
           if (
             nextCost > 0 &&
             roundsLeft >= 2 &&
-            nextCost <= bot.wallet.balanceVnd * 0.4
+            nextCost <= bot.wallet.balanceVnd * config.upgradeBalanceShare
           ) {
             try {
               await investUpgrade(tx, botCtx(bot, session));
@@ -97,7 +223,19 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
           unitCostVnd: producerUnitCostVnd(state),
           individualUnitCostVnd: state.individualUnitCostVnd,
         });
-        const qty = Math.max(allowed > 0 ? 1 : 0, Math.floor(allowed * 0.75));
+        const productionShare =
+          config.productionShare[0] +
+          seededUnit(
+            session.id,
+            session.currentRound,
+            bot.id,
+            "production-share",
+          ) *
+            (config.productionShare[1] - config.productionShare[0]);
+        const qty = Math.min(
+          allowed,
+          Math.max(allowed > 0 ? 1 : 0, Math.round(allowed * productionShare)),
+        );
         if (qty > 0) await produce(tx, botCtx(bot, session), qty);
       }
 
@@ -147,11 +285,12 @@ function botMarketTimerName(wave: number): string {
   return `${BOT_MARKET_TIMER_PREFIX}-${wave}`;
 }
 
-function marketWaveOffsets(totalMs: number): number[] {
+function marketWaveOffsets(sessionId: string, totalMs: number): number[] {
   const safeTotal = Math.max(20_000, totalMs);
-  return [0.02, 0.16, 0.32, 0.5, 0.7, 0.88].map((pct) =>
-    Math.max(1_000, Math.floor(safeTotal * pct)),
-  );
+  return [0.02, 0.16, 0.32, 0.5, 0.7, 0.88].map((pct, index) => {
+    const jitter = (seededUnit(sessionId, index + 1, "wave-timing") - 0.5) * 0.05;
+    return Math.max(1_000, Math.floor(safeTotal * Math.max(0.01, pct + jitter)));
+  });
 }
 
 export function clearBotMarketTimers(sessionId: string): void {
@@ -166,7 +305,7 @@ export function scheduleBotMarketWaves(
   includeFirst = true,
 ): void {
   clearBotMarketTimers(sessionId);
-  marketWaveOffsets(totalMs).forEach((offset, index) => {
+  marketWaveOffsets(sessionId, totalMs).forEach((offset, index) => {
     const wave = index + 1;
     if (!includeFirst && wave === 1) return;
     scheduleNamedTimer(sessionId, botMarketTimerName(wave), offset, () => {
@@ -278,10 +417,14 @@ async function listBotProducerRetail(
   price: number,
 ): Promise<number> {
   let actions = 0;
-  const producers = await botProducers(tx, session.id, roundId);
+  const producers = seededOrder(
+    await botProducers(tx, session.id, roundId),
+    session,
+    "producer-retail-order",
+  );
   for (const seller of producers) {
     const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
-    const ask = Math.max(pstate ? producerUnitCostVnd(pstate) : price, price);
+    const unitCost = pstate ? producerUnitCostVnd(pstate) : price;
     const lots = await tx.inventoryLot.findMany({
       where: {
         ownerParticipantId: seller.id,
@@ -291,9 +434,23 @@ async function listBotProducerRetail(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of lots) {
+      const ask = botAskPrice(
+        seller,
+        session,
+        `producer-retail-ask-${lot.id}`,
+        price,
+        unitCost,
+      );
+      const listingShare = botInt(
+        seller,
+        session,
+        `producer-retail-qty-${lot.id}`,
+        40,
+        75,
+      );
       const retailQty = Math.min(
         lot.availableQuantity,
-        Math.max(1, Math.ceil(lot.availableQuantity / 2)),
+        Math.max(1, Math.ceil((lot.availableQuantity * listingShare) / 100)),
       );
       if (retailQty <= 0) continue;
       try {
@@ -318,10 +475,14 @@ async function createBotWholesaleOffers(
   price: number,
 ): Promise<number> {
   let actions = 0;
-  const producers = await botProducers(tx, session.id, roundId);
+  const producers = seededOrder(
+    await botProducers(tx, session.id, roundId),
+    session,
+    "producer-wholesale-order",
+  );
   for (const seller of producers) {
     const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
-    const ask = Math.max(pstate ? producerUnitCostVnd(pstate) : price, price);
+    const unitCost = pstate ? producerUnitCostVnd(pstate) : price;
     const lots = await tx.inventoryLot.findMany({
       where: {
         ownerParticipantId: seller.id,
@@ -331,13 +492,30 @@ async function createBotWholesaleOffers(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of lots) {
-      const qty = Math.min(lot.availableQuantity, 2);
+      const ask = botAskPrice(
+        seller,
+        session,
+        `producer-wholesale-ask-${lot.id}`,
+        price,
+        unitCost,
+      );
+      const qty = Math.min(
+        lot.availableQuantity,
+        botInt(seller, session, `producer-wholesale-qty-${lot.id}`, 1, 3),
+      );
       if (qty <= 0) continue;
+      const discountSteps = botInt(
+        seller,
+        session,
+        `producer-wholesale-discount-${lot.id}`,
+        1,
+        2,
+      );
       try {
         await createWholesaleOffer(tx, botCtx(seller, session), {
           inventoryLotId: lot.id,
           quantity: qty,
-          minimumPriceVnd: Math.max(1000, ask - 1000),
+          minimumPriceVnd: Math.max(unitCost, ask - discountSteps * 1000),
         });
         actions++;
       } catch {
@@ -355,10 +533,14 @@ async function respondBotWholesaleOffers(
   price: number,
 ): Promise<number> {
   let actions = 0;
-  const intermediaries = await tx.participant.findMany({
-    where: { sessionId: session.id, isBot: true, role: "INTERMEDIARY" },
-    include: { wallet: true },
-  });
+  const intermediaries = seededOrder(
+    await tx.participant.findMany({
+      where: { sessionId: session.id, isBot: true, role: "INTERMEDIARY" },
+      include: { wallet: true },
+    }),
+    session,
+    "wholesale-buyer-order",
+  );
   for (const im of intermediaries) {
     if (!im.wallet) continue;
     const wholesale = await tx.wholesaleOffer.findFirst({
@@ -366,9 +548,15 @@ async function respondBotWholesaleOffers(
       orderBy: [{ minimumPriceVnd: "asc" }, { createdAt: "asc" }],
     });
     if (!wholesale) continue;
+    const bidCeiling = intermediaryBidCeiling(
+      im,
+      session,
+      `wholesale-bid-${wholesale.id}`,
+      price,
+    );
     try {
       if (
-        wholesale.minimumPriceVnd <= price &&
+        wholesale.minimumPriceVnd <= bidCeiling &&
         im.wallet.balanceVnd >= wholesale.minimumPriceVnd * wholesale.quantity
       ) {
         await respondWholesale(tx, botCtx(im, session), {
@@ -376,11 +564,19 @@ async function respondBotWholesaleOffers(
           decision: "ACCEPT",
         });
         actions++;
-      } else if (wholesale.minimumPriceVnd > price) {
+      } else if (
+        wholesale.minimumPriceVnd > bidCeiling &&
+        seededUnit(
+          session.id,
+          session.currentRound,
+          im.id,
+          wholesale.id,
+          "reject-wholesale",
+        ) < 0.35
+      ) {
         await respondWholesale(tx, botCtx(im, session), {
           offerId: wholesale.id,
-          decision: "COUNTER",
-          counterPriceVnd: Math.max(1000, price),
+          decision: "REJECT",
         });
         actions++;
       }
@@ -401,15 +597,31 @@ async function acceptBotWholesaleCounters(
   const producerById = new Map(producers.map((p) => [p.id, p]));
   const countered = await tx.wholesaleOffer.findMany({
     where: { roundId, status: "COUNTERED" },
+    include: { inventoryLot: true },
     orderBy: { updatedAt: "asc" },
   });
   for (const offer of countered) {
     const seller = producerById.get(offer.producerId);
     if (!seller) continue;
+    const acceptChance: Record<BotTemperament, number> = {
+      CAUTIOUS: 0.85,
+      BALANCED: 0.75,
+      BOLD: 0.65,
+    };
+    const accepts =
+      Boolean(offer.counterPriceVnd) &&
+      offer.counterPriceVnd! >= offer.inventoryLot.unitCostVnd &&
+      seededUnit(
+        session.id,
+        session.currentRound,
+        seller.id,
+        offer.id,
+        "accept-wholesale-counter",
+      ) < acceptChance[temperament(seller, session)];
     try {
       await respondWholesale(tx, botCtx(seller, session), {
         offerId: offer.id,
-        decision: "ACCEPT",
+        decision: accepts ? "ACCEPT" : "REJECT",
       });
       actions++;
     } catch {
@@ -424,10 +636,14 @@ async function listBotIntermediaryRetail(
   session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
 ): Promise<number> {
   let actions = 0;
-  const intermediaries = await tx.participant.findMany({
-    where: { sessionId: session.id, isBot: true, role: "INTERMEDIARY" },
-    include: { wallet: true },
-  });
+  const intermediaries = seededOrder(
+    await tx.participant.findMany({
+      where: { sessionId: session.id, isBot: true, role: "INTERMEDIARY" },
+      include: { wallet: true },
+    }),
+    session,
+    "intermediary-retail-order",
+  );
   for (const im of intermediaries) {
     const stock = await tx.inventoryLot.findMany({
       where: {
@@ -438,11 +654,25 @@ async function listBotIntermediaryRetail(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of stock) {
-      const retailAsk = Math.min(30000, lot.unitCostVnd + 2000);
+      const markupSteps = botInt(
+        im,
+        session,
+        `intermediary-markup-${lot.id}`,
+        1,
+        4,
+      );
+      const retailAsk = Math.min(30000, lot.unitCostVnd + markupSteps * 1000);
+      const retailQty = botInt(
+        im,
+        session,
+        `intermediary-qty-${lot.id}`,
+        1,
+        lot.availableQuantity,
+      );
       try {
         await listForSale(tx, botCtx(im, session), {
           inventoryLotId: lot.id,
-          quantity: lot.availableQuantity,
+          quantity: retailQty,
           askPriceVnd: retailAsk,
         });
         actions++;
@@ -464,10 +694,17 @@ async function runBotConsumerDemand(
     where: { sessionId_number: { sessionId: session.id, number: session.currentRound } },
     select: { id: true },
   });
-  const consumers = await tx.participant.findMany({
-    where: { sessionId: session.id, isBot: true, role: "CONSUMER" },
-    include: { wallet: true, roleStates: { where: { roundId: round.id }, take: 1 } },
-  });
+  const consumers = seededOrder(
+    await tx.participant.findMany({
+      where: { sessionId: session.id, isBot: true, role: "CONSUMER" },
+      include: {
+        wallet: true,
+        roleStates: { where: { roundId: round.id }, take: 1 },
+      },
+    }),
+    session,
+    `consumer-demand-order-${maxActionsPerConsumer}`,
+  );
   for (const consumer of consumers) {
     const state = consumer.roleStates[0]?.state as unknown as ConsumerRoundState | undefined;
     if (!state) continue;
@@ -477,7 +714,7 @@ async function runBotConsumerDemand(
       attempts++;
       const wallet = await tx.wallet.findUnique({ where: { participantId: consumer.id } });
       if (!wallet) break;
-      const listing = await tx.listing.findFirst({
+      const listings = await tx.listing.findMany({
         where: {
           round: { sessionId: session.id, number: session.currentRound },
           status: { in: ["OPEN", "PARTIALLY_FILLED"] },
@@ -485,9 +722,31 @@ async function runBotConsumerDemand(
           sellerParticipantId: { not: consumer.id },
         },
         orderBy: [{ askPriceVnd: "asc" }, { createdAt: "asc" }],
+        take: 3,
       });
+      const listing =
+        listings[
+          botInt(
+            consumer,
+            session,
+            `consumer-listing-${maxActionsPerConsumer}-${attempts}`,
+            0,
+            Math.max(0, listings.length - 1),
+          )
+        ];
       if (!listing) break;
-      const maxPay = Math.min(20000, Math.floor(wallet.balanceVnd / Math.max(need, 1)));
+      const config = botConfig(consumer, session);
+      const willingness = botInt(
+        consumer,
+        session,
+        `consumer-willingness-${maxActionsPerConsumer}-${attempts}`,
+        config.willingnessVnd[0],
+        config.willingnessVnd[1],
+      );
+      const maxPay = Math.min(
+        willingness,
+        Math.floor(wallet.balanceVnd / Math.max(need, 1)),
+      );
       try {
         if (listing.askPriceVnd <= maxPay) {
           await buyNow(tx, botCtx(consumer, session), {
@@ -497,7 +756,14 @@ async function runBotConsumerDemand(
           need--;
           actions++;
         } else {
-          const offerPrice = Math.max(1000, listing.askPriceVnd - 2000);
+          const discountSteps = botInt(
+            consumer,
+            session,
+            `consumer-offer-${listing.id}`,
+            config.offerDiscountSteps[0],
+            config.offerDiscountSteps[1],
+          );
+          const offerPrice = Math.max(1000, listing.askPriceVnd - discountSteps * 1000);
           if (offerPrice < listing.askPriceVnd && wallet.balanceVnd >= offerPrice) {
             await makeOffer(tx, botCtx(consumer, session), {
               listingId: listing.id,
@@ -522,34 +788,57 @@ async function respondBotRetailOffers(
   price: number,
 ): Promise<number> {
   let actions = 0;
-  const offers = await tx.offer.findMany({
-    where: {
-      status: "OPEN",
-      listing: {
-        round: { sessionId: session.id, number: session.currentRound },
-        sellerParticipantId: {
-          in: (
-            await tx.participant.findMany({
-              where: {
-                sessionId: session.id,
-                isBot: true,
-                role: { in: ["PRODUCER", "INTERMEDIARY"] },
-              },
-              select: { id: true },
-            })
-          ).map((p) => p.id),
+  const offers = seededOrder(
+    await tx.offer.findMany({
+      where: {
+        status: "OPEN",
+        listing: {
+          round: { sessionId: session.id, number: session.currentRound },
+          sellerParticipantId: {
+            in: (
+              await tx.participant.findMany({
+                where: {
+                  sessionId: session.id,
+                  isBot: true,
+                  role: { in: ["PRODUCER", "INTERMEDIARY"] },
+                },
+                select: { id: true },
+              })
+            ).map((p) => p.id),
+          },
         },
       },
-    },
-    include: { listing: true },
-    orderBy: { createdAt: "asc" },
-    take: 12,
-  });
+      include: { listing: true },
+      orderBy: { createdAt: "asc" },
+      take: 12,
+    }),
+    session,
+    "retail-offer-response-order",
+  );
   for (const offer of offers) {
     if (!offer.listing) continue;
     const seller = await tx.participant.findUnique({ where: { id: offer.toParticipantId } });
     if (!seller?.isBot) continue;
-    const acceptFloor = Math.max(1000, Math.min(price, offer.listing.askPriceVnd - 1000));
+    const config = botConfig(seller, session);
+    const concessionSteps = botInt(
+      seller,
+      session,
+      `seller-concession-${offer.id}`,
+      config.sellerConcessionSteps[0],
+      config.sellerConcessionSteps[1],
+    );
+    const counterPrice = Math.max(
+      offer.offerPriceVnd + 1000,
+      offer.listing.askPriceVnd - Math.max(1, concessionSteps) * 1000,
+    );
+    const acceptFloor = Math.max(1000, Math.min(price, counterPrice));
+    const counterGapSteps = botInt(
+      seller,
+      session,
+      `seller-counter-gap-${offer.id}`,
+      2,
+      4,
+    );
     try {
       if (offer.offerPriceVnd >= acceptFloor) {
         await respondOffer(tx, botCtx(seller, session), {
@@ -557,11 +846,14 @@ async function respondBotRetailOffers(
           decision: "ACCEPT",
         });
         actions++;
-      } else if (offer.listing.askPriceVnd - offer.offerPriceVnd >= 3000) {
+      } else if (
+        offer.listing.askPriceVnd - offer.offerPriceVnd >= counterGapSteps * 1000 &&
+        counterPrice < offer.listing.askPriceVnd
+      ) {
         await respondOffer(tx, botCtx(seller, session), {
           offerId: offer.id,
           decision: "COUNTER",
-          counterPriceVnd: Math.max(1000, offer.listing.askPriceVnd - 1000),
+          counterPriceVnd: counterPrice,
         });
         actions++;
       }

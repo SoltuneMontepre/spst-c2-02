@@ -12,6 +12,7 @@ import {
   hostSetAutoHost,
   hostSetParticipantRole,
   hostAddBot,
+  hostAutoFillBots,
   hostRemoveBot,
   hostSwapRoles,
 } from "@/lib/game-service";
@@ -44,6 +45,7 @@ const schema = z.discriminatedUnion("action", [
     role: roleSchema,
     productivityProfile: profileSchema.nullable().optional(),
   }),
+  z.object({ action: z.literal("autoFillBots") }),
   z.object({
     action: z.literal("removeBot"),
     participantId: z.string().uuid(),
@@ -79,6 +81,9 @@ export async function POST(
         break;
       case "addBot":
         await hostAddBot(user.id, id, body.role, body.productivityProfile);
+        break;
+      case "autoFillBots":
+        await hostAutoFillBots(user.id, id);
         break;
       case "removeBot":
         await hostRemoveBot(user.id, id, body.participantId);

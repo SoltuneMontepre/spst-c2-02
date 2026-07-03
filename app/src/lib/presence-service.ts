@@ -95,6 +95,7 @@ export async function heartbeat(
       participantId: participant.id,
       userId,
       presence: "ONLINE",
+      controlMode,
     });
   }
   return { controlMode };

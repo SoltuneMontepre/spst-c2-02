@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { Channel } from "appwrite";
+import { Channel, Query } from "appwrite";
 import type { HomeDashboard } from "@/lib/session-service";
 import { apiFetch } from "./use-api";
 import { useAppwriteSession } from "./use-appwrite-session";
@@ -11,6 +11,7 @@ import { appwriteConfig } from "@/lib/appwrite-config";
 import {
   getAppwriteRealtimeClient,
   isAppwriteRealtimeEnabled,
+  onAppwriteRealtimeConnectionChange,
 } from "@/lib/appwrite-client";
 
 export type HomeStreamState = "connecting" | "connected" | "disconnected";
@@ -118,43 +119,63 @@ export function useHomeStream(): HomeStreamState {
       }
     };
 
+    const stopConnectionWatch = onAppwriteRealtimeConnectionChange((state) => {
+      if (closed || appwriteSubs.length === 0) return;
+
+      if (state === "open") {
+        refetchDashboard();
+        wasDisconnected.current = false;
+        setStreamState("connected");
+        teardownSSE();
+        return;
+      }
+
+      wasDisconnected.current = true;
+      setStreamState("disconnected");
+      setupSSE();
+    });
+
     const setupAppwrite = async () => {
-      if (closed || appwriteSubs.length > 0 || !useAppwrite || !appwriteReady || !userId) return;
-      const pendingSubs: RealtimeSubscription[] = [];
+      if (
+        closed ||
+        appwriteSubs.length > 0 ||
+        !useAppwrite ||
+        !appwriteReady ||
+        !userId
+      ) {
+        return;
+      }
       try {
         const realtime = getAppwriteRealtimeClient();
-
-        const subscribeRow = async (rowId: string) => {
-          const sub = await subscribeWithTimeout(
-            realtime.subscribe(
-              Channel.tablesdb(appwriteConfig.databaseId)
-                .table(appwriteConfig.homeSignalsTableId)
-                .row(rowId)
-                .update(),
-              () => {
-                if (!closed) refetchDashboard();
-              },
-            ),
-            () => !closed && !source,
-          );
-          pendingSubs.push(sub);
-          return sub;
-        };
-
-        const subs = await Promise.all([subscribeRow("public"), subscribeRow(userId)]);
+        const sub = await subscribeWithTimeout(
+          realtime.subscribe(
+            Channel.tablesdb(appwriteConfig.databaseId)
+              .table(appwriteConfig.homeSignalsTableId)
+              .row(),
+            (response) => {
+              if (closed) return;
+              const rowId = String(
+                (response.payload as Record<string, unknown>).$id ?? "",
+              );
+              if (rowId === "public" || rowId === userId) refetchDashboard();
+            },
+            [Query.equal("$id", ["public", userId])],
+          ),
+          () => !closed && !source,
+        );
+        const subs = [sub];
         if (closed) {
           subs.forEach((s) => void s.unsubscribe());
           return;
         }
         appwriteSubs = subs;
-        if (wasDisconnected.current) refetchDashboard();
+        refetchDashboard();
         wasDisconnected.current = false;
         setStreamState("connected");
 
         // Appwrite is active — drop SSE to avoid duplicate updates
         teardownSSE();
       } catch {
-        pendingSubs.forEach((s) => void s.unsubscribe());
         if (!closed) {
           wasDisconnected.current = true;
           setStreamState("disconnected");
@@ -174,6 +195,7 @@ export function useHomeStream(): HomeStreamState {
     return () => {
       closed = true;
       if (fallbackTimer) clearTimeout(fallbackTimer);
+      stopConnectionWatch();
       teardownSSE();
       appwriteSubs.forEach((s) => void s.unsubscribe());
       setStreamState("connecting");

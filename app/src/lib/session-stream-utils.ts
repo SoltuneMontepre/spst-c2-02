@@ -9,20 +9,20 @@ export const SESSION_LIFECYCLE_EVENTS = new Set([
   "session:debrief",
 ]);
 
-export const SESSION_ROSTER_REFETCH_EVENTS = new Set([
+export const SESSION_SNAPSHOT_REFETCH_EVENTS = new Set([
   "participant:joined",
   "participant:left",
   "participant:bot_added",
   "participant:bot_removed",
+  "participant:role_set",
+  "round:phase_changed",
 ]);
 
 const SESSION_DELTA_PATCH_EVENTS = new Set([
   "participant:ready",
   "participant:presence",
   "participant:phase_ready",
-  "participant:role_set",
   "bot:control_changed",
-  "round:phase_changed",
   "session:paused",
   "session:resumed",
   "session:extended",
@@ -89,15 +89,18 @@ export function patchSessionSnapshot(
   }
 
   if (event.type === "participant:presence" && event.data) {
-    const { participantId, presence } = event.data as {
+    const { participantId, presence, controlMode } = event.data as {
       participantId?: string;
       presence: Presence;
+      controlMode?: ControlMode;
     };
     if (!participantId) return undefined;
     return {
       ...old,
       participants: old.participants.map((p) =>
-        p.id === participantId ? { ...p, presence } : p,
+        p.id === participantId
+          ? { ...p, presence, controlMode: controlMode ?? p.controlMode }
+          : p,
       ),
     };
   }
@@ -221,8 +224,14 @@ export function applySessionGameEvent(
   queryKey: readonly ["session", string],
   event: GameEvent,
 ): void {
-  if (SESSION_LIFECYCLE_EVENTS.has(event.type) || SESSION_ROSTER_REFETCH_EVENTS.has(event.type)) {
+  if (
+    SESSION_LIFECYCLE_EVENTS.has(event.type) ||
+    SESSION_SNAPSHOT_REFETCH_EVENTS.has(event.type)
+  ) {
     void queryClient.refetchQueries({ queryKey });
+    if (SESSION_LIFECYCLE_EVENTS.has(event.type)) {
+      void queryClient.invalidateQueries({ queryKey: [...queryKey, "result"] });
+    }
     return;
   }
 

@@ -13,7 +13,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   WRONG_PHASE: "Thao tác không khả dụng trong giai đoạn hiện tại.",
   PRODUCER_INPUT_LOCKED: "Cơ quan quản lý đang chọn chính sách. Sản xuất mở sau 15 giây.",
   INVALID_MONEY_STEP: "Giá phải là bội số của 1 nghìn Đồng.",
-  SESSION_FULL: "Phòng đã đủ 10 người chơi.",
+  SESSION_FULL: "Phòng đã đủ số người chơi.",
+  ROLE_CAP_REACHED: "Vai trò này đã đủ số lượng theo cơ cấu phòng.",
+  INVALID_ROLE_DISTRIBUTION:
+    "Cơ cấu vai trò đang vượt mục tiêu. Hãy điều chỉnh vai trước khi thêm bot.",
   LATE_JOIN_FORBIDDEN: "Phiên đã bắt đầu; chỉ thành viên cũ có thể kết nối lại.",
   ROOM_EXPIRED: "Mã phòng đã hết hạn.",
   ROOM_NOT_FOUND: "Không tìm thấy phòng.",
