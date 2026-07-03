@@ -293,12 +293,14 @@ export function IntermediaryInsightPanel({
   inventoryUnits,
   soldUnits,
   marginK,
+  wholesaleOfferCount,
   marketActivity,
 }: {
   balanceVnd: number | null;
   inventoryUnits: number;
   soldUnits: number;
   marginK: number;
+  wholesaleOfferCount: number;
   marketActivity?: MarketActivityView[];
 }) {
   return (
@@ -333,7 +335,9 @@ export function IntermediaryInsightPanel({
         body={
           inventoryUnits > 0
             ? `Bạn đã có ${inventoryUnits} thùng trong kho. Chuyển sang khung niêm yết bán lẻ để đưa hàng ra chợ.`
-            : "Chọn một đề nghị bán sỉ ở khung bên trái để nhập hàng trước."
+            : wholesaleOfferCount > 0
+              ? "Chọn một đề nghị bán sỉ ở khung bên trái để nhập hàng trước."
+              : "Nhà cung cấp đang chuẩn bị nguồn hàng sỉ. Đề nghị phù hợp sẽ tự xuất hiện trong khung bên trái."
         }
       />
 

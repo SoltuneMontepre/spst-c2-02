@@ -932,9 +932,15 @@ async function buildAnalytics(sessionId: string): Promise<RoundAnalytics[]> {
   const snapshots = await db.marketSnapshot.findMany({
     where: { isFinal: true, round: { sessionId } },
     include: { round: { select: { number: true } } },
-    orderBy: { round: { number: "asc" } },
+    orderBy: [{ round: { number: "asc" } }, { capturedAt: "desc" }],
   });
-  return snapshots.map((s) => ({
+  const latestByRound = new Map<number, (typeof snapshots)[number]>();
+  for (const snapshot of snapshots) {
+    if (!latestByRound.has(snapshot.round.number)) {
+      latestByRound.set(snapshot.round.number, snapshot);
+    }
+  }
+  return [...latestByRound.values()].map((s) => ({
     number: s.round.number,
     unitValueVnd: s.unitValueVnd,
     marketPriceVnd: s.marketPriceVnd,

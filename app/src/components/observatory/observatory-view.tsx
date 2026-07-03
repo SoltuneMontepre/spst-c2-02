@@ -355,6 +355,13 @@ function ObservatoryDashboard({
             currentRound={data.currentRound}
           />
         </div>
+        {stats.marketPriceVnd == null && stats.source !== "planned" ? (
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Chưa có giao dịch thành công nên chưa có đường giá thị trường. Mũi tên chỉ
+            áp lực cung-cầu: cầu vượt cung có xu hướng đẩy giá lên, nhưng không tự tạo
+            ra một mức giá.
+          </p>
+        ) : null}
       </Card>
 
       <div className="grid gap-3.5 md:grid-cols-3">

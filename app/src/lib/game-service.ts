@@ -609,83 +609,123 @@ async function enterRound(sessionId: string, n: number): Promise<void> {
     where: { sessionId },
     include: { wallet: true },
   });
+  const previousRound =
+    n > 1
+      ? await db.round.findUnique({
+          where: { sessionId_number: { sessionId, number: n - 1 } },
+          include: { roleStates: { where: { role: "PRODUCER" } } },
+        })
+      : null;
+  const previousProducerState = new Map(
+    (previousRound?.roleStates ?? []).map((state) => [
+      state.participantId,
+      state.state as unknown as ProducerRoundState,
+    ]),
+  );
+  const upgradeIds: Record<ProductivityProfile, string[]> = {
+    TRADITIONAL: [],
+    SOCIAL_AVERAGE: [],
+    PIONEER: [],
+  };
+  for (const participant of participants) {
+    if (participant.role !== "PRODUCER") continue;
+    const upgrade = previousProducerState.get(participant.id)?.pendingUpgrade;
+    if (!upgrade) continue;
+    participant.productivityProfile = upgrade;
+    upgradeIds[upgrade].push(participant.id);
+  }
+
   const consumerCount = participants.filter((p) => p.role === "CONSUMER").length;
   const needPlan = distributeNeed(consumerCount, n);
+  const phaseEndsAt = new Date(Date.now() + PHASE_DURATIONS_SEC.EVENT * 1000);
 
-  await db.$transaction(async (tx) => {
-    const round = await tx.round.upsert({
-      where: { sessionId_number: { sessionId, number: n } },
-      create: { sessionId, number: n, phase: "EVENT", ...cfg },
-      update: { phase: "EVENT" },
-    });
-
-    let consumerIdx = 0;
-    for (const p of participants) {
-      if (!p.role) continue;
-
-      // Apply pending tech upgrade from previous round (SRS §5.4).
-      if (n > 1 && p.role === "PRODUCER") {
-        const prevRound = await tx.round.findUnique({
-          where: { sessionId_number: { sessionId, number: n - 1 } },
-        });
-        if (prevRound) {
-          const prevRs = await tx.roleState.findUnique({
-            where: {
-              participantId_roundId: { participantId: p.id, roundId: prevRound.id },
-            },
-          });
-          const prev = prevRs?.state as unknown as ProducerRoundState | undefined;
-          if (prev?.pendingUpgrade) {
-            await tx.participant.update({
-              where: { id: p.id },
-              data: { productivityProfile: prev.pendingUpgrade },
-            });
-            p.productivityProfile = prev.pendingUpgrade;
-          }
-        }
-      }
-
-      // Consumer subsidy each round (§5.1).
-      if (p.role === "CONSUMER" && p.wallet) {
-        await tx.wallet.update({
-          where: { participantId: p.id },
-          data: { balanceVnd: { increment: SCENARIO.consumerSubsidyPerRoundVnd } },
-        });
-        await tx.ledgerEntry.create({
-          data: {
-            sessionId,
-            roundId: round.id,
-            walletId: p.wallet.id,
-            type: "SUBSIDY",
-            amountVnd: SCENARIO.consumerSubsidyPerRoundVnd,
-          },
-        });
-      }
-      await tx.roleState.upsert({
-        where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
-        create: {
-          participantId: p.id,
-          roundId: round.id,
-          role: p.role,
-          state: buildRoleState(
-            p.role,
-            p.productivityProfile,
-            n,
-            needPlan[consumerIdx],
-          ) as unknown as Prisma.InputJsonValue,
-        },
-        update: {},
+  await db.$transaction(
+    async (tx) => {
+      const round = await tx.round.upsert({
+        where: { sessionId_number: { sessionId, number: n } },
+        create: { sessionId, number: n, phase: "EVENT", ...cfg },
+        update: { phase: "EVENT", ...cfg },
       });
-      if (p.role === "CONSUMER") consumerIdx++;
-    }
+      const initializedCount = await tx.roleState.count({
+        where: { roundId: round.id },
+      });
 
-    await tx.gameSession.update({
-      where: { id: sessionId },
-      data: { status: `ROUND_${n}` as SessionStatus, currentRound: n },
-    });
+      if (initializedCount === 0) {
+        for (const profile of Object.keys(upgradeIds) as ProductivityProfile[]) {
+          if (upgradeIds[profile].length === 0) continue;
+          await tx.participant.updateMany({
+            where: { id: { in: upgradeIds[profile] } },
+            data: { productivityProfile: profile },
+          });
+        }
+
+        const consumers = participants.filter(
+          (participant) => participant.role === "CONSUMER" && participant.wallet,
+        );
+        if (consumers.length > 0) {
+          await tx.wallet.updateMany({
+            where: { participantId: { in: consumers.map((consumer) => consumer.id) } },
+            data: { balanceVnd: { increment: SCENARIO.consumerSubsidyPerRoundVnd } },
+          });
+          await tx.ledgerEntry.createMany({
+            data: consumers.map((consumer) => ({
+              sessionId,
+              roundId: round.id,
+              walletId: consumer.wallet!.id,
+              type: "SUBSIDY",
+              amountVnd: SCENARIO.consumerSubsidyPerRoundVnd,
+            })),
+          });
+        }
+
+        let consumerIndex = 0;
+        const roleStates = participants.flatMap((participant) => {
+          if (!participant.role) return [];
+          const state = buildRoleState(
+            participant.role,
+            participant.productivityProfile,
+            n,
+            needPlan[consumerIndex],
+          ) as unknown as Prisma.InputJsonValue;
+          if (participant.role === "CONSUMER") consumerIndex++;
+          return [{
+            participantId: participant.id,
+            roundId: round.id,
+            role: participant.role,
+            state,
+          }];
+        });
+        await tx.roleState.createMany({ data: roleStates, skipDuplicates: true });
+      }
+
+      await tx.participant.updateMany({
+        where: { sessionId, isBot: false },
+        data: { phaseReady: false },
+      });
+      await tx.gameSession.update({
+        where: { id: sessionId },
+        data: {
+          status: `ROUND_${n}` as SessionStatus,
+          currentRound: n,
+          phase: "EVENT",
+          phaseEndsAt,
+          phaseExtensions: 0,
+          paused: false,
+          pausedRemainingMs: null,
+        },
+      });
+    },
+    { timeout: 15_000 },
+  );
+
+  scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
+  await touch(sessionId, "round:phase_changed", {
+    phase: "EVENT",
+    phaseEndsAt: phaseEndsAt.toISOString(),
+    paused: false,
+    phaseExtensions: 0,
   });
-
-  await setPhase(sessionId, "EVENT");
+  void import("./ai-host").then((module) => module.announcePhase(sessionId));
 }
 
 /** Distribute total need across consumers; round 3 boosts total by 50% (BR-ROUND-03). */
@@ -785,71 +825,120 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
   void import("./ai-host").then((m) => m.announcePhase(sessionId));
 }
 
+const TRANSITION_LEASE_MS = 30_000;
+
 /** One forward step in the round/phase machine. */
 async function transition(sessionId: string, auto: boolean): Promise<void> {
   const session = await db.gameSession.findUnique({ where: { id: sessionId } });
   if (!session) return;
+  let leaseEndsAt: Date | null = null;
   if (auto) {
     if (session.paused) return;
     if (session.phaseEndsAt && Date.now() < session.phaseEndsAt.getTime() - 1000) return;
+    if (!session.phaseEndsAt) return;
+    leaseEndsAt = new Date(Date.now() + TRANSITION_LEASE_MS);
+    const claimed = await db.gameSession.updateMany({
+      where: {
+        id: sessionId,
+        paused: false,
+        phaseEndsAt: session.phaseEndsAt,
+      },
+      data: { phaseEndsAt: leaseEndsAt },
+    });
+    if (claimed.count === 0) return;
   }
   const n = session.currentRound;
 
-  // INTRO -> Round 1
-  if (session.status === "INTRO") {
-    await enterRound(sessionId, 1);
-    return;
-  }
-  // AI host finishes the session after the debrief settles.
-  if (session.status === "DEBRIEF") {
-    if (session.autoHost) await completeSession(sessionId);
-    return;
-  }
-  if (!session.phase) return;
+  try {
+    // INTRO -> Round 1
+    if (session.status === "INTRO") {
+      await enterRound(sessionId, 1);
+      return;
+    }
+    // AI host finishes the session after the debrief settles.
+    if (session.status === "DEBRIEF") {
+      if (session.autoHost) await completeSession(sessionId);
+      return;
+    }
+    if (!session.phase) return;
 
-  switch (session.phase) {
-    case "EVENT":
-      await setPhase(sessionId, "DECISION");
-      await runBotDecisions(sessionId);
-      return;
-    case "DECISION":
-      await setPhase(sessionId, "MARKET_OPEN");
-      await runBotMarket(sessionId);
-      return;
-    case "MARKET_OPEN":
-      await setPhase(sessionId, "SETTLEMENT");
-      await settleRound(sessionId, n);
-      await touch(sessionId, "round:settled", { round: n });
-      return;
-    case "SETTLEMENT":
-      await setPhase(sessionId, "RECAP");
-      return;
-    case "RECAP":
-      if (n >= session.totalRounds) {
-        const phaseEndsAt = session.autoHost
-          ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
-          : null;
-        await db.gameSession.update({
-          where: { id: sessionId },
-          data: { status: "DEBRIEF", phase: null, phaseEndsAt },
-        });
-        await finalizeSession(sessionId).catch((e) => console.error("finalize:", e));
-        if (session.autoHost && phaseEndsAt) {
-          scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
+    switch (session.phase) {
+      case "EVENT":
+        await setPhase(sessionId, "DECISION");
+        await runBotDecisions(sessionId);
+        return;
+      case "DECISION":
+        await setPhase(sessionId, "MARKET_OPEN");
+        await runBotMarket(sessionId);
+        return;
+      case "MARKET_OPEN":
+        await settleRound(sessionId, n);
+        await setPhase(sessionId, "SETTLEMENT");
+        await touch(sessionId, "round:settled", { round: n });
+        return;
+      case "SETTLEMENT":
+        await setPhase(sessionId, "RECAP");
+        return;
+      case "RECAP":
+        if (n >= session.totalRounds) {
+          const phaseEndsAt = session.autoHost
+            ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
+            : null;
+          await db.gameSession.update({
+            where: { id: sessionId },
+            data: { status: "DEBRIEF", phase: null, phaseEndsAt },
+          });
+          await finalizeSession(sessionId).catch((e) => console.error("finalize:", e));
+          if (session.autoHost && phaseEndsAt) {
+            scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
+          }
+          void import("./ai-host").then((m) => m.announcePhase(sessionId));
+          await touch(sessionId, "session:debrief");
+        } else {
+          await enterRound(sessionId, n + 1);
         }
-        void import("./ai-host").then((m) => m.announcePhase(sessionId));
-        await touch(sessionId, "session:debrief");
-      } else {
-        await enterRound(sessionId, n + 1);
-      }
-      return;
+        return;
+    }
+  } catch (error) {
+    if (auto && leaseEndsAt) {
+      const retryAt = new Date(Date.now() + 1_000);
+      const restored = await db.gameSession.updateMany({
+        where: {
+          id: sessionId,
+          status: session.status,
+          currentRound: session.currentRound,
+          phase: session.phase,
+          phaseEndsAt: leaseEndsAt,
+        },
+        data: { phaseEndsAt: retryAt },
+      });
+      if (restored.count > 0) scheduleAdvance(sessionId, 1_000);
+    }
+    throw error;
   }
+}
+
+const transitionState = globalThis as typeof globalThis & {
+  phaseTransitions?: Map<string, Promise<void>>;
+};
+const phaseTransitions =
+  transitionState.phaseTransitions ?? new Map<string, Promise<void>>();
+transitionState.phaseTransitions = phaseTransitions;
+
+function runPhaseTransition(sessionId: string, auto: boolean): Promise<void> {
+  const existing = phaseTransitions.get(sessionId);
+  if (existing) return existing;
+  const pending = transition(sessionId, auto).finally(() => {
+    if (phaseTransitions.get(sessionId) === pending) phaseTransitions.delete(sessionId);
+  });
+  phaseTransitions.set(sessionId, pending);
+  return pending;
 }
 
 // Persistent server timers (Docker deployment).
 function scheduleAdvance(sessionId: string, ms: number): void {
   scheduleTimer(sessionId, ms, () => {
-    void transition(sessionId, true).catch((e) => console.error("advance:", e));
+    void runPhaseTransition(sessionId, true).catch((e) => console.error("advance:", e));
   });
 }
 
@@ -871,7 +960,7 @@ async function scheduleIntroAdvance(sessionId: string): Promise<void> {
 /** Force next phase (timer skip / all-ready fast-forward). */
 export async function requestPhaseTransition(sessionId: string): Promise<void> {
   clearTimer(sessionId);
-  await transition(sessionId, false);
+  await runPhaseTransition(sessionId, false);
 }
 
 /** Mark session complete, persist final scores/badges. */
@@ -893,7 +982,7 @@ export async function maybeAutoAdvance(sessionId: string): Promise<void> {
   if (Date.now() < s.phaseEndsAt.getTime()) return;
 
   if (s.status === "INTRO" && s.autoHost) {
-    await transition(sessionId, true);
+    await runPhaseTransition(sessionId, true);
     return;
   }
   if (s.status === "DEBRIEF" && s.autoHost) {
@@ -902,7 +991,7 @@ export async function maybeAutoAdvance(sessionId: string): Promise<void> {
   }
   if (!s.phase) return;
   const timed = TIMED_PHASES.includes(s.phase) || (s.phase === "RECAP" && s.autoHost);
-  if (timed) await transition(sessionId, true);
+  if (timed) await runPhaseTransition(sessionId, true);
 }
 
 // ───────────────────────── Host controls (FR-HOST-02..05) ─────────────────────────
@@ -916,7 +1005,7 @@ async function assertHost(hostUserId: string, sessionId: string) {
 
 export async function hostNext(hostUserId: string, sessionId: string): Promise<void> {
   await assertHost(hostUserId, sessionId);
-  await transition(sessionId, false);
+  await runPhaseTransition(sessionId, false);
 }
 
 export async function hostPause(hostUserId: string, sessionId: string): Promise<void> {

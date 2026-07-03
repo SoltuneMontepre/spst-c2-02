@@ -399,6 +399,7 @@ export function MapZones({
         src="/map-texture.png"
         alt=""
         fill
+        sizes="(min-width: 1024px) 70vw, 100vw"
         className="pointer-events-none object-cover opacity-25"
         aria-hidden
         priority

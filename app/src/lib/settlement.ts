@@ -10,9 +10,22 @@ const RETAIL_CHANNELS = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"
 export async function settleRound(sessionId: string, n: number): Promise<void> {
   const round = await db.round.findUnique({
     where: { sessionId_number: { sessionId, number: n } },
-    include: { transactions: true, listings: true, roleStates: true },
+    include: {
+      transactions: true,
+      listings: true,
+      roleStates: true,
+      snapshots: { where: { isFinal: true }, take: 1 },
+    },
   });
   if (!round) return;
+  if (round.settledAt) return;
+  if (round.snapshots.length > 0) {
+    await db.round.update({
+      where: { id: round.id },
+      data: { settledAt: new Date(), phase: "SETTLEMENT" },
+    });
+    return;
+  }
 
   // Expire open offers before settlement (§5.8, §6.4).
   await db.offer.updateMany({

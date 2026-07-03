@@ -146,7 +146,11 @@ export function WholesalePanel({
 
             {openOffers.length === 0 ? (
               <div className="rounded-[10.5px] border border-dashed border-border bg-surface px-3 py-5 text-center text-sm text-muted-foreground">
-                Chưa có đề nghị bán sỉ. Chờ nhà cung cấp đưa hàng vào kênh bán buôn.
+                <p className="font-medium text-foreground">Nguồn hàng đang được chuẩn bị</p>
+                <p className="mt-1.5">
+                  Nhà cung cấp sẽ dành một đề nghị phù hợp với số vốn hiện có của
+                  bạn ngay đầu phiên chợ.
+                </p>
               </div>
             ) : (
               openOffers.map((offer) => {

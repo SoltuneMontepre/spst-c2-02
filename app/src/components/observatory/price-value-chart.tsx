@@ -5,6 +5,7 @@ const H = 210;
 const PAD_X = 48;
 const PAD_TOP = 18;
 const PAD_BOTTOM = 34;
+const PRESSURE_ARROW_PX = 30;
 
 function compactVnd(amountVnd: number): string {
   const thousands = amountVnd / 1000;
@@ -12,6 +13,19 @@ function compactVnd(amountVnd: number): string {
     ? thousands.toString()
     : thousands.toFixed(1);
   return `${text}k`;
+}
+
+function pressureDirection(round: RoundAnalytics): -1 | 0 | 1 {
+  if (round.demandQuantity > round.supplyQuantity) return 1;
+  if (round.demandQuantity < round.supplyQuantity) return -1;
+  return 0;
+}
+
+function pressureLabel(round: RoundAnalytics): string {
+  const direction = pressureDirection(round);
+  if (direction > 0) return "Cầu > Cung";
+  if (direction < 0) return "Cung > Cầu";
+  return "Cung = Cầu";
 }
 
 /** Two-line chart: social value (anchor) vs market price (SRS §5.9, UI-OBSERVATORY-01). */
@@ -130,29 +144,85 @@ export function PriceValueChart({
         />
       ) : null}
 
-      {displayRounds.map((round, i) => (
-        <g key={`${round.number}-${i}`}>
-          {round.marketPriceVnd != null ? (
-            <circle
-              cx={x(i)}
-              cy={y(round.marketPriceVnd)}
-              r={4}
-              fill="var(--price)"
-              stroke="var(--surface)"
-              strokeWidth={2}
-            />
-          ) : null}
-          <text
-            x={x(i)}
-            y={H - 10}
-            textAnchor="middle"
-            fontSize={11}
-            fill="var(--muted-foreground)"
-          >
-            V{round.number}
-          </text>
-        </g>
-      ))}
+      {displayRounds.map((round, i) => {
+        const direction = pressureDirection(round);
+        const anchorY = y(round.unitValueVnd);
+        const tipY = Math.max(
+          PAD_TOP + 16,
+          Math.min(H - PAD_BOTTOM - 16, anchorY - direction * PRESSURE_ARROW_PX),
+        );
+        const labelY = direction >= 0 ? tipY - 8 : tipY + 13;
+
+        return (
+          <g key={`${round.number}-${i}`}>
+            {round.marketPriceVnd != null ? (
+              <circle
+                cx={x(i)}
+                cy={y(round.marketPriceVnd)}
+                r={4}
+                fill="var(--price)"
+                stroke="var(--surface)"
+                strokeWidth={2}
+              />
+            ) : round.supplyQuantity > 0 || round.demandQuantity > 0 ? (
+              <g aria-label={`${pressureLabel(round)}: áp lực giá, chưa phải giá giao dịch`}>
+                <circle
+                  cx={x(i)}
+                  cy={anchorY}
+                  r={4}
+                  fill="var(--surface)"
+                  stroke="var(--price)"
+                  strokeWidth={2}
+                />
+                {direction !== 0 ? (
+                  <>
+                    <line
+                      x1={x(i)}
+                      y1={anchorY + (direction > 0 ? -5 : 5)}
+                      x2={x(i)}
+                      y2={tipY}
+                      stroke="var(--price)"
+                      strokeDasharray="3 3"
+                      strokeWidth={2}
+                    />
+                    <path
+                      d={
+                        direction > 0
+                          ? `M ${x(i) - 4} ${tipY + 5} L ${x(i)} ${tipY} L ${x(i) + 4} ${tipY + 5}`
+                          : `M ${x(i) - 4} ${tipY - 5} L ${x(i)} ${tipY} L ${x(i) + 4} ${tipY - 5}`
+                      }
+                      fill="none"
+                      stroke="var(--price)"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                    />
+                  </>
+                ) : null}
+                <text
+                  x={x(i)}
+                  y={labelY}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={600}
+                  fill="var(--price)"
+                >
+                  {pressureLabel(round)}
+                </text>
+              </g>
+            ) : null}
+            <text
+              x={x(i)}
+              y={H - 10}
+              textAnchor="middle"
+              fontSize={11}
+              fill="var(--muted-foreground)"
+            >
+              V{round.number}
+            </text>
+          </g>
+        );
+      })}
 
       <text
         x={W - PAD_X}

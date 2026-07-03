@@ -20,6 +20,7 @@ import {
   unitValueVnd,
 } from "./economy";
 import { PHASE_DURATIONS_SEC, POLICIES, UPGRADE_COSTS } from "./scenario";
+import { MIN_PRICE_VND } from "./money";
 import type {
   ProducerRoundState,
   ConsumerRoundState,
@@ -336,34 +337,42 @@ async function runBotMarketWave(sessionId: string, wave: number): Promise<void> 
   });
   let actions = 0;
 
-  await db.$transaction(async (tx) => {
-    if (wave === 1) {
-      actions += await applyBotExportPromotion(tx, session, round.id);
-      actions += await listBotProducerRetail(tx, session, round.id, price);
-    }
+  await db.$transaction(
+    async (tx) => {
+      if (wave === 1) {
+        actions += await applyBotExportPromotion(tx, session, round.id);
+        actions += await createHumanIntermediaryStarterOffers(
+          tx,
+          session,
+          round.id,
+        );
+        actions += await listBotProducerRetail(tx, session, round.id, price);
+      }
 
-    if (wave === 2) {
-      actions += await createBotWholesaleOffers(tx, session, round.id, price);
-    }
+      if (wave === 2) {
+        actions += await createBotWholesaleOffers(tx, session, round.id, price);
+      }
 
-    if (wave === 3) {
-      actions += await respondBotWholesaleOffers(tx, session, round.id, price);
-    }
+      if (wave === 3) {
+        actions += await respondBotWholesaleOffers(tx, session, round.id, price);
+      }
 
-    if (wave === 4) {
-      actions += await acceptBotWholesaleCounters(tx, session, round.id);
-      actions += await listBotIntermediaryRetail(tx, session);
-    }
+      if (wave === 4) {
+        actions += await acceptBotWholesaleCounters(tx, session, round.id);
+        actions += await listBotIntermediaryRetail(tx, session);
+      }
 
-    if (wave === 5) {
-      actions += await runBotConsumerDemand(tx, session, 1);
-    }
+      if (wave === 5) {
+        actions += await runBotConsumerDemand(tx, session, 1);
+      }
 
-    if (wave === 6) {
-      actions += await respondBotRetailOffers(tx, session, price);
-      actions += await runBotConsumerDemand(tx, session, 2);
-    }
-  });
+      if (wave === 6) {
+        actions += await respondBotRetailOffers(tx, session, price);
+        actions += await runBotConsumerDemand(tx, session, 2);
+      }
+    },
+    { timeout: 15_000 },
+  );
 
   await bump(sessionId, "bot:market_wave", { wave, actions });
 }
@@ -520,6 +529,82 @@ async function createBotWholesaleOffers(
         actions++;
       } catch {
         /* skip invalid wholesale attempts */
+      }
+    }
+  }
+  return actions;
+}
+
+/** Reserve an immediate, affordable sourcing action for each human intermediary. */
+async function createHumanIntermediaryStarterOffers(
+  tx: Prisma.TransactionClient,
+  session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
+  roundId: string,
+): Promise<number> {
+  const intermediaries = await tx.participant.findMany({
+    where: { sessionId: session.id, isBot: false, role: "INTERMEDIARY" },
+    include: { wallet: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const buyers = intermediaries.filter(
+    (intermediary) => (intermediary.wallet?.balanceVnd ?? 0) >= MIN_PRICE_VND,
+  );
+  if (buyers.length === 0) return 0;
+
+  const existingOffers = await tx.wholesaleOffer.findMany({
+    where: { roundId, status: "OPEN" },
+    select: { quantity: true, minimumPriceVnd: true },
+  });
+  const affordableOfferCount = existingOffers.filter((offer) =>
+    buyers.some(
+      (buyer) =>
+        (buyer.wallet?.balanceVnd ?? 0) >=
+        offer.quantity * offer.minimumPriceVnd,
+    ),
+  ).length;
+  let needed = Math.max(0, buyers.length - affordableOfferCount);
+  if (needed === 0) return 0;
+
+  const producers = seededOrder(
+    await botProducers(tx, session.id, roundId),
+    session,
+    "human-intermediary-starter-order",
+  );
+  let actions = 0;
+  for (const seller of producers) {
+    if (needed === 0) break;
+    const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
+    if (!pstate) continue;
+    const lots = await tx.inventoryLot.findMany({
+      where: {
+        ownerParticipantId: seller.id,
+        availableQuantity: { gt: 0 },
+        status: { in: ["AVAILABLE", "CARRIED"] },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    for (const lot of lots) {
+      if (needed === 0) break;
+      const buyer = buyers[actions % buyers.length];
+      const budget =
+        Math.floor((buyer.wallet?.balanceVnd ?? 0) / 1000) * 1000;
+      const minimumPriceVnd = Math.max(
+        MIN_PRICE_VND,
+        Math.min(producerUnitCostVnd(pstate), budget),
+      );
+      if (minimumPriceVnd > budget) continue;
+
+      try {
+        await createWholesaleOffer(tx, botCtx(seller, session), {
+          inventoryLotId: lot.id,
+          quantity: 1,
+          minimumPriceVnd,
+        });
+        actions++;
+        needed--;
+      } catch {
+        /* another starter offer may have reserved this lot */
       }
     }
   }

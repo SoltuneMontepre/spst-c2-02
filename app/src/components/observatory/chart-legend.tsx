@@ -1,3 +1,4 @@
+import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ChartLegend({ className }: { className?: string }) {
@@ -8,6 +9,9 @@ export function ChartLegend({ className }: { className?: string }) {
       </span>
       <span className="flex items-center gap-1">
         <span className="inline-block h-0.5 w-4 bg-price" /> Giá thị trường
+      </span>
+      <span className="flex items-center gap-1">
+        <ArrowUpDown className="size-3.5 text-price" aria-hidden /> Áp lực cung-cầu
       </span>
     </div>
   );
