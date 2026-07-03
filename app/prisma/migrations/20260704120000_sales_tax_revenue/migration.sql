@@ -1,0 +1,1 @@
+ALTER TYPE "LedgerEntryType" ADD VALUE 'TAX_REVENUE';

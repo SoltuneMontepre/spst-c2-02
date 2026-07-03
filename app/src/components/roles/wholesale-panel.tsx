@@ -3,12 +3,17 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
 import { Stepper } from "@/components/ui/stepper";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { formatThousandDong, MAX_PRICE_VND, MIN_PRICE_VND } from "@/lib/money";
+import {
+  formatThousandDong,
+  MAX_PRICE_VND,
+  MIN_PRICE_VND,
+  PRICE_STEP_VND,
+} from "@/lib/money";
 import { PriceStepper } from "./producer-action-card";
 import type { InventoryView, WholesaleView } from "@/lib/session-service";
 
@@ -70,13 +75,12 @@ export function WholesalePanel({
             ) : null}
             <div className="flex items-center justify-between gap-2">
               <Stepper value={qty} min={1} max={lot?.availableQuantity ?? 1} onChange={setQty} />
-              <Input
-                type="number"
-                step={1000}
-                min={MIN_PRICE_VND}
+              <PriceInput
                 value={minPrice}
-                onChange={(e) => setMinPrice(Number(e.target.value))}
-                className="w-24"
+                onChange={setMinPrice}
+                min={MIN_PRICE_VND}
+                max={MAX_PRICE_VND}
+                step={PRICE_STEP_VND}
               />
             </div>
             <Button

@@ -121,7 +121,10 @@ export function HomeView({
       </div>
 
       <div className="relative z-10 mt-8 w-full max-w-2xl">
-        <HomeHeroCards activeHostedSessions={data?.activeHostedSessions} />
+        <HomeHeroCards
+          activeHostedSessions={data?.activeHostedSessions}
+          activeJoinedSession={data?.activeJoinedSession}
+        />
       </div>
 
       <div className="relative z-10 mt-8 w-full max-w-2xl">

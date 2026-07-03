@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
@@ -137,8 +137,8 @@ export function OffersPanel({
                 </Button>
                 {canCounter && hasCounterRoom(o) ? (
                   <>
-                    <Input
-                      type="number"
+                    <PriceInput
+                      value={price}
                       step={PRICE_STEP_VND}
                       min={o.offerPriceVnd + PRICE_STEP_VND}
                       max={
@@ -146,15 +146,10 @@ export function OffersPanel({
                           ? o.askPriceVnd - PRICE_STEP_VND
                           : undefined
                       }
-                      className="h-9 w-24"
-                      value={Number.isFinite(price) ? price : ""}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setCounterPrices((p) => ({
-                          ...p,
-                          [o.id]: raw === "" ? Number.NaN : Number(raw),
-                        }));
-                      }}
+                      suffix={null}
+                      onChange={(next) =>
+                        setCounterPrices((p) => ({ ...p, [o.id]: next }))
+                      }
                     />
                     <Button
                       size="sm"

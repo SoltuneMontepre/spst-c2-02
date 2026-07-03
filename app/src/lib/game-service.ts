@@ -86,13 +86,21 @@ function phaseNarration(input: {
   return "Chào mừng đến Phiên chợ giá trị.";
 }
 
-function isDeadlockError(error: unknown): boolean {
+/** Postgres deadlocks (40P01) and Prisma P2028 ("unable to start a
+ *  transaction in the given time" — connection pool briefly saturated,
+ *  or a Neon cold start) are both transient: safe to retry shortly after. */
+function isTransientDbError(error: unknown): boolean {
   const code =
     (error as { code?: string })?.code ??
     (error as { cause?: { code?: string } })?.cause?.code ??
     (error as { meta?: { code?: string } })?.meta?.code;
   const message = String((error as { message?: string })?.message ?? error);
-  return code === "40P01" || /deadlock detected/i.test(message);
+  return (
+    code === "40P01" ||
+    code === "P2028" ||
+    /deadlock detected/i.test(message) ||
+    /unable to start a transaction/i.test(message)
+  );
 }
 
 /** Increment stateVersion and broadcast (TECH-REALTIME). */
@@ -503,7 +511,8 @@ function assignRandomLobbyRoles(
     return {
       id: h.id,
       role,
-      productivityProfile: role === "PRODUCER" ? "SOCIAL_AVERAGE" : null,
+      // Leave profile unset so startSessionManual draws from the shuffled pool.
+      productivityProfile: null,
     };
   });
 }
@@ -571,6 +580,17 @@ function producerProfileAt(
   return profiles[index] ?? "SOCIAL_AVERAGE";
 }
 
+/** Shuffle so humans are not deterministically handed TRADITIONAL (worst). */
+function shuffledProducerProfiles(producerCount: number): ProductivityProfile[] {
+  const base = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
+  const profiles = [...base];
+  for (let i = profiles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [profiles[i], profiles[j]] = [profiles[j], profiles[i]];
+  }
+  return profiles;
+}
+
 /** Auto-assign humans across balanced slots, then fill remaining seats with bots. */
 async function startSessionAuto(
   sessionId: string,
@@ -579,7 +599,8 @@ async function startSessionAuto(
 ): Promise<void> {
   const slots = balancedRoleSlots(compositionSlots(targetCount));
   const producerCount = slots.filter((r) => r === "PRODUCER").length;
-  const profiles = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
+  // Shuffle profiles so the first human producer slot is not always TRADITIONAL.
+  const profiles = shuffledProducerProfiles(producerCount);
   const botCounters: Record<Role, number> = {
     PRODUCER: 0,
     CONSUMER: 0,
@@ -664,7 +685,13 @@ async function startSessionManual(
     throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 nhà cung cấp và 1 khách hàng");
   }
   const producerCount = targetSlots.filter((r) => r === "PRODUCER").length;
-  const profiles = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
+  // Shuffle, then reserve profiles already chosen in lobby so bots get the rest.
+  const profilePool = shuffledProducerProfiles(producerCount);
+  for (const p of assigned) {
+    if (p.role !== "PRODUCER" || !p.productivityProfile) continue;
+    const idx = profilePool.indexOf(p.productivityProfile);
+    if (idx >= 0) profilePool.splice(idx, 1);
+  }
   const botCounters: Record<Role, number> = {
     PRODUCER: lobbyBots.filter((b) => b.role === "PRODUCER").length,
     CONSUMER: lobbyBots.filter((b) => b.role === "CONSUMER").length,
@@ -679,15 +706,16 @@ async function startSessionManual(
       data: { status: "INTRO", startedAt: new Date() },
     });
 
-    let producerIndex = 0;
+    let poolIdx = 0;
     const roster: { id: string; role: Role }[] = [];
 
     for (const p of assigned) {
       let profile: ProductivityProfile | null = null;
       if (p.role === "PRODUCER") {
         profile =
-          p.productivityProfile ?? producerProfileAt(profiles, producerIndex);
-        producerIndex++;
+          p.productivityProfile ??
+          profilePool[poolIdx++] ??
+          "SOCIAL_AVERAGE";
       }
       await tx.participant.update({
         where: { id: p.id },
@@ -704,7 +732,9 @@ async function startSessionManual(
           displayNameSnapshot: botName(role, botCounters[role]),
           role,
           productivityProfile:
-            role === "PRODUCER" ? producerProfileAt(profiles, producerIndex++) : null,
+            role === "PRODUCER"
+              ? (profilePool[poolIdx++] ?? "SOCIAL_AVERAGE")
+              : null,
           isBot: true,
           controlMode: "BOT_PERMANENT",
           ready: true,
@@ -1106,7 +1136,7 @@ async function transition(sessionId: string, auto: boolean): Promise<void> {
           return;
       }
     } catch (error) {
-      if (auto || isDeadlockError(error)) scheduleAdvance(sessionId, 2_000);
+      if (auto || isTransientDbError(error)) scheduleAdvance(sessionId, 2_000);
       throw error;
     }
   });

@@ -48,9 +48,12 @@ export function MapShell({ sessionId }: { sessionId: string }) {
   }, [data, role]);
 
   const questStatus = quest?.status;
-  // Only auto-ready when waiting (nothing to do). After an action (done),
-  // the bottom pill ready button pulses so the player confirms.
-  const shouldAutoReady = questStatus === "waiting";
+  // Auto-ready when waiting (nothing to do). After an action (done), the
+  // bottom pill ready button pulses so the player confirms — except for
+  // the government, whose "done" state (policy already applied) leaves
+  // nothing left to confirm, so it auto-readies too.
+  const shouldAutoReady =
+    questStatus === "waiting" || (role === "GOVERNMENT" && questStatus === "done");
   const phaseReady = selfParticipant?.phaseReady ?? false;
   const canPhaseReady = Boolean(selfParticipant && !selfParticipant.isBot);
 

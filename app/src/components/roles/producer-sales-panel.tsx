@@ -15,7 +15,7 @@ import {
   ProducerActionCard,
   ProducerQuantityControl,
 } from "./producer-action-card";
-import type { InventoryView } from "@/lib/session-service";
+import type { InventoryView, ListingView } from "@/lib/session-service";
 import type { ProducerRoundState } from "@/lib/role-state";
 
 export function ProducerSalesPanel({
@@ -26,6 +26,7 @@ export function ProducerSalesPanel({
   currentRound,
   phase,
   inventory,
+  listings,
   phaseReady,
 }: {
   sessionId: string;
@@ -35,6 +36,7 @@ export function ProducerSalesPanel({
   currentRound: number;
   phase: string | null;
   inventory: InventoryView[];
+  listings: ListingView[];
   phaseReady: boolean;
 }) {
   const command = useCommand(sessionId, stateVersion);
@@ -48,6 +50,7 @@ export function ProducerSalesPanel({
     [inventory],
   );
   const maxQty = activeLot?.availableQuantity ?? 0;
+  const listedQty = listings.reduce((sum, l) => sum + l.availableQuantity, 0);
 
   useEffect(() => {
     setQty((current) => Math.min(current, maxQty));
@@ -113,13 +116,21 @@ export function ProducerSalesPanel({
 
   return (
     <ProducerActionCard icon={Store} title="Bán hàng">
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
           <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
-            Tồn kho chờ bán
+            Chưa niêm yết
           </p>
           <p className="mt-0.5 font-mono text-xl font-black text-success">
             {maxQty} <span className="text-xs font-semibold">thùng</span>
+          </p>
+        </div>
+        <div className="rounded-[14px] border border-[#c9b3ff]/40 bg-violet-600/10 px-3 py-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700">
+            Đang bán
+          </p>
+          <p className="mt-0.5 font-mono text-xl font-black text-violet-700">
+            {listedQty} <span className="text-xs font-semibold">thùng</span>
           </p>
         </div>
         <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
@@ -137,6 +148,9 @@ export function ProducerSalesPanel({
           <CheckCircle2 className="size-6 text-success" aria-hidden />
           <p className="text-sm font-bold text-foreground">Đã giao dịch xong</p>
           <p className="text-xs text-muted-foreground">
+            {listedQty > 0
+              ? `Còn ${listedQty} thùng đang bán trên chợ, chờ người mua. `
+              : ""}
             Đang chờ những người chơi khác hoàn tất giai đoạn chợ mở.
           </p>
         </div>

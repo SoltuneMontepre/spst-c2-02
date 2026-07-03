@@ -56,6 +56,9 @@ function resourcesForSelf(data: SessionSnapshot): { label: string; value: string
 
   const inventoryUnits = self.inventory.reduce((s, l) => s + l.availableQuantity, 0);
   const listedUnits = self.listings.reduce((s, l) => s + l.availableQuantity, 0);
+  const ownWholesaleUnits = (data.market?.wholesaleOffers ?? [])
+    .filter((w) => w.isOwn && (w.status === "OPEN" || w.status === "COUNTERED"))
+    .reduce((s, w) => s + w.quantity, 0);
 
   if (self.role === "PRODUCER") {
     rows.push({
@@ -65,7 +68,7 @@ function resourcesForSelf(data: SessionSnapshot): { label: string; value: string
     });
     rows.push({
       label: "Đang bán",
-      value: `${listedUnits} thùng`,
+      value: `${listedUnits + ownWholesaleUnits} thùng`,
       icon: ShoppingBag,
     });
   }

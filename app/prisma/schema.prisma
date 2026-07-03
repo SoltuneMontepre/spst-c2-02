@@ -92,6 +92,7 @@ enum LedgerEntryType {
   SUBSIDY
   POLICY_COST
   EXPORT_REVENUE
+  TAX_REVENUE
 }
 
 enum InventoryStatus {

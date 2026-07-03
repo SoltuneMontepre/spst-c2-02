@@ -96,19 +96,23 @@ export function CreateRoomShareCard({
         <div
           className={cn(
             "flex w-full gap-2",
-            compact ? "mt-3 max-w-[240px]" : "mt-5 max-w-xs gap-2.5",
+            compact ? "mt-3 max-w-[280px]" : "mt-5 max-w-xs gap-2.5",
           )}
         >
-          <Button variant="outline" className="flex-1 gap-1.5" onClick={copy}>
-            <Copy className="size-3.5" aria-hidden />
+          <Button
+            variant="outline"
+            className="min-w-0 flex-1 gap-1.5 whitespace-nowrap"
+            onClick={copy}
+          >
+            <Copy className="size-3.5 shrink-0" aria-hidden />
             {copied ? "Đã sao chép" : "Sao chép"}
           </Button>
           <Button
             variant="outline"
-            className="flex-1 gap-1.5"
+            className="min-w-0 flex-1 gap-1.5 whitespace-nowrap"
             onClick={() => setZoomOpen(true)}
           >
-            <Maximize2 className="size-3.5" aria-hidden />
+            <Maximize2 className="size-3.5 shrink-0" aria-hidden />
             Phóng to
           </Button>
         </div>

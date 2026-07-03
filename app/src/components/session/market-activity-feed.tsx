@@ -8,6 +8,7 @@ import {
   Megaphone,
   Package,
   Store,
+  Zap,
 } from "lucide-react";
 import type { MarketActivityKind, MarketActivityView } from "@/lib/session-service";
 import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
@@ -23,6 +24,7 @@ const KIND_ICON: Record<
   offer: Megaphone,
   trade: BadgeDollarSign,
   policy: Activity,
+  upgrade: Zap,
 };
 
 const KIND_STYLE: Record<MarketActivityKind, string> = {
@@ -32,6 +34,7 @@ const KIND_STYLE: Record<MarketActivityKind, string> = {
   offer: "bg-amber-100 text-amber-800",
   trade: "bg-success/10 text-success",
   policy: "bg-sky-100 text-sky-700",
+  upgrade: "bg-orange-100 text-orange-700",
 };
 
 function timeLabel(value: string): string {

@@ -12,6 +12,7 @@ import type {
 import { UPGRADE_COSTS, POLICIES } from "./scenario";
 import { isProducerInputLockedAt } from "./producer-input-lock";
 import { allowedProductionQuantity, producerUnitCostVnd } from "./economy";
+import { collectSalesTax } from "./tax-service";
 
 function requirePhase(ctx: CommandContext, phase: RoundPhase): void {
   if (ctx.session.phase !== phase) throw new ApiError("WRONG_PHASE", 409);
@@ -555,6 +556,11 @@ async function executeRetailTrade(
     where: { participantId: listing.sellerParticipantId },
   });
   const round = await currentRound(tx, ctx.session.id, ctx.session.currentRound);
+  const { netSellerVnd } = await collectSalesTax(tx, {
+    sessionId: ctx.session.id,
+    roundId: round.id,
+    totalPriceVnd: total,
+  });
 
   await tx.wallet.update({
     where: { participantId: buyerId },
@@ -562,7 +568,7 @@ async function executeRetailTrade(
   });
   await tx.wallet.update({
     where: { participantId: listing.sellerParticipantId },
-    data: { balanceVnd: { increment: total } },
+    data: { balanceVnd: { increment: netSellerVnd } },
   });
   await tx.ledgerEntry.createMany({
     data: [
@@ -578,7 +584,7 @@ async function executeRetailTrade(
         roundId: round.id,
         walletId: sellerWallet.id,
         type: "SALE_REVENUE",
-        amountVnd: total,
+        amountVnd: netSellerVnd,
       },
     ],
   });

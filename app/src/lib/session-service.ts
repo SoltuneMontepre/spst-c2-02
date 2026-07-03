@@ -176,6 +176,24 @@ export async function joinSession(
     return { sessionId: session.id, participantId: existing.id, code: session.code };
   }
 
+  // Already in another active room as player or host — must leave/finish first.
+  const activeJoined = await getActiveJoinedSession(userId);
+  if (activeJoined) {
+    throw new ApiError(
+      "ALREADY_IN_SESSION",
+      409,
+      "Bạn đang ở trong một phòng khác. Quay lại phòng đó hoặc rời phòng trước.",
+    );
+  }
+  const activeHosted = await getActiveHostedSessions(userId);
+  if (activeHosted.length > 0) {
+    throw new ApiError(
+      "ALREADY_HOSTING",
+      409,
+      "Bạn đang host phòng khác. Hủy hoặc kết thúc phòng đó trước khi vào phòng mới.",
+    );
+  }
+
   if (session.status !== "LOBBY") throw new ApiError("LATE_JOIN_FORBIDDEN", 409);
 
   const seatCount = await db.participant.count({
@@ -289,7 +307,8 @@ export type MarketActivityKind =
   | "wholesale"
   | "offer"
   | "trade"
-  | "policy";
+  | "policy"
+  | "upgrade";
 
 export interface MarketActivityView {
   id: string;
@@ -761,7 +780,7 @@ async function buildMarketActivity(
   const isSelf = (participantId: string | null | undefined) =>
     Boolean(selfParticipantId && participantId && participantId === selfParticipantId);
 
-  const [lots, listings, wholesale, offers, transactions, policies, selfTxs] =
+  const [lots, listings, wholesale, offers, transactions, policies, selfTxs, upgrades] =
     await Promise.all([
       db.inventoryLot.findMany({
         where: { roundIdProduced: round.id },
@@ -807,6 +826,12 @@ async function buildMarketActivity(
             take: 20,
           })
         : Promise.resolve([]),
+      db.ledgerEntry.findMany({
+        where: { roundId: round.id, type: "UPGRADE_COST" },
+        include: { wallet: { select: { participantId: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+      }),
     ]);
 
   const items: (MarketActivityView & { sortAt: number })[] = [];
@@ -942,6 +967,22 @@ async function buildMarketActivity(
         policy.fixedCostVnd + policy.variableCostVnd > 0
           ? `Chi phí ${formatThousandDong(policy.fixedCostVnd + policy.variableCostVnd)}`
           : undefined,
+    });
+  }
+
+  for (const entry of upgrades) {
+    const actor = activityActor(meta, entry.wallet.participantId);
+    pushActivity({
+      id: `upgrade:${entry.id}`,
+      at: entry.createdAt.toISOString(),
+      sortAt: entry.createdAt.getTime(),
+      kind: "upgrade",
+      actorParticipantId: entry.wallet.participantId,
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label: "nâng cấp công nghệ",
+      detail: `Chi phí ${formatThousandDong(-entry.amountVnd)}`,
     });
   }
 
@@ -1198,6 +1239,8 @@ export interface HomeDashboard {
   publicOpenRooms: PublicOpenRoom[];
   activeHostedSessions: ActiveHostedSession[];
   activeHostedSession: ActiveHostedSession | null;
+  /** Active session the user joined as a player (not host). */
+  activeJoinedSession: ActiveHostedSession | null;
 }
 
 export interface PublicOpenRoom {
@@ -1384,6 +1427,7 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
 
   const activeHostedSessions = await getActiveHostedSessions(userId);
   const activeHostedSession = activeHostedSessions[0] ?? null;
+  const activeJoinedSession = await getActiveJoinedSession(userId);
 
   const ownActiveSessionIds = new Set(
     recentSessions
@@ -1400,5 +1444,6 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
     publicOpenRooms,
     activeHostedSessions,
     activeHostedSession,
+    activeJoinedSession,
   };
 }

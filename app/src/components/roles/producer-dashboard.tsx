@@ -148,6 +148,7 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                   currentRound={data.currentRound}
                   phase={data.phase}
                   inventory={data.self.inventory}
+                  listings={data.self.listings}
                   phaseReady={selfPhaseReady}
                 />
                 <OffersPanel

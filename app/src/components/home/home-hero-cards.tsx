@@ -10,32 +10,64 @@ import type { ActiveHostedSession } from "@/lib/session-service";
 import { MAX_ACTIVE_HOST_ROOMS } from "@/lib/scenario";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ApiClientError } from "@/hooks/use-api";
+import { errorMessage } from "@/lib/error-messages";
 
-function CurrentRoomNotice() {
+function sessionHref(room: ActiveHostedSession, asHost: boolean): string {
+  if (asHost) return `/host/session/${room.id}`;
+  // Lobby vs in-game: player entry always goes through session routes.
+  if (room.status === "LOBBY" || room.status === "CREATED") {
+    return `/session/${room.id}/lobby`;
+  }
+  if (room.status === "DEBRIEF") {
+    return `/session/${room.id}/debrief`;
+  }
+  return `/session/${room.id}/game`;
+}
+
+function CurrentRoomNotice({
+  title,
+  body,
+  room,
+  asHost,
+}: {
+  title: string;
+  body: string;
+  room?: ActiveHostedSession | null;
+  asHost?: boolean;
+}) {
   return (
     <Card className="flex flex-col gap-4 p-6">
       <div className="flex size-10 items-center justify-center rounded-xl bg-muted">
         <DoorClosed className="size-5 text-muted-foreground" aria-hidden />
       </div>
       <div className="flex flex-1 flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight">Đang host phòng khác</h2>
-        <p className="text-sm text-muted-foreground">
-          Bạn không thể vào phòng khác khi đang host. Quay lại phòng bên cạnh và hủy hoặc
-          kết thúc nó trước, rồi mới vào phòng mới.
-        </p>
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <p className="text-sm text-muted-foreground">{body}</p>
       </div>
+      {room ? (
+        <Link
+          href={sessionHref(room, asHost ?? false)}
+          className={cn(buttonVariants({ size: "lg" }), "w-full")}
+        >
+          Quay lại {room.code}
+        </Link>
+      ) : null}
     </Card>
   );
 }
 
 export function HomeHeroCards({
   activeHostedSessions = [],
+  activeJoinedSession = null,
 }: {
   activeHostedSessions?: ActiveHostedSession[];
+  activeJoinedSession?: ActiveHostedSession | null;
 }) {
   const joinRoom = useJoinRoom();
   const [code, setCode] = useState("");
   const isHosting = activeHostedSessions.length > 0;
+  const isPlaying = activeJoinedSession != null;
   const atHostLimit = activeHostedSessions.length >= MAX_ACTIVE_HOST_ROOMS;
   const canCreate = !atHostLimit;
 
@@ -44,6 +76,11 @@ export function HomeHeroCards({
     const trimmed = code.trim().toUpperCase();
     if (trimmed) joinRoom.mutate(trimmed);
   };
+
+  const joinError =
+    joinRoom.isError && joinRoom.error instanceof ApiClientError
+      ? errorMessage(joinRoom.error.code, joinRoom.error.message)
+      : null;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -109,7 +146,18 @@ export function HomeHeroCards({
       </Card>
 
       {isHosting ? (
-        <CurrentRoomNotice />
+        <CurrentRoomNotice
+          title="Đang host phòng khác"
+          body="Bạn không thể vào phòng khác khi đang host. Quay lại phòng bên cạnh và hủy hoặc kết thúc nó trước, rồi mới vào phòng mới."
+          room={activeHostedSessions[0]}
+          asHost
+        />
+      ) : isPlaying ? (
+        <CurrentRoomNotice
+          title="Đang trong phòng khác"
+          body="Bạn đang tham gia một phiên chợ. Quay lại phòng đó hoặc rời phòng trước khi vào phòng mới."
+          room={activeJoinedSession}
+        />
       ) : (
         <Card className="flex flex-col gap-4 p-6">
           <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
@@ -144,6 +192,11 @@ export function HomeHeroCards({
               )}
             </Button>
           </form>
+          {joinError ? (
+            <p className="text-sm text-danger" role="alert">
+              {joinError}
+            </p>
+          ) : null}
         </Card>
       )}
     </div>

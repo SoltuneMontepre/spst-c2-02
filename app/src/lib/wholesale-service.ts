@@ -4,6 +4,7 @@ import { ApiError } from "./api";
 import type { Tx, CommandContext } from "./commands";
 import type { RoundPhase } from "@/generated/prisma/enums";
 import { MIN_PRICE_VND } from "./money";
+import { collectSalesTax } from "./tax-service";
 
 function requirePhase(ctx: CommandContext, phase: RoundPhase): void {
   if (ctx.session.phase !== phase) throw new ApiError("WRONG_PHASE", 409);
@@ -176,6 +177,11 @@ async function executeWholesaleTrade(
     where: { participantId: offer.producerId },
   });
   const round = await currentRound(tx, ctx.session.id, ctx.session.currentRound);
+  const { netSellerVnd } = await collectSalesTax(tx, {
+    sessionId: ctx.session.id,
+    roundId: round.id,
+    totalPriceVnd: total,
+  });
 
   await tx.wallet.update({
     where: { participantId: intermediaryId },
@@ -183,7 +189,7 @@ async function executeWholesaleTrade(
   });
   await tx.wallet.update({
     where: { participantId: offer.producerId },
-    data: { balanceVnd: { increment: total } },
+    data: { balanceVnd: { increment: netSellerVnd } },
   });
   await tx.ledgerEntry.createMany({
     data: [
@@ -199,7 +205,7 @@ async function executeWholesaleTrade(
         roundId: round.id,
         walletId: sellerWallet.id,
         type: "WHOLESALE_REVENUE",
-        amountVnd: total,
+        amountVnd: netSellerVnd,
       },
     ],
   });

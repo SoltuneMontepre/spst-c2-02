@@ -20,6 +20,8 @@ export const SCENARIO = {
   stateStartingBudgetVnd: 40000,
   producerLaborPoints: 8,
   roundProductionCap: 4,
+  /** VAT-style cut on every retail/wholesale sale, routed to the government wallet. */
+  salesTaxRate: 0.1,
   needFulfillmentUtilityVnd: 20000,
   consumerBaseNeedUnits: 2, // base need target per consumer per round
 } as const;

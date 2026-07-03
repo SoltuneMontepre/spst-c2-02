@@ -53,7 +53,7 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
     <p className="rounded-[14px] bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
       Danh sách quầy sẽ hiện khi giai đoạn «Chợ mở».
     </p>
-  ) : listings.length === 0 ? (
+  ) : allListings.length === 0 ? (
     <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
       <p className="font-medium text-foreground">Chưa có quầy niêm yết</p>
       <p className="mt-2 text-muted-foreground">
@@ -63,22 +63,29 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
   ) : (
     <>
       <MarketplaceFilters value={filter} onChange={setFilter} />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {listings.map((l) => {
-          const pendingOffer = data.self?.outgoingOffers.find(
-            (o) => o.listingId === l.id,
-          );
-          return (
-            <MarketListingCard
-              key={l.id}
-              listing={l}
-              unitValueVnd={unitValue}
-              pendingOfferVnd={pendingOffer?.offerPriceVnd}
-              onClick={() => setSelectedListing(l)}
-            />
-          );
-        })}
-      </div>
+      {listings.length === 0 ? (
+        <div className="mt-4 rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
+          <p className="font-medium text-foreground">Không có quầy phù hợp bộ lọc</p>
+          <p className="mt-2 text-muted-foreground">Thử chọn bộ lọc khác.</p>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {listings.map((l) => {
+            const pendingOffer = data.self?.outgoingOffers.find(
+              (o) => o.listingId === l.id,
+            );
+            return (
+              <MarketListingCard
+                key={l.id}
+                listing={l}
+                unitValueVnd={unitValue}
+                pendingOfferVnd={pendingOffer?.offerPriceVnd}
+                onClick={() => setSelectedListing(l)}
+              />
+            );
+          })}
+        </div>
+      )}
     </>
   );
 

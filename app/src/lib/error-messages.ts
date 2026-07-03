@@ -20,6 +20,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INVALID_ROLE_DISTRIBUTION:
     "Cơ cấu vai trò đang vượt mục tiêu. Hãy điều chỉnh vai trước khi thêm bot.",
   LATE_JOIN_FORBIDDEN: "Phiên đã bắt đầu; chỉ thành viên cũ có thể kết nối lại.",
+  ALREADY_IN_SESSION:
+    "Bạn đang ở trong một phòng khác. Quay lại phòng đó hoặc rời phòng trước.",
+  ALREADY_HOSTING:
+    "Bạn đang host phòng khác. Hủy hoặc kết thúc phòng đó trước khi vào phòng mới.",
+  HOST_CANNOT_JOIN: "Host không chiếm ghế người chơi.",
   ROOM_EXPIRED: "Mã phòng đã hết hạn.",
   ROOM_NOT_FOUND: "Không tìm thấy phòng.",
   READ_ONLY_TAB: "Tab này chỉ xem. Tab khác đang điều khiển vai của bạn.",

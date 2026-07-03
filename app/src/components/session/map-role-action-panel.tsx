@@ -20,6 +20,9 @@ import {
 import { MarketTransactionDialog } from "@/components/roles/market-transaction-dialog";
 import { IncomingOfferPopup } from "@/components/roles/incoming-offer-popup";
 import { RoleActionCard } from "@/components/session/role-task-screen";
+import { MarketActivityFeed } from "@/components/session/market-activity-feed";
+import { MarketSnapshotPanel } from "@/components/session/market-snapshot-panel";
+import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { Button } from "@/components/ui/button";
 import { getRoleQuest } from "@/lib/role-quest";
 import { EVENT_COPY } from "@/lib/labels";
@@ -256,7 +259,53 @@ function QuestIdleCard({
           ? "Nhấn «Tôi đã sẵn sàng» ở thanh dưới để tiếp tục"
           : "Đã tự động sẵn sàng — chờ mọi người…"
       }
+      videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
     />
+  );
+}
+
+/** Replaces the idle-video card while a role has nothing left to do this
+ *  phase — the cơ quan quản lý spends most rounds only observing, so this
+ *  keeps the wait screen useful instead of blank. */
+function LiveMarketWatch({
+  title,
+  body,
+  data,
+}: {
+  title: string;
+  body: string;
+  data: SessionSnapshot;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-[14px] border border-dashed border-border bg-surface/80 px-4 py-3 text-center">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{body}</p>
+        <p className="mt-2 text-[11px] font-medium text-primary">
+          Đã tự động sẵn sàng — chờ mọi người…
+        </p>
+      </div>
+
+      <div className="rounded-[14px] border border-border bg-surface p-3">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Giá trị & giá thị trường
+        </p>
+        <PriceValueChart
+          rounds={data.analytics}
+          liveStats={data.liveRoundStats}
+          currentRound={data.currentRound}
+        />
+      </div>
+
+      <MarketSnapshotPanel stats={data.liveRoundStats} />
+
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Diễn biến chợ
+        </p>
+        <MarketActivityFeed activity={data.marketActivity} />
+      </div>
+    </div>
   );
 }
 
@@ -270,6 +319,7 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
       <WaitingCard
         title="Đang chuẩn bị vai trò"
         body="Vai trò nhà cung cấp sẽ sẵn sàng khi vào vòng chơi."
+        videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
       />
     );
   }
@@ -325,6 +375,7 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
         currentRound={data.currentRound}
         phase={data.phase}
         inventory={data.self.inventory}
+        listings={data.self.listings}
         phaseReady={phaseReady}
       />
 
@@ -384,7 +435,7 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
         </span>
       </div>
 
-      {listings.length === 0 ? (
+      {allListings.length === 0 ? (
         <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
           <p className="font-medium text-foreground">Chưa có quầy niêm yết</p>
           <p className="mt-2 text-muted-foreground">
@@ -394,16 +445,23 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
       ) : (
         <>
           <MarketplaceFilters value={filter} onChange={setFilter} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            {listings.map((l) => (
-              <MarketListingCard
-                key={l.id}
-                listing={l}
-                unitValueVnd={unitValue}
-                onClick={() => setSelectedListing(l)}
-              />
-            ))}
-          </div>
+          {listings.length === 0 ? (
+            <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
+              <p className="font-medium text-foreground">Không có quầy phù hợp bộ lọc</p>
+              <p className="mt-2 text-muted-foreground">Thử chọn bộ lọc khác.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {listings.map((l) => (
+                <MarketListingCard
+                  key={l.id}
+                  listing={l}
+                  unitValueVnd={unitValue}
+                  onClick={() => setSelectedListing(l)}
+                />
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -593,7 +651,7 @@ function GovernmentActions({ sessionId }: { sessionId: string }) {
     return (
       <div className="flex flex-col gap-4">
         <GovernmentStatusSummary balanceVnd={data.self.balanceVnd} used={used} />
-        <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+        <LiveMarketWatch title={quest.title} body={quest.action} data={data} />
       </div>
     );
   }
@@ -687,6 +745,7 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
       <WaitingCard
         title="Phiên sắp bắt đầu"
         body="Đọc biến cố trên banner — nhiệm vụ sẽ mở khi vòng 1 bắt đầu."
+        videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
       />
     );
   }
@@ -701,6 +760,7 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
             ? "Đọc biến cố trên banner (hoặc popup), rồi nhấn «Tôi đã sẵn sàng» khi đã hiểu."
             : "Một sự kiện bất ngờ vừa xảy ra — chờ giai đoạn tiếp theo."
         }
+        videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
       />
     );
   }
@@ -720,6 +780,7 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
       <WaitingCard
         title="Chưa có vai trò"
         body="Bạn sẽ nhận nhiệm vụ khi phiên bắt đầu."
+        videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
       />
     );
   }
@@ -738,6 +799,7 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
         <WaitingCard
           title="Đang chờ"
           body="Theo dõi danh sách người chơi và chờ giai đoạn tiếp theo."
+          videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
         />
       );
   }

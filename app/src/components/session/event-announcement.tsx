@@ -64,6 +64,13 @@ export function EventAnnouncementPopup({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Auto-close after a few seconds, mirroring TFT's round-start banner.
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(onClose, 4000);
+    return () => window.clearTimeout(timer);
+  }, [open, onClose]);
+
   if (!open || !event) return null;
 
   return (

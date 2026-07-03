@@ -19,7 +19,7 @@ import {
   isProducerInputLockedAt,
   producerInputLockRemainingSec,
 } from "@/lib/producer-input-lock";
-import { UPGRADE_COSTS } from "@/lib/scenario";
+import { PRODUCTIVITY_PROFILES, UPGRADE_COSTS } from "@/lib/scenario";
 import {
   formatCompactVnd,
   ProducerActionCard,
@@ -172,35 +172,64 @@ export function ProducePanel({
               </span>
             </div>
           </div>
-          <div className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
-            <p className="font-semibold text-success">
-              Đã sản xuất vòng này: {producedProgress}
-            </p>
-            <p className="font-semibold text-foreground">Có thể làm thêm: {remaining} thùng</p>
-            <p>Sức sản xuất còn lại: {capacityRemaining}/{productionCapacity} thùng</p>
-            <p>Ví đủ: {fundsRemaining} thùng · Chi phí {formatCompactVnd(unitCost)}/thùng</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
+                Đã sản xuất vòng này
+              </p>
+              <p className="mt-0.5 font-mono text-base font-black text-success">
+                {producedProgress}
+              </p>
+            </div>
+            <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Có thể làm thêm
+              </p>
+              <p className="mt-0.5 font-mono text-base font-black text-foreground">
+                {remaining} <span className="text-xs font-semibold">thùng</span>
+              </p>
+            </div>
+            <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Sức sản xuất còn
+              </p>
+              <p className="mt-0.5 font-mono text-base font-black text-foreground">
+                {capacityRemaining}/{productionCapacity} <span className="text-xs font-semibold">thùng</span>
+              </p>
+            </div>
+            <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Ví đủ làm
+              </p>
+              <p className="mt-0.5 font-mono text-base font-black text-foreground">
+                {fundsRemaining} <span className="text-xs font-semibold">thùng</span>
+              </p>
+            </div>
           </div>
 
-          <div className="pt-[17.5px]">
-            <table className="w-full border-b border-muted pb-3.75 text-xs">
+          <div className="mt-3 overflow-hidden rounded-[14px] border border-border">
+            <div className="bg-muted/20 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              Tóm tắt chi phí · {qty > 0 ? `${qty} thùng` : "chưa chọn số lượng"}
+            </div>
+            <table className="w-full text-xs">
               <tbody>
-                <tr>
-                  <td className="py-[5.25px] text-muted-foreground">Chi phí sản xuất</td>
-                  <td className="py-[5.25px] text-right font-mono font-bold text-foreground">
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 text-muted-foreground">Chi phí sản xuất</td>
+                  <td className="px-3 py-2 text-right font-mono font-bold text-foreground">
                     {formatCompactVnd(cost)}
                   </td>
                 </tr>
-                <tr>
-                  <td className="py-[5.25px] text-muted-foreground">Doanh thu kỳ vọng</td>
-                  <td className="py-[5.25px] text-right font-mono font-bold text-price">
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 text-muted-foreground">Doanh thu kỳ vọng</td>
+                  <td className="px-3 py-2 text-right font-mono font-bold text-price">
                     {formatCompactVnd(expectedRevenue)}
                   </td>
                 </tr>
-                <tr>
-                  <td className="py-[5.25px] text-muted-foreground">Lợi nhuận kỳ vọng</td>
+                <tr className="border-t border-border bg-muted/10">
+                  <td className="px-3 py-2 font-semibold text-foreground">Lợi nhuận kỳ vọng</td>
                   <td
                     className={cn(
-                      "py-[5.25px] text-right font-mono font-bold",
+                      "px-3 py-2 text-right font-mono font-bold",
                       expectedProfit >= 0 ? "text-success" : "text-danger",
                     )}
                   >
@@ -214,7 +243,8 @@ export function ProducePanel({
           <div className="flex flex-col gap-2 pt-3.5">
             {state.pendingUpgrade ? (
               <p className="text-xs text-primary">
-                Nâng cấp chờ áp dụng từ vòng sau: {state.pendingUpgrade}
+                Nâng cấp chờ áp dụng từ vòng sau:{" "}
+                {PRODUCTIVITY_PROFILES[state.pendingUpgrade].label}
               </p>
             ) : null}
             {disabledReason ? (

@@ -3,12 +3,17 @@
 import { useState } from "react";
 import { Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/price-input";
 import { Stepper } from "@/components/ui/stepper";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { formatThousandDong, MIN_PRICE_VND, MAX_PRICE_VND } from "@/lib/money";
+import {
+  formatThousandDong,
+  MIN_PRICE_VND,
+  MAX_PRICE_VND,
+  PRICE_STEP_VND,
+} from "@/lib/money";
 import type { InventoryView, ListingView } from "@/lib/session-service";
 
 export function SellPanel({
@@ -66,18 +71,14 @@ export function SellPanel({
               onChange={setQty}
               size="sm"
             />
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                value={price}
-                step={1000}
-                min={MIN_PRICE_VND}
-                max={MAX_PRICE_VND}
-                onChange={(e) => setPrice(Number(e.target.value))}
-                className="h-9 w-24 text-right font-mono"
-              />
-              <span className="text-xs text-muted-foreground">đ/thùng</span>
-            </div>
+            <PriceInput
+              value={price}
+              onChange={setPrice}
+              min={MIN_PRICE_VND}
+              max={MAX_PRICE_VND}
+              step={PRICE_STEP_VND}
+              suffix="đ/thùng"
+            />
           </div>
 
           <Button

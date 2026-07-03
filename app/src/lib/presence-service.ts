@@ -20,6 +20,28 @@ import {
 
 const hostOfflineTimers = new Map<string, NodeJS.Timeout>();
 
+/** Retry the initial bot-takeover nudge on SESSION_BUSY — a concurrent
+ *  phase transition can legitimately hold the lock past the default wait,
+ *  and without a retry the newly-taken-over seat gets zero actions for
+ *  the rest of the current phase (the next phase's bot pass still covers
+ *  it, but that can be a full phase late). */
+async function runBotTakeoverWithRetry(sessionId: string): Promise<void> {
+  const { runBotTakeover } = await import("./bots");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await runBotTakeover(sessionId);
+      return;
+    } catch (e) {
+      const busy = e instanceof ApiError && e.code === "SESSION_BUSY";
+      if (!busy || attempt === 2) {
+        console.error("bot takeover:", e);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 500 + attempt * 500));
+    }
+  }
+}
+
 async function bump(sessionId: string, type: string, data?: unknown): Promise<void> {
   const s = await db.gameSession.update({
     where: { id: sessionId },
@@ -223,9 +245,7 @@ export async function reconcileSessionPresence(sessionId: string): Promise<boole
         stateVersion: s.stateVersion,
         data: { participantId: p.id, controlMode: "BOT_TAKEOVER" },
       });
-      void import("./bots")
-        .then((m) => m.runBotTakeover(sessionId))
-        .catch((e) => console.error("bot takeover:", e));
+      void runBotTakeoverWithRetry(sessionId);
     }
   }
 
