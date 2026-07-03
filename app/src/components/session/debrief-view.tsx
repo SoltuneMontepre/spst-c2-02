@@ -14,6 +14,7 @@ import type { ParticipantOutcome } from "@/lib/finalize";
 import type { ParticipantView } from "@/lib/session-service";
 import type { Role } from "@/generated/prisma/enums";
 import { Brand } from "@/components/brand";
+import { PageLoading } from "@/components/ui/page-loading";
 import { formatThousandDong } from "@/lib/money";
 
 function mergeRosterParticipants(
@@ -83,7 +84,7 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
   }, [rosterParticipants, outcomesById]);
 
   if (snapLoading || !snapshot) {
-    return <p className="p-8 text-muted-foreground">Đang tải kết quả…</p>;
+    return <PageLoading label="Đang tải kết quả…" fullScreen />;
   }
 
   const waiting = Boolean(showResult && (resultLoading || !result));

@@ -1,7 +1,7 @@
 import { currentUser } from "@/lib/api";
 import { db } from "@/lib/db";
 import { subscribe, type GameEvent } from "@/lib/events";
-import { getSnapshot, setPresence } from "@/lib/session-service";
+import { getSnapshot } from "@/lib/session-service";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,7 @@ export async function GET(
     isHost || session.participants.some((p) => p.userId === user.id);
   if (!isMember) return new Response("Forbidden", { status: 403 });
 
-  // The live connection is the presence signal for players (FR-ROOM-07).
-  if (!isHost) void setPresence(user.id, id, "ONLINE").catch(() => {});
+  // Presence is heartbeat-only (see use-session-stream) — SSE is events only.
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -103,7 +102,6 @@ export async function GET(
         clearInterval(heartbeat);
         if (debounceTimer) clearTimeout(debounceTimer);
         unsubscribe();
-        if (!isHost) void setPresence(user.id, id, "OFFLINE").catch(() => {});
         try {
           controller.close();
         } catch {
@@ -118,6 +116,10 @@ export async function GET(
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      // Tell nginx-style intermediaries (many tunnels included) not to buffer
+      // the response — without this, events sit in a proxy buffer and arrive
+      // late/in bursts instead of as they're published.
+      "X-Accel-Buffering": "no",
     },
   });
 }

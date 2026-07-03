@@ -15,6 +15,7 @@ import { HostControls } from "./host-controls";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { ChartLegend } from "@/components/observatory/chart-legend";
+import { PageLoading } from "@/components/ui/page-loading";
 import { PlayAsPlayerButton } from "@/components/host/projector-mode-toggle";
 import {
   getRememberedProjectorView,
@@ -242,7 +243,7 @@ export function HostControl({
     return (
       <div className="flex min-h-full flex-col">
         <SessionNav displayName={displayName} sessionLabel="Điều phối" />
-        <p className="p-8 text-muted-foreground">Đang tải bảng điều khiển…</p>
+        <PageLoading label="Đang tải bảng điều khiển…" />
       </div>
     );
   }

@@ -40,9 +40,6 @@ const HOME_PUBLIC_TYPES = new Set([
 
 const SESSION_HOME_USER_TYPES = new Set(["session:started", "session:ended"]);
 
-const local = new EventEmitter();
-local.setMaxListeners(0);
-
 function homeUserChannel(userId: string): string {
   return `home:user:${userId}`;
 }
@@ -52,7 +49,18 @@ interface RedisBus {
   sub: Redis;
 }
 
-const globalForBus = globalThis as unknown as { __mlnBus?: RedisBus | null };
+const globalForBus = globalThis as unknown as {
+  __mlnBus?: RedisBus | null;
+  __mlnLocalBus?: EventEmitter;
+};
+
+// Pinned to globalThis so a Next.js dev-mode hot reload (which re-evaluates
+// this module) doesn't spawn a fresh emitter that open SSE connections can't
+// see — otherwise publish() and subscribe() end up on different instances
+// and live updates silently stop until the client does a hard refetch.
+const local = globalForBus.__mlnLocalBus ?? new EventEmitter();
+local.setMaxListeners(0);
+globalForBus.__mlnLocalBus = local;
 
 function emitLocal(event: GameEvent): void {
   local.emit(event.sessionId, event);

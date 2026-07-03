@@ -53,19 +53,19 @@ export function Stepper({
 
   const valueClasses =
     size === "lg"
-      ? "text-[38px] font-bold"
+      ? "w-12 text-[22px] font-bold"
       : size === "sm"
-        ? "text-base font-semibold"
-        : "text-lg font-semibold";
+        ? "w-8 text-base font-semibold"
+        : "w-10 text-lg font-semibold";
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex shrink-0 items-center gap-2">
       <button
         type="button"
         onClick={() => stepBy(-step)}
         disabled={value <= min}
         className={cn(
-          "flex items-center justify-center border border-border bg-surface hover:bg-muted disabled:opacity-40 transition-colors",
+          "flex shrink-0 items-center justify-center border border-border bg-surface hover:bg-muted disabled:opacity-40 transition-colors",
           btnSize,
         )}
         aria-label="Giảm"
@@ -76,6 +76,7 @@ export function Stepper({
         type="text"
         inputMode="numeric"
         pattern="[0-9]*"
+        size={3}
         value={focused ? text : String(value)}
         onFocus={() => {
           setFocused(true);
@@ -99,7 +100,7 @@ export function Stepper({
           if (e.key === "Enter") e.currentTarget.blur();
         }}
         className={cn(
-          "min-w-10 border-none bg-transparent text-center tabular-nums outline-none",
+          "shrink-0 border-none bg-transparent text-center tabular-nums outline-none",
           valueClasses,
         )}
       />
@@ -108,7 +109,7 @@ export function Stepper({
         onClick={() => stepBy(step)}
         disabled={value >= max}
         className={cn(
-          "flex items-center justify-center border border-border bg-surface hover:bg-muted disabled:opacity-40 transition-colors",
+          "flex shrink-0 items-center justify-center border border-border bg-surface hover:bg-muted disabled:opacity-40 transition-colors",
           btnSize,
         )}
         aria-label="Tăng"

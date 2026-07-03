@@ -448,11 +448,15 @@ export async function respondOffer(
     return { transactionId: result.transactionId };
   }
 
-  // COUNTER — seller proposes a new price back to the consumer.
-  if (!input.counterPriceVnd) throw new ApiError("MISSING_COUNTER_PRICE", 422);
+  // COUNTER — seller proposes a price between the buyer's offer and the ask.
+  if (input.counterPriceVnd == null) throw new ApiError("MISSING_COUNTER_PRICE", 422);
   if (ctx.participant.role !== "PRODUCER" && ctx.participant.role !== "INTERMEDIARY")
     throw new ApiError("WRONG_ROLE", 403);
   if (!offer.listing) throw new ApiError("LISTING_UNAVAILABLE", 409);
+  // Must beat the buyer's offer (otherwise just accept) and stay below ask
+  // (ask is already on the listing — countering at/above ask is not a concession).
+  if (input.counterPriceVnd <= offer.offerPriceVnd)
+    throw new ApiError("COUNTER_BELOW_OFFER", 422);
   if (input.counterPriceVnd >= offer.listing.askPriceVnd)
     throw new ApiError("COUNTER_TOO_HIGH", 422);
 
@@ -467,6 +471,7 @@ export async function respondOffer(
       offerPriceVnd: input.counterPriceVnd,
       parentOfferId: offer.id,
       expiresAt,
+      status: "OPEN",
     },
   });
   return { offerId: counter.id };
@@ -476,15 +481,41 @@ async function releaseOfferReservation(
   tx: Tx,
   sessionId: string,
   roundNumber: number,
-  offer: { fromParticipantId: string; offerPriceVnd: number; quantity: number },
+  offer: {
+    fromParticipantId: string;
+    offerPriceVnd: number;
+    quantity: number;
+    parentOfferId?: string | null;
+  },
 ): Promise<void> {
+  // Counter-offers are from the seller; the reserved funds sit on the original
+  // buyer offer (parent). Walk to the root offer before releasing.
+  let buyerId = offer.fromParticipantId;
+  let reservePrice = offer.offerPriceVnd;
+  let parentId = offer.parentOfferId ?? null;
+  while (parentId) {
+    const parent = await tx.offer.findUnique({
+      where: { id: parentId },
+      select: {
+        fromParticipantId: true,
+        offerPriceVnd: true,
+        parentOfferId: true,
+      },
+    });
+    if (!parent) break;
+    buyerId = parent.fromParticipantId;
+    reservePrice = parent.offerPriceVnd;
+    parentId = parent.parentOfferId;
+  }
+
   const round = await currentRound(tx, sessionId, roundNumber);
   const rs = await tx.roleState.findUnique({
-    where: { participantId_roundId: { participantId: offer.fromParticipantId, roundId: round.id } },
+    where: { participantId_roundId: { participantId: buyerId, roundId: round.id } },
   });
   if (!rs) return;
   const cstate = rs.state as unknown as ConsumerRoundState;
-  const reserve = offer.offerPriceVnd * offer.quantity;
+  if (cstate.kind !== "CONSUMER") return;
+  const reserve = reservePrice * offer.quantity;
   await tx.roleState.update({
     where: { id: rs.id },
     data: {

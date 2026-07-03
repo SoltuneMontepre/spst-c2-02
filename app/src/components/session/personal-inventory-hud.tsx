@@ -176,27 +176,17 @@ export function PersonalInventoryHud({
         {role === "PRODUCER" && state?.kind === "PRODUCER" ? (
           <>
             <HudStat
-              icon={<Sprout className="size-3.5" />}
-              label="Đã sản xuất"
-              value={`${state.producedQuantity}`}
-              title={`Đã sản xuất ${state.producedQuantity} thùng`}
+              icon={<Package className="size-3.5" />}
+              label="Tồn kho"
+              value={`${inventoryUnits}`}
+              title={`${inventoryUnits} thùng trong kho`}
             />
-            {inventoryUnits > 0 ? (
-              <HudStat
-                icon={<Package className="size-3.5" />}
-                label="Tồn kho"
-                value={`${inventoryUnits}`}
-                title={`${inventoryUnits} thùng trong kho`}
-              />
-            ) : null}
-            {listedUnits > 0 ? (
-              <HudStat
-                icon={<ShoppingBag className="size-3.5" />}
-                label="Đang bán"
-                value={`${listedUnits}`}
-                title={`${listedUnits} thùng đang bán`}
-              />
-            ) : null}
+            <HudStat
+              icon={<ShoppingBag className="size-3.5" />}
+              label="Đang bán"
+              value={`${listedUnits}`}
+              title={`${listedUnits} thùng đang bán`}
+            />
           </>
         ) : null}
 

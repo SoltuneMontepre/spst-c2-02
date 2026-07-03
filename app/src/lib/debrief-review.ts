@@ -3,7 +3,6 @@
 export interface AiDebriefParticipantReview {
   participantId: string;
   grade: number;
-  comment: string;
 }
 
 export interface AiDebriefReview {
@@ -46,7 +45,6 @@ export function parseAiDebrief(raw: unknown): AiDebriefReview | null {
     participants: r.participants.map((p) => ({
       participantId: p.participantId,
       grade: clampGrade(p.grade),
-      comment: typeof p.comment === "string" ? p.comment : "",
     })),
   };
 }

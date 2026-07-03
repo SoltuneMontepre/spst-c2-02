@@ -27,6 +27,7 @@ const SESSION_DELTA_PATCH_EVENTS = new Set([
   "session:resumed",
   "session:extended",
   "session:auto_host",
+  "session:lobby_solo",
 ]);
 
 function parseEventData(row: Record<string, unknown>): unknown {
@@ -213,6 +214,22 @@ export function patchSessionSnapshot(
     return { ...old, autoHost };
   }
 
+  if (event.type === "session:lobby_solo" && event.data) {
+    const { lobbySoloSince, lobbySoloExtendUsed } = event.data as {
+      lobbySoloSince?: string | null;
+      lobbySoloExtendUsed?: boolean;
+    };
+    return {
+      ...old,
+      lobbySoloSince:
+        lobbySoloSince === undefined ? old.lobbySoloSince : lobbySoloSince,
+      lobbySoloExtendUsed:
+        lobbySoloExtendUsed === undefined
+          ? old.lobbySoloExtendUsed
+          : lobbySoloExtendUsed,
+    };
+  }
+
   return undefined;
 }
 
@@ -222,7 +239,10 @@ export function applySessionSnapshot(
   payload: StreamSnapshotPayload,
 ): void {
   const cached = queryClient.getQueryData<SessionSnapshot>(queryKey);
-  if (cached && payload.stateVersion <= cached.stateVersion) return;
+  // Equal versions still apply: delta patches (e.g. phase_ready) bump
+  // stateVersion without refreshing lastSeenAt/presence, and the follow-up
+  // SSE snapshot carries the same version with fresh derived fields.
+  if (cached && payload.stateVersion < cached.stateVersion) return;
   queryClient.setQueryData(queryKey, payload.snapshot);
 }
 

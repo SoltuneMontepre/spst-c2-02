@@ -1,4 +1,6 @@
-// Presence, disconnect handling, bot takeover (FR-GAME-03, FR-ROOM-03, FR-HOST-06).
+// Presence is heartbeat-only (lastSeenAt). SSE is for game events, not presence.
+// Online/offline is derived on read; we only write OFFLINE when reconcile finds
+// a stale heartbeat — no flaky connect/abort races.
 
 import { db } from "./db";
 import { publish } from "./events";
@@ -6,42 +8,17 @@ import { ApiError } from "./api";
 import { ensureHostParticipant } from "./lobby-seat";
 import {
   DISCONNECT_BOT_TAKEOVER_SEC,
-  DISCONNECT_READY_GRACE_SEC,
   HOST_RECONNECT_WINDOW_SEC,
 } from "./scenario";
 import { hostPause, hostEnd } from "./game-service";
 import { syncLobbySoloSince } from "./lobby-maintenance";
+import {
+  effectivePresence,
+  isDueForBotTakeover,
+  isEffectivelyOnline,
+} from "./participant-presence";
 
-const disconnectTimers = new Map<string, NodeJS.Timeout>();
 const hostOfflineTimers = new Map<string, NodeJS.Timeout>();
-
-function participantTimerKey(sessionId: string, participantId: string): string {
-  return `${sessionId}:${participantId}`;
-}
-
-function clearParticipantTimer(sessionId: string, participantId: string): void {
-  const key = participantTimerKey(sessionId, participantId);
-  const existing = disconnectTimers.get(key);
-  if (existing) clearTimeout(existing);
-  disconnectTimers.delete(key);
-}
-
-function scheduleStaleHeartbeat(
-  userId: string,
-  sessionId: string,
-  participantId: string,
-): void {
-  const key = participantTimerKey(sessionId, participantId);
-  disconnectTimers.set(
-    key,
-    setTimeout(() => {
-      disconnectTimers.delete(key);
-      void markOffline(userId, sessionId).catch((e) =>
-        console.error("heartbeat stale:", (e as Error).message),
-      );
-    }, DISCONNECT_BOT_TAKEOVER_SEC * 1000),
-  );
-}
 
 async function bump(sessionId: string, type: string, data?: unknown): Promise<void> {
   const s = await db.gameSession.update({
@@ -49,15 +26,17 @@ async function bump(sessionId: string, type: string, data?: unknown): Promise<vo
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
+  await import("./session-service")
+    .then((m) => m.refreshLiveRoom(sessionId))
+    .catch((e) => console.error("live-room refresh:", e));
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }
 
-/** Player heartbeat — marks online and cancels pending bot takeover. */
+/** Player heartbeat — sole presence signal. Updates lastSeenAt every call. */
 export async function heartbeat(
   userId: string,
   sessionId: string,
-  tabId?: string,
-): Promise<{ controlMode: string }> {
+): Promise<{ controlMode: string; presence: "ONLINE" }> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
     select: { hostUserId: true, status: true },
@@ -72,116 +51,206 @@ export async function heartbeat(
   });
   if (!participant) throw new ApiError("FORBIDDEN", 403);
 
-  clearParticipantTimer(sessionId, participant.id);
-
-  // Reclaim from bot takeover at action boundary.
+  const wasOffline = !isEffectivelyOnline(participant.lastSeenAt);
   const controlMode =
     participant.controlMode === "BOT_TAKEOVER" ? "HUMAN" : participant.controlMode;
-  const shouldBroadcast =
-    participant.presence !== "ONLINE" || participant.controlMode !== controlMode;
-
   const lastSeenAt = new Date();
-  await db.participant.update({
-    where: { id: participant.id },
-    data: {
-      presence: "ONLINE",
-      lastSeenAt,
-      controlMode,
-      ...(tabId ? {} : {}),
-    },
-  });
+  const presenceData = {
+    presence: "ONLINE" as const,
+    lastSeenAt,
+    controlMode,
+  };
 
-  scheduleStaleHeartbeat(userId, sessionId, participant.id);
+  // Broadcast only on real transitions (offline → online, or reclaiming seat).
+  // When bumping stateVersion, lock GameSession before the participant row.
+  if (wasOffline || participant.controlMode !== controlMode) {
+    const s = await db.$transaction(async (tx) => {
+      const updated = await tx.gameSession.update({
+        where: { id: sessionId },
+        data: { stateVersion: { increment: 1 } },
+        select: { stateVersion: true },
+      });
+      await tx.participant.update({
+        where: { id: participant.id },
+        data: presenceData,
+      });
+      return updated;
+    });
+    await import("./session-service")
+      .then((m) => m.refreshLiveRoom(sessionId))
+      .catch((e) => console.error("live-room refresh:", e));
+    await publish({
+      sessionId,
+      type: "participant:presence",
+      stateVersion: s.stateVersion,
+      data: {
+        participantId: participant.id,
+        userId,
+        presence: "ONLINE",
+        controlMode,
+        lastSeenAt: lastSeenAt.toISOString(),
+      },
+    });
+  } else {
+    await db.participant.update({
+      where: { id: participant.id },
+      data: presenceData,
+    });
+  }
 
   if (session.status === "LOBBY") {
     await syncLobbySoloSince(sessionId);
   }
 
-  if (shouldBroadcast) {
-    await bump(sessionId, "participant:presence", {
-      participantId: participant.id,
-      userId,
-      presence: "ONLINE",
-      controlMode,
-      lastSeenAt: lastSeenAt.toISOString(),
-    });
-  }
-  return { controlMode };
+  return { controlMode, presence: "ONLINE" };
 }
 
-/** Called when SSE disconnects or explicit offline. */
+/**
+ * Reconcile stored presence flags from lastSeenAt.
+ * Call on snapshot reads so every client sees consistent online/offline
+ * without depending on in-process timers or SSE abort.
+ */
+export async function reconcileSessionPresence(sessionId: string): Promise<boolean> {
+  const session = await db.gameSession.findUnique({
+    where: { id: sessionId },
+    select: { status: true },
+  });
+  if (!session) return false;
+
+  const humans = await db.participant.findMany({
+    where: { sessionId, isBot: false },
+    select: {
+      id: true,
+      userId: true,
+      presence: true,
+      lastSeenAt: true,
+      controlMode: true,
+      ready: true,
+    },
+  });
+
+  const now = Date.now();
+  const inGame = !["LOBBY", "CREATED", "COMPLETED", "INCOMPLETE", "CANCELLED"].includes(
+    session.status,
+  );
+  let changed = false;
+
+  for (const p of humans) {
+    const online = isEffectivelyOnline(p.lastSeenAt, now);
+    const storedOnline = p.presence === "ONLINE";
+
+    if (online && !storedOnline) {
+      await db.participant.update({
+        where: { id: p.id },
+        data: { presence: "ONLINE" },
+      });
+      changed = true;
+      continue;
+    }
+
+    if (!online && storedOnline) {
+      changed = true;
+      const clearReady = session.status === "LOBBY" && p.ready;
+      const s = await db.$transaction(async (tx) => {
+        const updated = await tx.gameSession.update({
+          where: { id: sessionId },
+          data: { stateVersion: { increment: 1 } },
+          select: { stateVersion: true },
+        });
+        await tx.participant.update({
+          where: { id: p.id },
+          data: {
+            presence: "OFFLINE",
+            ...(clearReady ? { ready: false } : {}),
+          },
+        });
+        return updated;
+      });
+      await import("./session-service")
+        .then((m) => m.refreshLiveRoom(sessionId))
+        .catch((e) => console.error("live-room refresh:", e));
+      if (clearReady) {
+        await publish({
+          sessionId,
+          type: "participant:ready",
+          stateVersion: s.stateVersion,
+          data: { participantId: p.id, userId: p.userId, ready: false },
+        });
+      }
+      await publish({
+        sessionId,
+        type: "participant:presence",
+        stateVersion: s.stateVersion,
+        data: {
+          participantId: p.id,
+          userId: p.userId,
+          presence: "OFFLINE",
+          lastSeenAt: p.lastSeenAt?.toISOString() ?? null,
+          controlMode: p.controlMode,
+        },
+      });
+
+      void import("./ai-host")
+        .then((m) => m.maybeFastForwardPhase(sessionId))
+        .catch((e) => console.error("ready-grace fast-forward:", e));
+    }
+
+    if (
+      inGame &&
+      !online &&
+      p.controlMode === "HUMAN" &&
+      isDueForBotTakeover(p.lastSeenAt, now)
+    ) {
+      changed = true;
+      const s = await db.$transaction(async (tx) => {
+        const updated = await tx.gameSession.update({
+          where: { id: sessionId },
+          data: { stateVersion: { increment: 1 } },
+          select: { stateVersion: true },
+        });
+        await tx.participant.update({
+          where: { id: p.id },
+          data: { controlMode: "BOT_TAKEOVER", presence: "OFFLINE" },
+        });
+        return updated;
+      });
+      await import("./session-service")
+        .then((m) => m.refreshLiveRoom(sessionId))
+        .catch((e) => console.error("live-room refresh:", e));
+      await publish({
+        sessionId,
+        type: "bot:control_changed",
+        stateVersion: s.stateVersion,
+        data: { participantId: p.id, controlMode: "BOT_TAKEOVER" },
+      });
+      void import("./bots")
+        .then((m) => m.runBotTakeover(sessionId))
+        .catch((e) => console.error("bot takeover:", e));
+    }
+  }
+
+  return changed;
+}
+
+/** @deprecated Prefer heartbeat — kept for any legacy callers. */
 export async function markOffline(userId: string, sessionId: string): Promise<void> {
   const participant = await db.participant.findFirst({
     where: { sessionId, userId, isBot: false },
   });
   if (!participant) return;
-  clearParticipantTimer(sessionId, participant.id);
 
-  const lastSeenAt = new Date();
+  // Only mark offline if heartbeat is already stale (ignore flaky callers).
+  if (isEffectivelyOnline(participant.lastSeenAt)) return;
+
   await db.participant.update({
     where: { id: participant.id },
-    data: { presence: "OFFLINE", lastSeenAt },
+    data: { presence: "OFFLINE" },
   });
-
-  const session = await db.gameSession.findUnique({ where: { id: sessionId } });
-  if (!session) return;
-
-  // After the grace window, stop waiting on this player for phase advance.
-  setTimeout(() => {
-    void import("./ai-host")
-      .then((m) => m.maybeFastForwardPhase(sessionId))
-      .catch((e) => console.error("ready-grace fast-forward:", e));
-  }, DISCONNECT_READY_GRACE_SEC * 1000);
-
-  // Lobby: not-ready after 15s (FR-ROOM-03).
-  if (session.status === "LOBBY") {
-    await syncLobbySoloSince(sessionId);
-    const key = participantTimerKey(sessionId, participant.id);
-    disconnectTimers.set(
-      key,
-      setTimeout(async () => {
-        disconnectTimers.delete(key);
-        await db.participant.updateMany({
-          where: { id: participant.id, presence: "OFFLINE" },
-          data: { ready: false },
-        });
-        await bump(sessionId, "participant:ready", {
-          participantId: participant.id,
-          userId,
-          ready: false,
-        });
-      }, DISCONNECT_BOT_TAKEOVER_SEC * 1000),
-    );
-  }
-
-  // Active game: bot takeover after 15s (FR-GAME-03).
-  if (
-    !["LOBBY", "CREATED", "COMPLETED", "INCOMPLETE", "CANCELLED"].includes(session.status)
-  ) {
-    const key = participantTimerKey(sessionId, participant.id);
-    disconnectTimers.set(
-      key,
-      setTimeout(async () => {
-        disconnectTimers.delete(key);
-        const fresh = await db.participant.findUnique({ where: { id: participant.id } });
-        if (!fresh || fresh.presence !== "OFFLINE") return;
-        await db.participant.update({
-          where: { id: participant.id },
-          data: { controlMode: "BOT_TAKEOVER" },
-        });
-        await bump(sessionId, "bot:control_changed", {
-          participantId: participant.id,
-          controlMode: "BOT_TAKEOVER",
-        });
-      }, DISCONNECT_BOT_TAKEOVER_SEC * 1000),
-    );
-  }
-
   await bump(sessionId, "participant:presence", {
     participantId: participant.id,
     userId,
     presence: "OFFLINE",
-    lastSeenAt: lastSeenAt.toISOString(),
+    lastSeenAt: participant.lastSeenAt?.toISOString() ?? null,
   });
 }
 
@@ -193,10 +262,7 @@ export async function hostHeartbeat(hostUserId: string, sessionId: string): Prom
   const t = hostOfflineTimers.get(sessionId);
   if (t) clearTimeout(t);
   hostOfflineTimers.delete(sessionId);
-
-  if (session.paused && session.pausedRemainingMs !== null) {
-    // Host returned — resume is manual or auto-resume could be added.
-  }
+  hostOfflineTimers.delete(`${sessionId}:end`);
 }
 
 export async function hostOffline(hostUserId: string, sessionId: string): Promise<void> {
@@ -222,3 +288,5 @@ export async function hostOffline(hostUserId: string, sessionId: string): Promis
     }, HOST_RECONNECT_WINDOW_SEC * 1000),
   );
 }
+
+export { effectivePresence, isEffectivelyOnline, isDisconnectedForReady } from "./participant-presence";

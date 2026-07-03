@@ -66,7 +66,27 @@ export function PriceValueChart({
     });
   }
 
-  const values = displayRounds.flatMap((round) => [
+  // Prepend the pre-trading anchor so a round's trajectory (start → close)
+  // is visible — N completed rounds otherwise only plot N points, hiding
+  // the "where did it start from" mark players expect (SRS §5.9).
+  const points: (RoundAnalytics & { label: string })[] =
+    displayRounds.length > 0
+      ? [
+          {
+            ...displayRounds[0],
+            number: displayRounds[0].number - 1,
+            marketPriceVnd: displayRounds[0].unitValueVnd,
+            supplyQuantity: 0,
+            demandQuantity: 0,
+            retailSoldQuantity: 0,
+            spoiledQuantity: 0,
+            label: "Bắt đầu",
+          },
+          ...displayRounds.map((round) => ({ ...round, label: `V${round.number}` })),
+        ]
+      : [];
+
+  const values = points.flatMap((round) => [
     round.unitValueVnd,
     round.marketPriceVnd ?? round.unitValueVnd,
   ]);
@@ -79,15 +99,15 @@ export function PriceValueChart({
   const innerH = H - PAD_TOP - PAD_BOTTOM;
 
   const x = (i: number) =>
-    PAD_X + (displayRounds.length === 1 ? innerW / 2 : (i * innerW) / (displayRounds.length - 1));
+    PAD_X + (points.length === 1 ? innerW / 2 : (i * innerW) / (points.length - 1));
   const y = (v: number) =>
     PAD_TOP + ((maxVnd - v) / Math.max(1, maxVnd - minVnd)) * innerH;
 
   const yTicks = [maxVnd, Math.round((maxVnd + minVnd) / 2000) * 1000, minVnd];
-  const valueLine = displayRounds
+  const valueLine = points
     .map((round, i) => `${x(i)},${y(round.unitValueVnd)}`)
     .join(" ");
-  const pricePoints = displayRounds
+  const pricePoints = points
     .map((round, i) =>
       round.marketPriceVnd == null ? null : `${x(i)},${y(round.marketPriceVnd)}`,
     )
@@ -144,7 +164,7 @@ export function PriceValueChart({
         />
       ) : null}
 
-      {displayRounds.map((round, i) => {
+      {points.map((round, i) => {
         const direction = pressureDirection(round);
         const anchorY = y(round.unitValueVnd);
         const tipY = Math.max(
@@ -218,7 +238,7 @@ export function PriceValueChart({
               fontSize={11}
               fill="var(--muted-foreground)"
             >
-              V{round.number}
+              {round.label}
             </text>
           </g>
         );
@@ -226,13 +246,13 @@ export function PriceValueChart({
 
       <text
         x={W - PAD_X}
-        y={y(displayRounds[displayRounds.length - 1]?.unitValueVnd ?? maxVnd)}
+        y={y(points[points.length - 1]?.unitValueVnd ?? maxVnd)}
         fontSize={11}
         fill="var(--value)"
         textAnchor="end"
         dy={-6}
       >
-        GT {compactVnd(displayRounds[displayRounds.length - 1]?.unitValueVnd ?? maxVnd)}
+        GT {compactVnd(points[points.length - 1]?.unitValueVnd ?? maxVnd)}
       </text>
     </svg>
   );

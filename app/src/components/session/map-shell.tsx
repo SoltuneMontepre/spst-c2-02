@@ -11,7 +11,12 @@ import { GameBottomPill } from "@/components/session/game-bottom-pill";
 import { MapPlayerRoster } from "@/components/session/map-player-roster";
 import { MapRoleActionPanel } from "@/components/session/map-role-action-panel";
 import { MapResourcesPanel } from "@/components/session/map-resources-panel";
+import {
+  EventAnnouncementPopup,
+  useEventAnnouncement,
+} from "@/components/session/event-announcement";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
+import { PageLoading } from "@/components/ui/page-loading";
 import { getRoleQuest } from "@/lib/role-quest";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
@@ -58,8 +63,15 @@ export function MapShell({ sessionId }: { sessionId: string }) {
     enabled: canPhaseReady,
   });
 
+  const eventAnnouncement = useEventAnnouncement(
+    sessionId,
+    data?.status ?? "",
+    data?.phase ?? null,
+    data?.currentRound ?? 0,
+  );
+
   if (isLoading || !data) {
-    return <p className="p-6 text-muted-foreground">Đang tải phiên…</p>;
+    return <PageLoading label="Đang tải phiên…" fullScreen />;
   }
 
   const recapRound = data.analytics.find((r) => r.number === data.currentRound);
@@ -84,6 +96,7 @@ export function MapShell({ sessionId }: { sessionId: string }) {
             <GamePhaseCta
               variant="map"
               sessionId={sessionId}
+              status={data.status}
               phase={data.phase}
               round={data.currentRound}
               role={role}
@@ -119,6 +132,13 @@ export function MapShell({ sessionId }: { sessionId: string }) {
         phaseReady={phaseReady}
         autoHost={data.autoHost}
         questStatus={questStatus}
+      />
+
+      <EventAnnouncementPopup
+        round={eventAnnouncement.round}
+        open={eventAnnouncement.open}
+        onClose={eventAnnouncement.dismiss}
+        preview={eventAnnouncement.preview}
       />
     </GameSessionLayout>
   );

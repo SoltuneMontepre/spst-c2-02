@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Clock, LogOut, Wallet, Wifi } from "lucide-react";
+import { Clock, Loader2, LogOut, Wallet, Wifi } from "lucide-react";
 import { useCountdown, formatClock } from "@/hooks/use-countdown";
 import type { SessionStreamState } from "@/hooks/use-session-stream";
 import { Brand } from "@/components/brand";
@@ -13,7 +13,7 @@ import { PHASE_LABELS } from "@/lib/labels";
 import { formatThousandDong } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
-function connectionLabel(streamState: SessionStreamState): string {
+export function connectionLabel(streamState: SessionStreamState): string {
   if (streamState === "connecting") return "Đang kết nối";
   if (streamState === "disconnected") return "Mất kết nối";
   return "Kết nối ổn định";
@@ -116,7 +116,12 @@ export function GameTopBar({
           {phaseLabel}
         </span>
 
-        {remaining !== null ? (
+        {remaining === 0 ? (
+          <span className="hidden shrink-0 items-center gap-1 text-[13px] font-semibold text-muted-foreground md:flex">
+            <Loader2 className="size-[13px] animate-spin" aria-hidden />
+            Đang chuyển…
+          </span>
+        ) : remaining !== null ? (
           <span className="hidden shrink-0 items-center gap-1 font-mono text-[14px] font-bold tabular-nums md:flex">
             <Clock className="size-[13px] text-muted-foreground" aria-hidden />
             {formatClock(remaining)}

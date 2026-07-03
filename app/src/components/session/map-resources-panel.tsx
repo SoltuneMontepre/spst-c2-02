@@ -1,13 +1,12 @@
 "use client";
 
-import { Coins, Package, ShoppingBag, Sprout } from "lucide-react";
+import { Coins, Package, ShoppingBag } from "lucide-react";
 import { MarketActivityFeed } from "@/components/session/market-activity-feed";
 import { formatThousandDong } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/session-service";
 import type {
   ConsumerRoundState,
   GovernmentRoundState,
-  ProducerRoundState,
 } from "@/lib/role-state";
 import { cn } from "@/lib/utils";
 
@@ -59,26 +58,16 @@ function resourcesForSelf(data: SessionSnapshot): { label: string; value: string
   const listedUnits = self.listings.reduce((s, l) => s + l.availableQuantity, 0);
 
   if (self.role === "PRODUCER") {
-    const state = self.roleState as ProducerRoundState | null;
-    if (state?.kind === "PRODUCER") {
-      rows.push({
-        label: "Đã sản xuất",
-        value: `${state.producedQuantity} thùng`,
-        icon: Sprout,
-      });
-    }
     rows.push({
       label: "Tồn kho",
       value: `${inventoryUnits} thùng`,
       icon: Package,
     });
-    if (listedUnits > 0) {
-      rows.push({
-        label: "Đang bán",
-        value: `${listedUnits} thùng`,
-        icon: ShoppingBag,
-      });
-    }
+    rows.push({
+      label: "Đang bán",
+      value: `${listedUnits} thùng`,
+      icon: ShoppingBag,
+    });
   }
 
   if (self.role === "CONSUMER") {

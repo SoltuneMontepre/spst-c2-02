@@ -128,7 +128,7 @@ export function LobbySettingsPanel({
           description={
             autoAssignRoles
               ? "Hệ thống tự động gán vai và cân bằng cơ cấu cho người chơi mới vào phòng."
-              : "Bạn gán vai thủ công cho từng người chơi và bot ở phần bên dưới."
+              : "Mỗi người chọn vai của mình (mặc định Ngẫu nhiên). Bot lấp chỗ trống khi phiên bắt đầu."
           }
           checked={autoAssignRoles}
           onCheckedChange={isHost ? onSetAutoAssignRoles : undefined}

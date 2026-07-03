@@ -16,6 +16,7 @@ import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { Card } from "@/components/ui/card";
 import { ChartLegend } from "@/components/observatory/chart-legend";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
+import { PageLoading } from "@/components/ui/page-loading";
 import { PHASE_LABELS } from "@/lib/labels";
 import { unitValueVnd } from "@/lib/economy";
 import type { SessionSnapshot, TransactionView } from "@/lib/session-service";
@@ -390,7 +391,7 @@ export function ObservatoryView({ sessionId }: { sessionId: string }) {
   }, [data, router, sessionId]);
 
   if (isLoading || !data) {
-    return <p className="p-6 text-muted-foreground">Đang tải phiên…</p>;
+    return <PageLoading label="Đang tải phiên…" fullScreen />;
   }
 
   const stats = deriveStats(data);

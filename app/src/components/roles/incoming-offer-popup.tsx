@@ -42,7 +42,7 @@ export function IncomingOfferPopup({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/60 px-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-foreground/60 px-4 py-[6vh]">
       <div className="relative w-full max-w-[380px] rounded-[21px] bg-surface p-5 text-center shadow-2xl">
         <button
           type="button"
@@ -54,14 +54,17 @@ export function IncomingOfferPopup({
         </button>
 
         <p className="text-xs font-bold uppercase tracking-wide text-primary">
-          Đề nghị mới
+          Phản đề nghị giá
         </p>
         <p className="mt-2 text-lg font-bold">
-          {activeOffer.fromName} sẵn sàng bán
+          {activeOffer.fromName} gửi phản giá
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {activeOffer.quantity} thùng · {formatThousandDong(activeOffer.offerPriceVnd)}
-          /thùng
+          Người bán trả giá lại đề nghị của bạn:{" "}
+          <span className="font-semibold text-foreground">
+            {activeOffer.quantity} thùng ·{" "}
+            {formatThousandDong(activeOffer.offerPriceVnd)}/thùng
+          </span>
         </p>
 
         <div className="mt-5 flex gap-2">
@@ -94,7 +97,7 @@ export function IncomingOfferPopup({
             className="flex-[2] rounded-[14px] py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: "linear-gradient(172deg, #c94a2d, #a03020)" }}
           >
-            Mua ngay
+            Chấp nhận giá này
           </button>
         </div>
       </div>

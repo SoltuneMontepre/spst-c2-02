@@ -132,6 +132,8 @@ export const respondWholesaleSchema = z.object({
   offerId: z.string().uuid(),
   decision: z.enum(["ACCEPT", "REJECT", "COUNTER"]),
   counterPriceVnd: priceVndSchema.optional(),
+  /** ACCEPT only — buy fewer than the full offer quantity, leaving the rest open. */
+  quantity: quantitySchema.optional(),
 });
 
 export const wholesaleCreateSchema = z.object({

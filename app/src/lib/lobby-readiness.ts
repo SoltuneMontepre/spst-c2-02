@@ -36,6 +36,13 @@ export interface LobbyReadiness {
 
 const ROLE_ORDER: Role[] = ["PRODUCER", "CONSUMER", "INTERMEDIARY", "GOVERNMENT"];
 
+const ROLE_CHECKLIST_LABEL: Record<Role, string> = {
+  PRODUCER: "Có nhà cung cấp",
+  CONSUMER: "Có khách hàng",
+  INTERMEDIARY: "Có đại lý",
+  GOVERNMENT: "Có cơ quan quản lý",
+};
+
 function countRoles(participants: SessionSnapshot["participants"]) {
   const counts: Record<Role, number> = {
     PRODUCER: 0,
@@ -57,9 +64,12 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
   const readyCount = humans.filter((p) => p.ready).length;
   const allReady = humanCount > 0 && humans.every((p) => p.ready);
   const minHumans = lobbyMinHumans(snapshot.autoHost);
-  const roleCounts = countRoles(snapshot.participants);
-
+  const roleCounts = countRoles(humans);
   const target = compositionTarget(snapshot.maxPlayers);
+  const auto = snapshot.autoAssignRoles;
+  const overTarget = ROLE_ORDER.some((role) => roleCounts[role] > target[role]);
+  // null = Ngẫu nhiên; bots fill remaining seats. "Have role" is ok unless over cap.
+  const compositionOk = humanCount >= minHumans && !overTarget;
 
   const checklist: ChecklistItem[] = [
     {
@@ -67,55 +77,25 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
       label: `Tối thiểu ${minHumans} người`,
       done: humanCount >= minHumans,
     },
-    {
-      id: "has-producer",
-      label: "Có nhà cung cấp",
-      done: snapshot.autoAssignRoles
-        ? humanCount >= minHumans || roleCounts.PRODUCER > 0
-        : roleCounts.PRODUCER > 0,
-    },
-    {
-      id: "has-consumer",
-      label: "Có khách hàng",
-      done: snapshot.autoAssignRoles
-        ? humanCount >= minHumans || roleCounts.CONSUMER > 0
-        : roleCounts.CONSUMER > 0,
-    },
-    {
-      id: "has-intermediary",
-      label: "Có đại lý",
-      done:
-        target.INTERMEDIARY === 0 ||
-        (snapshot.autoAssignRoles
-          ? humanCount >= minHumans || roleCounts.INTERMEDIARY > 0
-          : roleCounts.INTERMEDIARY > 0),
-    },
-    {
-      id: "has-government",
-      label: "Có cơ quan quản lý",
-      done:
-        target.GOVERNMENT === 0 ||
-        (snapshot.autoAssignRoles
-          ? humanCount >= minHumans || roleCounts.GOVERNMENT > 0
-          : roleCounts.GOVERNMENT > 0),
-    },
-    {
-      id: "all-ready",
-      label: allReady ? "Tất cả đã sẵn sàng" : "Chờ mọi người bấm sẵn sàng",
-      done: allReady,
-    },
   ];
 
+  for (const role of ROLE_ORDER) {
+    if (target[role] === 0) continue;
+    checklist.push({
+      id: `has-${role.toLowerCase()}`,
+      label: ROLE_CHECKLIST_LABEL[role],
+      done: compositionOk,
+    });
+  }
+
+  checklist.push({
+    id: "all-ready",
+    label: allReady ? "Tất cả đã sẵn sàng" : "Chờ mọi người bấm sẵn sàng",
+    done: allReady,
+  });
+
   const completedCount = checklist.filter((c) => c.done).length;
-  const manualMode =
-    !snapshot.autoAssignRoles ||
-    snapshot.participants.some((p) => p.role) ||
-    snapshot.participants.some((p) => p.isBot);
-  const manualComplete =
-    !manualMode ||
-    (humans.every((p) => p.role) &&
-      snapshot.participants.filter((p) => p.isBot).every((p) => p.role) &&
-      ROLE_ORDER.every((role) => roleCounts[role] <= target[role]));
+  const manualComplete = auto || !overTarget;
 
   const canStart =
     allReady &&

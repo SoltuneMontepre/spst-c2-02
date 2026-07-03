@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, HandCoins, Send, ShoppingCart } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Stepper } from "@/components/ui/stepper";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { formatThousandDong, MIN_PRICE_VND } from "@/lib/money";
+import { formatThousandDong, MAX_PRICE_VND, MIN_PRICE_VND } from "@/lib/money";
+import { PriceStepper } from "./producer-action-card";
 import type { InventoryView, WholesaleView } from "@/lib/session-service";
 
 export function WholesalePanel({
@@ -31,9 +32,12 @@ export function WholesalePanel({
   const [qty, setQty] = useState(1);
   const [minPrice, setMinPrice] = useState(8000);
   const [counterPrices, setCounterPrices] = useState<Record<string, number>>({});
+  const [buyQuantities, setBuyQuantities] = useState<Record<string, number>>({});
 
   const lot = inventory.find((l) => l.id === lotId) ?? inventory[0];
-  const openOffers = offers.filter((o) => !o.isOwn);
+  // Only truly unclaimed offers are actionable here — one already countered by
+  // someone else (bot or another intermediary) must not look buyable.
+  const openOffers = offers.filter((o) => !o.isOwn && o.status === "OPEN");
   const ownOffers = offers.filter((o) => o.isOwn);
   const commandError =
     command.isError && command.error instanceof ApiClientError
@@ -91,45 +95,61 @@ export function WholesalePanel({
           </>
         ) : null}
 
-        {ownOffers.map((o) => (
-          <div key={o.id} className="rounded-lg border p-3">
-            <span>
-              Lô của bạn: {o.quantity} thùng · tối thiểu {formatThousandDong(o.minimumPriceVnd)}
-            </span>
-            {o.status === "COUNTERED" && o.counterPriceVnd ? (
-              <div className="mt-2 flex gap-2">
-                <span>Phản giá: {formatThousandDong(o.counterPriceVnd)}</span>
-                <Button
-                  size="sm"
-                  disabled={command.isPending}
-                  onClick={() =>
-                    command.mutate({
-                      action: "respondWholesale",
-                      offerId: o.id,
-                      decision: "ACCEPT",
-                    })
-                  }
-                >
-                  Chấp nhận
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={command.isPending}
-                  onClick={() =>
-                    command.mutate({
-                      action: "respondWholesale",
-                      offerId: o.id,
-                      decision: "REJECT",
-                    })
-                  }
-                >
-                  Từ chối
-                </Button>
+        {role === "PRODUCER"
+          ? ownOffers.map((o) => (
+              <div key={o.id} className="rounded-lg border p-3">
+                <span>
+                  Lô của bạn: {o.quantity} thùng · tối thiểu {formatThousandDong(o.minimumPriceVnd)}
+                </span>
+                {o.status === "COUNTERED" && o.counterPriceVnd ? (
+                  <div className="mt-2 flex gap-2">
+                    <span>Phản giá: {formatThousandDong(o.counterPriceVnd)}</span>
+                    <Button
+                      size="sm"
+                      disabled={command.isPending}
+                      onClick={() =>
+                        command.mutate({
+                          action: "respondWholesale",
+                          offerId: o.id,
+                          decision: "ACCEPT",
+                        })
+                      }
+                    >
+                      Chấp nhận
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={command.isPending}
+                      onClick={() =>
+                        command.mutate({
+                          action: "respondWholesale",
+                          offerId: o.id,
+                          decision: "REJECT",
+                        })
+                      }
+                    >
+                      Từ chối
+                    </Button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        ))}
+            ))
+          : null}
+
+        {role === "INTERMEDIARY"
+          ? ownOffers
+              .filter((o) => o.status === "COUNTERED")
+              .map((o) => (
+                <div
+                  key={o.id}
+                  className="rounded-[10.5px] border border-border bg-muted/10 px-3 py-2.5 text-sm text-muted-foreground"
+                >
+                  Đã gửi giá {formatThousandDong(o.counterPriceVnd ?? o.minimumPriceVnd)} —
+                  đang chờ nhà cung cấp phản hồi.
+                </div>
+              ))
+          : null}
 
         {role === "INTERMEDIARY" ? (
           <>
@@ -153,129 +173,94 @@ export function WholesalePanel({
                 </p>
               </div>
             ) : (
-              openOffers.map((offer) => {
-                const counterPrice = counterPrices[offer.id] ?? offer.minimumPriceVnd;
-                const minimumTotal = offer.minimumPriceVnd * offer.quantity;
-                const counterTotal = counterPrice * offer.quantity;
-                const canBuyMinimum =
-                  balanceVnd == null || balanceVnd >= minimumTotal;
-                const canSendCounter =
-                  counterPrice >= offer.minimumPriceVnd &&
-                  (balanceVnd == null || balanceVnd >= counterTotal);
+              <div className="overflow-hidden rounded-[14px] border border-border">
+                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 bg-muted/20 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                  <span>Nhà cung cấp</span>
+                  <span>SL</span>
+                  <span>Giá đề nghị</span>
+                  <span className="sr-only">Hành động</span>
+                </div>
+                {openOffers.map((offer) => {
+                  const counterPrice = counterPrices[offer.id] ?? offer.minimumPriceVnd;
+                  const isFloor = counterPrice === offer.minimumPriceVnd;
+                  // Partial quantity only applies to instant buys at the floor
+                  // price — a counter offer still negotiates the whole lot.
+                  const quantity = isFloor
+                    ? Math.min(buyQuantities[offer.id] ?? offer.quantity, offer.quantity)
+                    : offer.quantity;
+                  const total = counterPrice * quantity;
+                  const canAfford = balanceVnd == null || balanceVnd >= total;
 
-                return (
-                  <div
-                    key={offer.id}
-                    className="flex flex-col gap-3 rounded-[10.5px] border border-border bg-muted/10 p-3"
-                  >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-foreground">{offer.producerName}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {offer.quantity} thùng đang chờ đại lý nhập kho
-                        </p>
-                      </div>
-                      <div className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-primary">
-                        Giá sàn {formatThousandDong(offer.minimumPriceVnd)}
-                      </div>
-                    </div>
-
-                    <dl className="grid gap-2 text-xs sm:grid-cols-3">
-                      <div className="rounded-[10.5px] bg-muted/25 p-2">
-                        <dt className="text-muted-foreground">Số lượng</dt>
-                        <dd className="mt-0.5 font-mono font-bold">{offer.quantity} thùng</dd>
-                      </div>
-                      <div className="rounded-[10.5px] bg-muted/25 p-2">
-                        <dt className="text-muted-foreground">Tổng tiền mua</dt>
-                        <dd className="mt-0.5 font-mono font-bold">
-                          {formatThousandDong(minimumTotal)}
-                        </dd>
-                      </div>
-                      <div className="rounded-[10.5px] bg-muted/25 p-2">
-                        <dt className="text-muted-foreground">Sau khi mua</dt>
-                        <dd className="mt-0.5 font-semibold text-success">+ tồn kho</dd>
-                      </div>
-                    </dl>
-
-                    <div className="rounded-[10.5px] bg-primary/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                      Mua xong, lô này sẽ chuyển sang cột{" "}
-                      <span className="font-semibold text-foreground">Niêm yết bán lẻ</span>.
-                    </div>
-
-                    <div className="grid gap-2">
+                  return (
+                    <div
+                      key={offer.id}
+                      className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 border-t border-border px-3 py-2.5"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-foreground">
+                          {offer.producerName}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {offer.quantity} thùng · sàn {formatThousandDong(offer.minimumPriceVnd)}
+                        </span>
+                      </span>
+                      {isFloor ? (
+                        <Stepper
+                          size="sm"
+                          value={quantity}
+                          min={1}
+                          max={offer.quantity}
+                          onChange={(next) =>
+                            setBuyQuantities((p) => ({ ...p, [offer.id]: next }))
+                          }
+                        />
+                      ) : (
+                        <span className="text-center text-xs text-muted-foreground">
+                          cả lô
+                        </span>
+                      )}
+                      <PriceStepper
+                        value={counterPrice}
+                        min={MIN_PRICE_VND}
+                        max={MAX_PRICE_VND}
+                        disabled={command.isPending}
+                        onChange={(next) =>
+                          setCounterPrices((p) => ({ ...p, [offer.id]: next }))
+                        }
+                      />
                       <Button
                         size="sm"
-                        className="h-10 justify-start rounded-[14px] px-3"
-                        disabled={command.isPending || !canBuyMinimum}
+                        disabled={command.isPending || !canAfford}
+                        title={!canAfford ? "Vốn không đủ để nhập lô này." : undefined}
                         onClick={() =>
-                          command.mutate({
-                            action: "respondWholesale",
-                            offerId: offer.id,
-                            decision: "ACCEPT",
-                          })
+                          command.mutate(
+                            isFloor
+                              ? {
+                                  action: "respondWholesale",
+                                  offerId: offer.id,
+                                  decision: "ACCEPT",
+                                  quantity,
+                                }
+                              : {
+                                  action: "respondWholesale",
+                                  offerId: offer.id,
+                                  decision: "COUNTER",
+                                  counterPriceVnd: counterPrice,
+                                },
+                          )
                         }
                       >
-                        <ShoppingCart className="size-3.5" aria-hidden />
-                        Nhập kho với giá sàn
+                        {isFloor ? "Mua" : "Gửi giá"}
                       </Button>
-
-                      <div className="rounded-[10.5px] border border-border bg-muted/10 p-2.5">
-                        <label
-                          htmlFor={`counter-${offer.id}`}
-                          className="text-xs font-semibold text-foreground"
-                        >
-                          Gửi giá khác cho nhà cung cấp
-                        </label>
-                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                          <Input
-                            id={`counter-${offer.id}`}
-                            type="number"
-                            step={1000}
-                            min={offer.minimumPriceVnd}
-                            className="h-9 sm:w-32"
-                            value={counterPrice}
-                            onChange={(e) =>
-                              setCounterPrices((p) => ({
-                                ...p,
-                                [offer.id]: Number(e.target.value),
-                              }))
-                            }
-                          />
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-9 sm:shrink-0"
-                            disabled={command.isPending || !canSendCounter}
-                            onClick={() =>
-                              command.mutate({
-                                action: "respondWholesale",
-                                offerId: offer.id,
-                                decision: "COUNTER",
-                                counterPriceVnd: counterPrice,
-                              })
-                            }
-                          >
-                            <Send className="size-3.5" aria-hidden />
-                            Gửi giá
-                          </Button>
-                        </div>
-                        <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
-                          Giá gửi lại không thấp hơn giá sàn. Nhà cung cấp phải chấp
-                          nhận thì giao dịch mới hoàn tất.
-                        </p>
-                      </div>
                     </div>
-
-                    {!canBuyMinimum ? (
-                      <p className="flex items-center gap-1.5 text-xs text-danger">
-                        <HandCoins className="size-3.5" aria-hidden />
-                        Vốn không đủ để nhập lô này.
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              Mua đúng giá sàn nhập kho ngay. Chỉnh giá thấp hơn rồi «Gửi giá» để
+              nhà cung cấp duyệt trước khi giao dịch hoàn tất.
+            </p>
           </>
         ) : null}
 

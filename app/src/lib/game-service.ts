@@ -31,11 +31,13 @@ import {
   clearBotMarketTimers,
   runBotDecisions,
   runBotMarket,
+  runFinalBotConsumerPass,
   scheduleBotMarketWaves,
 } from "./bots";
 import { finalizeSession } from "./finalize";
 import { withSessionLock } from "./session-lock";
 import { scheduleTimer, clearTimer } from "./timer-service";
+import { ROUND_NAMES, PHASE_BANNERS } from "./labels";
 import type {
   ProducerRoundState,
   ConsumerRoundState,
@@ -52,6 +54,47 @@ const INITIAL_CAPITAL: Record<Role, number> = {
 
 const SETTLEMENT_DISPLAY_SEC = 4;
 
+const EVENT_NARRATION: Record<number, string> = {
+  1: "Thị trường cơ sở — giá trị 10 nghìn Đồng là mốc so sánh.",
+  2: "Được mùa — cung tăng, giá có thể chịu áp lực giảm.",
+  3: "Thanh long viral — cầu tăng, chợ có thể nóng lên.",
+  4: "Công nghệ phổ biến — giá trị chuẩn giảm còn 6 nghìn Đồng.",
+};
+
+/** Static host line written with the phase row (no separate LLM / write race). */
+function phaseNarration(input: {
+  status: string;
+  phase: string | null;
+  currentRound: number;
+  autoHost: boolean;
+}): string | null {
+  if (!input.autoHost) return null;
+  const round = input.currentRound;
+  const phase = input.phase;
+  if (input.status === "INTRO") {
+    return "Bốn vòng chợ thanh long sắp bắt đầu — hãy nhớ phân biệt giá trị và giá cả.";
+  }
+  if (phase === "EVENT" && round > 0) {
+    return `${ROUND_NAMES[round]}: ${EVENT_NARRATION[round] ?? "Biến cố mới của vòng."}`;
+  }
+  if (phase && PHASE_BANNERS[phase]) {
+    return `${PHASE_BANNERS[phase]}. ${round ? `Vòng ${round}.` : ""} Hãy ra quyết định trước khi hết giờ.`;
+  }
+  if (input.status === "DEBRIEF") {
+    return "Phiên sắp kết thúc. Hãy xem lại dữ liệu thị trường và so sánh với lý thuyết.";
+  }
+  return "Chào mừng đến Phiên chợ giá trị.";
+}
+
+function isDeadlockError(error: unknown): boolean {
+  const code =
+    (error as { code?: string })?.code ??
+    (error as { cause?: { code?: string } })?.cause?.code ??
+    (error as { meta?: { code?: string } })?.meta?.code;
+  const message = String((error as { message?: string })?.message ?? error);
+  return code === "40P01" || /deadlock detected/i.test(message);
+}
+
 /** Increment stateVersion and broadcast (TECH-REALTIME). */
 async function touch(sessionId: string, type: string, data?: unknown): Promise<void> {
   const updated = await db.gameSession.update({
@@ -63,6 +106,19 @@ async function touch(sessionId: string, type: string, data?: unknown): Promise<v
     .then((m) => m.refreshLiveRoom(sessionId))
     .catch((e) => console.error("live-room refresh:", e));
   await publish({ sessionId, type, stateVersion: updated.stateVersion, data });
+}
+
+/** Broadcast after a write that already bumped stateVersion. */
+async function publishState(
+  sessionId: string,
+  stateVersion: number,
+  type: string,
+  data?: unknown,
+): Promise<void> {
+  await import("./session-service")
+    .then((m) => m.refreshLiveRoom(sessionId))
+    .catch((e) => console.error("live-room refresh:", e));
+  await publish({ sessionId, type, stateVersion, data });
 }
 
 // ───────────────────────── Host start + assignment ─────────────────────────
@@ -112,17 +168,27 @@ function assertRoleEditable(p: { isBot: boolean; ready: boolean }): void {
   }
 }
 
-/** Host assigns a role (and producer profile) in the lobby. */
-export async function hostSetParticipantRole(
-  hostUserId: string,
+/**
+ * Player picks their own lobby role (null = Ngẫu nhiên).
+ * Slot caps follow compositionTarget — full roles cannot be selected.
+ */
+export async function setOwnLobbyRole(
+  userId: string,
   sessionId: string,
-  participantId: string,
   role: Role | null,
   productivityProfile?: ProductivityProfile | null,
 ): Promise<void> {
-  const session = await assertLobbyHost(hostUserId, sessionId);
-  const p = await db.participant.findFirst({ where: { id: participantId, sessionId } });
-  if (!p) throw new ApiError("NOT_FOUND", 404);
+  const session = await db.gameSession.findUnique({ where: { id: sessionId } });
+  if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
+  if (session.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
+  if (session.autoAssignRoles) {
+    throw new ApiError("INVALID_STATE", 409, "Phòng đang tự động phân vai");
+  }
+
+  const p = await db.participant.findFirst({
+    where: { sessionId, userId, isBot: false },
+  });
+  if (!p) throw new ApiError("FORBIDDEN", 403);
   assertRoleEditable(p);
 
   if (role && role !== p.role) {
@@ -137,10 +203,25 @@ export async function hostSetParticipantRole(
   }
 
   await db.participant.update({
-    where: { id: participantId },
+    where: { id: p.id },
     data: { role, productivityProfile: profile },
   });
-  await touch(sessionId, "participant:role_set", { participantId, role });
+  await touch(sessionId, "participant:role_set", { participantId: p.id, role });
+}
+
+/** Host route compatibility — only allows the host to set their own role. */
+export async function hostSetParticipantRole(
+  hostUserId: string,
+  sessionId: string,
+  participantId: string,
+  role: Role | null,
+  productivityProfile?: ProductivityProfile | null,
+): Promise<void> {
+  const p = await db.participant.findFirst({
+    where: { id: participantId, sessionId, userId: hostUserId, isBot: false },
+  });
+  if (!p) throw new ApiError("FORBIDDEN", 403, "Chỉ được chọn vai của chính mình");
+  await setOwnLobbyRole(hostUserId, sessionId, role, productivityProfile);
 }
 
 /** Host adds a lobby bot with a pre-assigned role. */
@@ -330,6 +411,7 @@ export function lobbyManualMode(session: {
 export function canAutoStartLobby(session: {
   autoAssignRoles: boolean;
   status: string;
+  maxPlayers: number;
   participants: { isBot: boolean; role: Role | null; ready: boolean }[];
 }): boolean {
   if (session.status !== "LOBBY") return false;
@@ -340,12 +422,10 @@ export function canAutoStartLobby(session: {
 
   if (!lobbyManualMode(session)) return true;
 
-  const lobbyBots = session.participants.filter((p) => p.isBot);
-  if (!humans.every((p) => p.role)) return false;
-  if (lobbyBots.some((p) => !p.role)) return false;
-
-  const counts = countRoles([...humans, ...lobbyBots]);
-  return counts.PRODUCER >= 1 && counts.CONSUMER >= 1;
+  // null role = Ngẫu nhiên (resolved at start). Only reject over-cap picks.
+  const target = compositionTarget(session.maxPlayers);
+  const counts = countRoles(humans);
+  return ROLES.every((role) => counts[role] <= target[role]);
 }
 
 /** Slots still needed after manual lobby assignments. */
@@ -362,10 +442,77 @@ function missingRoleSlots(
   return missing;
 }
 
+export type StartRoleAssignment = {
+  participantId: string;
+  role: Role;
+  productivityProfile?: ProductivityProfile | null;
+};
+
+/** Resolve null (Ngẫu nhiên) picks into concrete roles within composition caps. */
+function assignRandomLobbyRoles(
+  humans: {
+    id: string;
+    role: Role | null;
+    productivityProfile: ProductivityProfile | null;
+  }[],
+  maxPlayers: number,
+): {
+  id: string;
+  role: Role;
+  productivityProfile: ProductivityProfile | null;
+}[] {
+  const target = compositionTarget(maxPlayers);
+  const counts: Record<Role, number> = {
+    PRODUCER: 0,
+    CONSUMER: 0,
+    INTERMEDIARY: 0,
+    GOVERNMENT: 0,
+  };
+  for (const h of humans) {
+    if (h.role) counts[h.role]++;
+  }
+  if (ROLES.some((role) => counts[role] > target[role])) {
+    throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
+  }
+
+  const pool: Role[] = [];
+  for (const role of ROLES) {
+    for (let i = counts[role]; i < target[role]; i++) pool.push(role);
+  }
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  let poolIdx = 0;
+  return humans.map((h) => {
+    if (h.role) {
+      return {
+        id: h.id,
+        role: h.role,
+        productivityProfile:
+          h.role === "PRODUCER"
+            ? (h.productivityProfile ?? "SOCIAL_AVERAGE")
+            : null,
+      };
+    }
+    const role = pool[poolIdx++];
+    if (!role) {
+      throw new ApiError("INVALID_COMPOSITION", 409, "Không đủ chỗ vai cho người chơi");
+    }
+    return {
+      id: h.id,
+      role,
+      productivityProfile: role === "PRODUCER" ? "SOCIAL_AVERAGE" : null,
+    };
+  });
+}
+
 /** Host start guard + full game initialization (FR-HOST-01, BR-ROLE-01). */
 export async function startSession(
   hostUserId: string,
   sessionId: string,
+  _options?: { roleAssignments?: StartRoleAssignment[] },
 ): Promise<void> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
@@ -381,12 +528,13 @@ export async function startSession(
   if (humans.length < minHumans) throw new ApiError("UNDER_MIN_PLAYERS", 409);
   if (!humans.every((p) => p.ready)) throw new ApiError("NOT_ALL_READY", 409);
 
-  const manualMode =
-    !session.autoAssignRoles ||
-    lobbyBots.length > 0 ||
-    session.participants.some((p) => p.role !== null);
-
-  if (manualMode) {
+  if (!session.autoAssignRoles) {
+    // Players may pick a role or leave it Random (null). Resolve random picks,
+    // drop lobby bots, and fill remaining seats with bots.
+    await db.participant.deleteMany({ where: { sessionId, isBot: true } });
+    const humansWithRoles = assignRandomLobbyRoles(humans, session.maxPlayers);
+    await startSessionManual(sessionId, session.maxPlayers, humansWithRoles, []);
+  } else if (lobbyManualMode(session)) {
     await startSessionManual(sessionId, session.maxPlayers, humans, lobbyBots);
   } else {
     await startSessionAuto(sessionId, session.maxPlayers, humans);
@@ -440,6 +588,12 @@ async function startSessionAuto(
   };
 
   await db.$transaction(async (tx) => {
+    // Parent row first — avoids FK ShareLock upgrade deadlocks with heartbeats.
+    await tx.gameSession.update({
+      where: { id: sessionId },
+      data: { status: "INTRO", startedAt: new Date() },
+    });
+
     let producerIndex = 0;
     for (let i = 0; i < slots.length; i++) {
       const role = slots[i];
@@ -472,11 +626,6 @@ async function startSessionAuto(
       }
       await createInitialWallet(tx, sessionId, participantId, role);
     }
-
-    await tx.gameSession.update({
-      where: { id: sessionId },
-      data: { status: "INTRO", startedAt: new Date() },
-    });
   });
 }
 
@@ -496,19 +645,24 @@ async function startSessionManual(
 
   const assigned = [...humans, ...lobbyBots];
   const counts = countRoles(assigned);
-  if (counts.PRODUCER < 1 || counts.CONSUMER < 1) {
-    throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 nhà cung cấp và 1 khách hàng");
-  }
 
   const targetSlots = compositionSlots(targetCount);
   const targetCounts = countRoles(targetSlots.map((role) => ({ role })));
   if (ROLES.some((role) => counts[role] > targetCounts[role])) {
     throw new ApiError("INVALID_ROLE_DISTRIBUTION", 409);
   }
+  // Bots fill remaining target seats — validate the final roster, not humans alone.
   const toCreate = missingRoleSlots(targetSlots, assigned).slice(
     0,
     Math.max(0, targetSlots.length - assigned.length),
   );
+  const finalCounts = countRoles([
+    ...assigned,
+    ...toCreate.map((role) => ({ role })),
+  ]);
+  if (finalCounts.PRODUCER < 1 || finalCounts.CONSUMER < 1) {
+    throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 nhà cung cấp và 1 khách hàng");
+  }
   const producerCount = targetSlots.filter((r) => r === "PRODUCER").length;
   const profiles = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
   const botCounters: Record<Role, number> = {
@@ -519,21 +673,28 @@ async function startSessionManual(
   };
 
   await db.$transaction(async (tx) => {
-    let producerIndex = 0;
-    for (const p of assigned) {
-      if (p.role === "PRODUCER" && !p.productivityProfile) {
-        await tx.participant.update({
-          where: { id: p.id },
-          data: { productivityProfile: producerProfileAt(profiles, producerIndex) },
-        });
-      }
-      if (p.role === "PRODUCER") producerIndex++;
-    }
+    // Parent row first — avoids FK ShareLock upgrade deadlocks with heartbeats.
+    await tx.gameSession.update({
+      where: { id: sessionId },
+      data: { status: "INTRO", startedAt: new Date() },
+    });
 
-    const roster: { id: string; role: Role }[] = assigned.map((p) => ({
-      id: p.id,
-      role: p.role!,
-    }));
+    let producerIndex = 0;
+    const roster: { id: string; role: Role }[] = [];
+
+    for (const p of assigned) {
+      let profile: ProductivityProfile | null = null;
+      if (p.role === "PRODUCER") {
+        profile =
+          p.productivityProfile ?? producerProfileAt(profiles, producerIndex);
+        producerIndex++;
+      }
+      await tx.participant.update({
+        where: { id: p.id },
+        data: { role: p.role, productivityProfile: profile },
+      });
+      roster.push({ id: p.id, role: p.role! });
+    }
 
     for (const role of toCreate) {
       botCounters[role]++;
@@ -556,11 +717,6 @@ async function startSessionManual(
     for (const { id, role } of roster) {
       await createInitialWallet(tx, sessionId, id, role);
     }
-
-    await tx.gameSession.update({
-      where: { id: sessionId },
-      data: { status: "INTRO", startedAt: new Date() },
-    });
   });
 }
 
@@ -604,7 +760,7 @@ function roundConfig(n: number) {
 async function enterRound(sessionId: string, n: number): Promise<void> {
   const session = await db.gameSession.findUniqueOrThrow({
     where: { id: sessionId },
-    select: { totalRounds: true },
+    select: { totalRounds: true, autoHost: true },
   });
   if (n > session.totalRounds) {
     throw new ApiError("INVALID_ROUND", 409);
@@ -643,9 +799,35 @@ async function enterRound(sessionId: string, n: number): Promise<void> {
   const consumerCount = participants.filter((p) => p.role === "CONSUMER").length;
   const needPlan = distributeNeed(consumerCount, n);
   const phaseEndsAt = new Date(Date.now() + PHASE_DURATIONS_SEC.EVENT * 1000);
+  const status = `ROUND_${n}` as SessionStatus;
+  const narration = phaseNarration({
+    status,
+    phase: "EVENT",
+    currentRound: n,
+    autoHost: session.autoHost,
+  });
 
-  await db.$transaction(
+  // Lock GameSession first (RowExclusive), then children. Updating participants
+  // before the session row takes a ShareLock on GameSession via FK checks; a
+  // concurrent touch/heartbeat that wants Exclusive then deadlocks on upgrade.
+  const stateVersion = await db.$transaction(
     async (tx) => {
+      const updated = await tx.gameSession.update({
+        where: { id: sessionId },
+        data: {
+          status,
+          currentRound: n,
+          phase: "EVENT",
+          phaseEndsAt,
+          phaseExtensions: 0,
+          paused: false,
+          pausedRemainingMs: null,
+          ...(narration != null ? { aiNarration: narration } : {}),
+          stateVersion: { increment: 1 },
+        },
+        select: { stateVersion: true },
+      });
+
       const round = await tx.round.upsert({
         where: { sessionId_number: { sessionId, number: n } },
         create: { sessionId, number: n, phase: "EVENT", ...cfg },
@@ -707,30 +889,19 @@ async function enterRound(sessionId: string, n: number): Promise<void> {
         where: { sessionId, isBot: false },
         data: { phaseReady: false },
       });
-      await tx.gameSession.update({
-        where: { id: sessionId },
-        data: {
-          status: `ROUND_${n}` as SessionStatus,
-          currentRound: n,
-          phase: "EVENT",
-          phaseEndsAt,
-          phaseExtensions: 0,
-          paused: false,
-          pausedRemainingMs: null,
-        },
-      });
+
+      return updated.stateVersion;
     },
     { timeout: 15_000 },
   );
 
   scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
-  await touch(sessionId, "round:phase_changed", {
+  await publishState(sessionId, stateVersion, "round:phase_changed", {
     phase: "EVENT",
     phaseEndsAt: phaseEndsAt.toISOString(),
     paused: false,
     phaseExtensions: 0,
   });
-  void import("./ai-host").then((module) => module.announcePhase(sessionId));
 }
 
 /** Distribute total need across consumers; round 3 boosts total by 50% (BR-ROUND-03). */
@@ -802,32 +973,51 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
   if (phase !== "MARKET_OPEN") clearBotMarketTimers(sessionId);
   const session = await db.gameSession.findUniqueOrThrow({
     where: { id: sessionId },
-    select: { autoHost: true, currentRound: true },
+    select: { autoHost: true, currentRound: true, status: true },
   });
   // RECAP is host-driven by default, but the AI host auto-advances it too.
   const timed = TIMED_PHASES.includes(phase) || (phase === "RECAP" && session.autoHost);
   const durationSec = phaseDurationSec(phase);
   const phaseEndsAt = timed ? new Date(Date.now() + durationSec * 1000) : null;
-  await db.gameSession.update({
-    where: { id: sessionId },
-    data: { phase, phaseEndsAt, phaseExtensions: 0, paused: false, pausedRemainingMs: null },
+  const narration = phaseNarration({
+    status: session.status,
+    phase,
+    currentRound: session.currentRound,
+    autoHost: session.autoHost,
   });
-  await db.round.updateMany({
-    where: { sessionId, number: session.currentRound },
-    data: { phase },
+
+  const stateVersion = await db.$transaction(async (tx) => {
+    const updated = await tx.gameSession.update({
+      where: { id: sessionId },
+      data: {
+        phase,
+        phaseEndsAt,
+        phaseExtensions: 0,
+        paused: false,
+        pausedRemainingMs: null,
+        ...(narration != null ? { aiNarration: narration } : {}),
+        stateVersion: { increment: 1 },
+      },
+      select: { stateVersion: true },
+    });
+    await tx.round.updateMany({
+      where: { sessionId, number: session.currentRound },
+      data: { phase },
+    });
+    await tx.participant.updateMany({
+      where: { sessionId, isBot: false },
+      data: { phaseReady: false },
+    });
+    return updated.stateVersion;
   });
-  await db.participant.updateMany({
-    where: { sessionId, isBot: false },
-    data: { phaseReady: false },
-  });
+
   if (timed && phaseEndsAt) scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
-  await touch(sessionId, "round:phase_changed", {
+  await publishState(sessionId, stateVersion, "round:phase_changed", {
     phase,
     phaseEndsAt: phaseEndsAt?.toISOString() ?? null,
     paused: false,
     phaseExtensions: 0,
   });
-  void import("./ai-host").then((m) => m.announcePhase(sessionId));
 }
 
 /** One forward step in the round/phase machine.
@@ -871,6 +1061,11 @@ async function transition(sessionId: string, auto: boolean): Promise<void> {
           await runBotMarket(sessionId);
           return;
         case "MARKET_OPEN":
+          // Consumer-buying waves are scheduled late in the phase (~70-88%
+          // through) and get cancelled if this transition fires early (host
+          // force-advance, or a restart that dropped the timers) — give
+          // bots one guaranteed last chance to buy before settling.
+          await runFinalBotConsumerPass(sessionId);
           await settleRound(sessionId, n);
           await setPhase(sessionId, "SETTLEMENT");
           await touch(sessionId, "round:settled", { round: n });
@@ -883,23 +1078,35 @@ async function transition(sessionId: string, auto: boolean): Promise<void> {
             const phaseEndsAt = session.autoHost
               ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
               : null;
-            await db.gameSession.update({
+            const narration = phaseNarration({
+              status: "DEBRIEF",
+              phase: null,
+              currentRound: n,
+              autoHost: session.autoHost,
+            });
+            const debrief = await db.gameSession.update({
               where: { id: sessionId },
-              data: { status: "DEBRIEF", phase: null, phaseEndsAt },
+              data: {
+                status: "DEBRIEF",
+                phase: null,
+                phaseEndsAt,
+                ...(narration != null ? { aiNarration: narration } : {}),
+                stateVersion: { increment: 1 },
+              },
+              select: { stateVersion: true },
             });
             await finalizeSession(sessionId).catch((e) => console.error("finalize:", e));
             if (session.autoHost && phaseEndsAt) {
               scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
             }
-            void import("./ai-host").then((m) => m.announcePhase(sessionId));
-            await touch(sessionId, "session:debrief");
+            await publishState(sessionId, debrief.stateVersion, "session:debrief");
           } else {
             await enterRound(sessionId, n + 1);
           }
           return;
       }
     } catch (error) {
-      if (auto) scheduleAdvance(sessionId, 2_000);
+      if (auto || isDeadlockError(error)) scheduleAdvance(sessionId, 2_000);
       throw error;
     }
   });
@@ -935,13 +1142,23 @@ function scheduleAdvance(sessionId: string, ms: number): void {
 
 async function scheduleIntroAdvance(sessionId: string): Promise<void> {
   const phaseEndsAt = new Date(Date.now() + INTRO_DURATION_SEC * 1000);
-  await db.gameSession.update({
+  const narration = phaseNarration({
+    status: "INTRO",
+    phase: null,
+    currentRound: 0,
+    autoHost: true,
+  });
+  const updated = await db.gameSession.update({
     where: { id: sessionId },
-    data: { phaseEndsAt },
+    data: {
+      phaseEndsAt,
+      ...(narration != null ? { aiNarration: narration } : {}),
+      stateVersion: { increment: 1 },
+    },
+    select: { stateVersion: true },
   });
   scheduleAdvance(sessionId, INTRO_DURATION_SEC * 1000);
-  void import("./ai-host").then((m) => m.announcePhase(sessionId));
-  await touch(sessionId, "round:phase_changed", {
+  await publishState(sessionId, updated.stateVersion, "round:phase_changed", {
     phase: null,
     phaseEndsAt: phaseEndsAt.toISOString(),
     paused: false,

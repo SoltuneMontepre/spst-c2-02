@@ -46,6 +46,9 @@ export function useSessionSnapshot(sessionId: string) {
     queryFn: () => apiFetch<SessionSnapshot>(`/api/sessions/${sessionId}`),
     staleTime: 0,
     refetchOnWindowFocus: true,
+    // Fallback poll in case the SSE stream misses an event (e.g. connects
+    // after a lobby-start fired) — self-heals without needing a manual refresh.
+    refetchInterval: 10000,
     retry: (failureCount, error) => {
       if (error instanceof ApiClientError && error.status === 403) return false;
       return failureCount < 2;

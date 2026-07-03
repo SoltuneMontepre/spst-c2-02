@@ -18,19 +18,184 @@ import {
   type MarketplaceFilter,
 } from "@/components/roles/market-listing-card";
 import { MarketTransactionDialog } from "@/components/roles/market-transaction-dialog";
+import { IncomingOfferPopup } from "@/components/roles/incoming-offer-popup";
 import { RoleActionCard } from "@/components/session/role-task-screen";
 import { Button } from "@/components/ui/button";
 import { getRoleQuest } from "@/lib/role-quest";
+import { EVENT_COPY } from "@/lib/labels";
 import { POLICIES } from "@/lib/scenario";
 import { errorMessage } from "@/lib/error-messages";
 import { formatThousandDong } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import type { PolicyType } from "@/generated/prisma/enums";
 import type {
   ConsumerRoundState,
   GovernmentRoundState,
   ProducerRoundState,
 } from "@/lib/role-state";
-import type { ListingView } from "@/lib/session-service";
+import type { ListingView, SessionSnapshot } from "@/lib/session-service";
+
+/** Wallet + units sold — always visible for producer, regardless
+ *  of quest/phase state, so "did I earn anything / is it selling" is never hidden. */
+function ProducerStatusSummary({ data }: { data: SessionSnapshot }) {
+  const soldUnits = data.recentTransactions
+    .filter((t) => t.direction === "sell")
+    .reduce((s, t) => s + t.quantity, 0);
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Ví
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {formatThousandDong(data.self?.balanceVnd ?? 0)}
+        </p>
+      </div>
+      <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
+          Đã bán vòng này
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-success">
+          {soldUnits} <span className="text-xs font-semibold">thùng</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Vốn + tồn kho + đã bán — always visible for the intermediary so
+ *  margin progress stays legible regardless of quest/phase state. */
+function IntermediaryStatusSummary({ data }: { data: SessionSnapshot }) {
+  const inventoryUnits = (data.self?.inventory ?? []).reduce(
+    (s, l) => s + l.availableQuantity,
+    0,
+  );
+  const soldUnits = data.recentTransactions
+    .filter((t) => t.direction === "sell")
+    .reduce((s, t) => s + t.quantity, 0);
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Vốn
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {formatThousandDong(data.self?.balanceVnd ?? 0)}
+        </p>
+      </div>
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Tồn kho
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {inventoryUnits} <span className="text-xs font-semibold">thùng</span>
+        </p>
+      </div>
+      <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
+          Đã bán vòng này
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-success">
+          {soldUnits} <span className="text-xs font-semibold">thùng</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Ví + tiến độ nhu cầu — always visible for the consumer so "còn thiếu bao
+ *  nhiêu" never requires scrolling into the listing grid to figure out. */
+function ConsumerStatusSummary({
+  data,
+  state,
+}: {
+  data: SessionSnapshot;
+  state: ConsumerRoundState | null;
+}) {
+  const needTarget = state?.needTarget ?? 0;
+  const fulfilled = state?.fulfilledUnits ?? 0;
+  const remaining = Math.max(0, needTarget - fulfilled);
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Ví
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {formatThousandDong(data.self?.balanceVnd ?? 0)}
+        </p>
+      </div>
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Cần mua
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {remaining} <span className="text-xs font-semibold">thùng</span>
+        </p>
+      </div>
+      <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
+          Đã mua vòng này
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-success">
+          {fulfilled} <span className="text-xs font-semibold">thùng</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Ngân sách + trạng thái chính sách — mirrors the other roles' summary
+ *  strip so the government screen isn't the only one dropping straight
+ *  into the action list with no at-a-glance state. */
+function GovernmentStatusSummary({
+  balanceVnd,
+  used,
+}: {
+  balanceVnd: number | null;
+  used: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          Ngân sách
+        </p>
+        <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+          {formatThousandDong(balanceVnd ?? 0)}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "rounded-[14px] border px-3 py-2",
+          used
+            ? "border-success/25 bg-success/10"
+            : "border-border bg-muted/25",
+        )}
+      >
+        <p
+          className={cn(
+            "text-[10px] font-bold uppercase tracking-wide",
+            used ? "text-success/80" : "text-muted-foreground",
+          )}
+        >
+          Chính sách vòng này
+        </p>
+        <p
+          className={cn(
+            "mt-0.5 text-sm font-black",
+            used ? "text-success" : "text-foreground",
+          )}
+        >
+          {used ? "Đã áp dụng" : "Chưa chọn"}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function WaitingCard({
   title,
@@ -42,7 +207,7 @@ function WaitingCard({
   footer?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-border bg-surface/80 px-6 py-12 text-center">
+    <div className="flex h-full min-h-80 flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-border bg-surface/80 px-6 py-12 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-muted">
         <Hourglass className="size-5 text-muted-foreground" aria-hidden />
       </span>
@@ -95,6 +260,8 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
     );
   }
 
+  const phaseReady = data.participants.find((p) => p.isSelf)?.phaseReady ?? false;
+
   const quest = getRoleQuest({
     role: "PRODUCER",
     phase: data.phase,
@@ -105,28 +272,37 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
 
   if (quest.status !== "active") {
     return (
-      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      <div className="flex flex-col gap-4">
+        <ProducerStatusSummary data={data} />
+        <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      </div>
     );
   }
 
   // DECISION = sản xuất only; MARKET_OPEN = bán hàng / chợ only.
   if (data.phase === "DECISION") {
     return (
-      <ProducePanel
-        sessionId={sessionId}
-        state={state}
-        balanceVnd={data.self.balanceVnd ?? 0}
-        stateVersion={data.stateVersion}
-        currentRound={data.currentRound}
-        phase={data.phase}
-        phaseEndsAt={data.phaseEndsAt}
-        paused={data.paused}
-      />
+      <div className="flex flex-col gap-4">
+        <ProducerStatusSummary data={data} />
+        <ProducePanel
+          sessionId={sessionId}
+          state={state}
+          balanceVnd={data.self.balanceVnd ?? 0}
+          stateVersion={data.stateVersion}
+          currentRound={data.currentRound}
+          phase={data.phase}
+          phaseEndsAt={data.phaseEndsAt}
+          paused={data.paused}
+          phaseReady={phaseReady}
+        />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      <ProducerStatusSummary data={data} />
+
       <ProducerSalesPanel
         sessionId={sessionId}
         state={state}
@@ -135,6 +311,7 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
         currentRound={data.currentRound}
         phase={data.phase}
         inventory={data.self.inventory}
+        phaseReady={phaseReady}
       />
 
       {data.phase === "MARKET_OPEN" ? (
@@ -166,9 +343,14 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
     marketListingCount: data.market?.listings.length ?? 0,
   });
 
-  if (quest.status !== "active") {
+  // "done" only means the need target is met — consumers can keep shopping
+  // past it, so only the genuinely idle "waiting" phases show the idle card.
+  if (quest.status === "waiting") {
     return (
-      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      <div className="flex flex-col gap-4">
+        <ConsumerStatusSummary data={data} state={state} />
+        <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      </div>
     );
   }
 
@@ -178,6 +360,8 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <ConsumerStatusSummary data={data} state={state} />
+
       <div className="flex items-center gap-2 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
         <AlertCircle className="size-3.5 shrink-0" aria-hidden />
         <span>
@@ -214,13 +398,13 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
         stateVersion={data.stateVersion}
         incoming={data.self.incomingOffers}
         outgoing={data.self.outgoingOffers}
+        canCounter={false}
       />
 
       {selectedListing ? (
         <MarketTransactionDialog
           listing={selectedListing}
           unitValueVnd={unitValue}
-          affordable={(data.self.balanceVnd ?? 0) >= selectedListing.askPriceVnd}
           pending={command.isPending}
           balanceVnd={data.self.balanceVnd ?? 0}
           onBuy={(quantity) => {
@@ -243,6 +427,12 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
           onClose={() => setSelectedListing(null)}
         />
       ) : null}
+
+      <IncomingOfferPopup
+        sessionId={sessionId}
+        stateVersion={data.stateVersion}
+        offers={data.self.incomingOffers}
+      />
     </div>
   );
 }
@@ -261,7 +451,10 @@ function IntermediaryActions({ sessionId }: { sessionId: string }) {
 
   if (quest.status !== "active") {
     return (
-      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      <div className="flex flex-col gap-4">
+        <IntermediaryStatusSummary data={data} />
+        <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      </div>
     );
   }
 
@@ -270,6 +463,8 @@ function IntermediaryActions({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <IntermediaryStatusSummary data={data} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <RoleActionCard title="Đề nghị bán sỉ nhận được" icon={Inbox}>
           <WholesalePanel
@@ -284,7 +479,7 @@ function IntermediaryActions({ sessionId }: { sessionId: string }) {
 
         <RoleActionCard title="Niêm yết bán lẻ" icon={Store}>
           {listedUnits > 0 ? (
-            <p className="mb-2 text-xs text-muted-foreground">
+            <p className="mb-2 text-xs font-semibold text-primary">
               {listedUnits} thùng đang niêm yết
             </p>
           ) : null}
@@ -298,7 +493,8 @@ function IntermediaryActions({ sessionId }: { sessionId: string }) {
       </div>
 
       {inventoryUnits > 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
           Tồn kho {inventoryUnits} thùng chưa bán sẽ giảm điểm lợi nhuận cuối vòng.
         </p>
       ) : null}
@@ -377,13 +573,17 @@ function GovernmentActions({ sessionId }: { sessionId: string }) {
     marketListingCount: data.market?.listings.length ?? 0,
   });
 
+  const used = state?.policyUsed ?? false;
+
   if (quest.status !== "active") {
     return (
-      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      <div className="flex flex-col gap-4">
+        <GovernmentStatusSummary balanceVnd={data.self.balanceVnd} used={used} />
+        <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+      </div>
     );
   }
 
-  const used = state?.policyUsed ?? false;
   const decisionOpen = data.phase === "DECISION" && data.currentRound >= 2;
   const exportOpen =
     data.phase === "MARKET_OPEN" && data.currentRound >= 2 && !used;
@@ -415,6 +615,8 @@ function GovernmentActions({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <GovernmentStatusSummary balanceVnd={data.self.balanceVnd} used={used} />
+
       <p className="text-sm font-semibold">Chọn chính sách điều tiết cho vòng này</p>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
         {visiblePolicies.map((p) => {
@@ -470,16 +672,21 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
     return (
       <WaitingCard
         title="Phiên sắp bắt đầu"
-        body="Chờ vòng 1 — biến cố và nhiệm vụ sẽ hiện tại đây."
+        body="Đọc biến cố trên banner — nhiệm vụ sẽ mở khi vòng 1 bắt đầu."
       />
     );
   }
 
   if (data.phase === "EVENT") {
+    const event = EVENT_COPY[data.currentRound];
     return (
       <WaitingCard
-        title="Biến cố thị trường"
-        body="Một sự kiện bất ngờ vừa xảy ra — theo dõi thông báo rồi tiếp tục vòng chơi."
+        title={event?.title ?? "Biến cố thị trường"}
+        body={
+          event
+            ? "Đọc biến cố trên banner (hoặc popup), rồi nhấn «Tôi đã sẵn sàng» khi đã hiểu."
+            : "Một sự kiện bất ngờ vừa xảy ra — chờ giai đoạn tiếp theo."
+        }
       />
     );
   }

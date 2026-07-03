@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Package, Store, Truck, Zap } from "lucide-react";
+import { CheckCircle2, Store, Truck, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
 import { producerUnitCostVnd, unitValueVnd } from "@/lib/economy";
-import { MIN_PRICE_VND } from "@/lib/money";
+import { MAX_PRICE_VND, MIN_PRICE_VND, PRICE_STEP_VND } from "@/lib/money";
 import { UPGRADE_COSTS } from "@/lib/scenario";
 import {
   formatCompactVnd,
+  PriceStepper,
   ProducerActionCard,
   ProducerQuantityControl,
 } from "./producer-action-card";
@@ -25,6 +26,7 @@ export function ProducerSalesPanel({
   currentRound,
   phase,
   inventory,
+  phaseReady,
 }: {
   sessionId: string;
   state: ProducerRoundState;
@@ -33,6 +35,7 @@ export function ProducerSalesPanel({
   currentRound: number;
   phase: string | null;
   inventory: InventoryView[];
+  phaseReady: boolean;
 }) {
   const command = useCommand(sessionId, stateVersion);
   const [qty, setQty] = useState(0);
@@ -50,10 +53,23 @@ export function ProducerSalesPanel({
     setQty((current) => Math.min(current, maxQty));
   }, [maxQty]);
 
-  const retailPrice = unitValueVnd(currentRound);
+  const retailStandardPrice = unitValueVnd(currentRound);
   const unitCost = producerUnitCostVnd(state);
-  const wholesalePrice = Math.max(MIN_PRICE_VND, unitCost);
-  const canSell = phase === "MARKET_OPEN" && Boolean(activeLot) && qty > 0;
+  const wholesaleStandardPrice = Math.max(MIN_PRICE_VND, unitCost);
+
+  const [retailPrice, setRetailPrice] = useState(retailStandardPrice);
+  const [wholesalePrice, setWholesalePrice] = useState(wholesaleStandardPrice);
+
+  useEffect(() => {
+    setRetailPrice(retailStandardPrice);
+  }, [retailStandardPrice]);
+
+  useEffect(() => {
+    setWholesalePrice(wholesaleStandardPrice);
+  }, [wholesaleStandardPrice]);
+
+  const canSell =
+    phase === "MARKET_OPEN" && Boolean(activeLot) && qty > 0 && !phaseReady;
 
   const upgradeCost =
     state.profile === "TRADITIONAL"
@@ -69,7 +85,8 @@ export function ProducerSalesPanel({
     Boolean(discountedUpgrade) &&
     !state.pendingUpgrade &&
     state.profile !== "PIONEER" &&
-    balanceVnd >= (discountedUpgrade ?? 0);
+    balanceVnd >= (discountedUpgrade ?? 0) &&
+    !phaseReady;
   const sellDisabledReason =
     phase !== "MARKET_OPEN"
       ? "Chỉ đưa hàng ra chợ ở giai đoạn chợ mở."
@@ -115,83 +132,109 @@ export function ProducerSalesPanel({
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between rounded-[14px] bg-muted/25 px-4 py-3">
-        <p className="text-sm font-bold text-foreground">Số lượng đưa ra chợ</p>
-        <ProducerQuantityControl
-          value={qty}
-          max={maxQty}
-          disabled={command.isPending || !activeLot || phase !== "MARKET_OPEN"}
-          onChange={setQty}
-        />
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2.5">
-        <Button
-          className="h-14 gap-3 rounded-2xl bg-danger text-base font-extrabold uppercase tracking-wide text-white shadow-md shadow-danger/25 transition-transform hover:bg-danger/90 active:scale-[0.98] disabled:shadow-none"
-          disabled={!canSell || command.isPending}
-          onClick={() => {
-            if (!activeLot) return;
-            command.mutate({
-              action: "list",
-              inventoryLotId: activeLot.id,
-              quantity: qty,
-              askPriceVnd: retailPrice,
-            });
-          }}
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
-            <Store className="size-4" aria-hidden />
-          </span>
-          Bán lẻ ra chợ
-        </Button>
-
-        <Button
-          className="h-14 gap-3 rounded-2xl bg-violet-600 text-base font-extrabold uppercase tracking-wide text-white shadow-md shadow-violet-600/25 transition-transform hover:bg-violet-700 active:scale-[0.98] disabled:shadow-none"
-          disabled={!canSell || command.isPending}
-          onClick={() => {
-            if (!activeLot) return;
-            command.mutate({
-              action: "wholesale",
-              inventoryLotId: activeLot.id,
-              quantity: qty,
-              minimumPriceVnd: wholesalePrice,
-            });
-          }}
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
-            <Truck className="size-4" aria-hidden />
-          </span>
-          Bán sỉ cho đại lý
-        </Button>
-
-        <Button
-          variant="outline"
-          className="h-11 gap-2.5 rounded-2xl border-2 border-primary/30 bg-primary/5 text-sm font-bold text-primary hover:bg-primary/10 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
-          disabled={!canUpgrade || command.isPending}
-          onClick={() => command.mutate({ action: "invest" })}
-        >
-          <Zap className="size-4" aria-hidden />
-          Nâng cấp công nghệ
-          {discountedUpgrade ? ` (−${formatCompactVnd(discountedUpgrade)})` : ""}
-        </Button>
-      </div>
-
-      {sellDisabledReason || upgradeDisabledReason ? (
-        <div className="mt-3 space-y-1 rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
-          {sellDisabledReason ? <p>{sellDisabledReason}</p> : null}
-          {upgradeDisabledReason ? <p>{upgradeDisabledReason}</p> : null}
+      {phaseReady ? (
+        <div className="mt-3 flex flex-col items-center gap-1.5 rounded-[14px] border border-success/25 bg-success/10 px-4 py-6 text-center">
+          <CheckCircle2 className="size-6 text-success" aria-hidden />
+          <p className="text-sm font-bold text-foreground">Đã giao dịch xong</p>
+          <p className="text-xs text-muted-foreground">
+            Đang chờ những người chơi khác hoàn tất giai đoạn chợ mở.
+          </p>
         </div>
-      ) : null}
+      ) : (
+        <>
+          <div className="mt-3 flex items-center justify-between rounded-[14px] bg-muted/25 px-4 py-3">
+            <p className="text-sm font-bold text-foreground">Số lượng đưa ra chợ</p>
+            <ProducerQuantityControl
+              value={qty}
+              max={maxQty}
+              disabled={command.isPending || !activeLot || phase !== "MARKET_OPEN"}
+              onChange={setQty}
+            />
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-[14px] border border-border">
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 bg-muted/20 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              <span>Kênh bán</span>
+              <span>Giá/thùng</span>
+              <span className="sr-only">Hành động</span>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-border px-3 py-2.5">
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Store className="size-4 shrink-0 text-danger" aria-hidden />
+                Bán lẻ
+              </span>
+              <PriceStepper
+                value={retailPrice}
+                onChange={setRetailPrice}
+                disabled={command.isPending}
+              />
+              <Button
+                size="sm"
+                className="bg-danger hover:bg-danger/90"
+                disabled={!canSell || command.isPending}
+                title={sellDisabledReason ?? undefined}
+                onClick={() => {
+                  if (!activeLot) return;
+                  command.mutate({
+                    action: "list",
+                    inventoryLotId: activeLot.id,
+                    quantity: qty,
+                    askPriceVnd: retailPrice,
+                  });
+                }}
+              >
+                Bán
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-border px-3 py-2.5">
+              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Truck className="size-4 shrink-0 text-violet-600" aria-hidden />
+                Bán sỉ
+              </span>
+              <PriceStepper
+                value={wholesalePrice}
+                onChange={setWholesalePrice}
+                disabled={command.isPending}
+              />
+              <Button
+                size="sm"
+                className="bg-violet-600 hover:bg-violet-700"
+                disabled={!canSell || command.isPending}
+                title={sellDisabledReason ?? undefined}
+                onClick={() => {
+                  if (!activeLot) return;
+                  command.mutate({
+                    action: "wholesale",
+                    inventoryLotId: activeLot.id,
+                    quantity: qty,
+                    minimumPriceVnd: wholesalePrice,
+                  });
+                }}
+              >
+                Bán
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      <Button
+        variant="outline"
+        className="mt-3 h-11 w-full gap-2.5 rounded-2xl border-2 border-primary/30 bg-primary/5 text-sm font-bold text-primary hover:bg-primary/10 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
+        disabled={!canUpgrade || command.isPending}
+        title={upgradeDisabledReason ?? undefined}
+        onClick={() => command.mutate({ action: "invest" })}
+      >
+        <Zap className="size-4" aria-hidden />
+        Nâng cấp công nghệ
+        {discountedUpgrade ? ` (−${formatCompactVnd(discountedUpgrade)})` : ""}
+      </Button>
 
       {state.pendingUpgrade ? (
         <p className="mt-2 text-xs font-semibold text-primary">
           Nâng cấp chờ áp dụng từ vòng sau.
-        </p>
-      ) : null}
-      {!activeLot && phase === "MARKET_OPEN" ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Package className="size-3.5" aria-hidden />
-          Chưa có hàng khả dụng để đưa ra chợ.
         </p>
       ) : null}
       {commandError ? (

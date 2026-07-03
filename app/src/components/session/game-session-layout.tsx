@@ -5,6 +5,7 @@ import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/session/game-sidebar";
 import { GameTopBar } from "@/components/session/game-top-bar";
+import { PageLoading } from "@/components/ui/page-loading";
 import { EventAnnouncementModal } from "@/components/session/event-announcement-modal";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import type { GameScreen } from "@/lib/game-zones";
@@ -36,7 +37,7 @@ export function GameSessionLayout({
   const { data, isLoading } = useSessionSnapshot(sessionId);
 
   if (isLoading || !data) {
-    return <p className="p-8 text-muted-foreground">Đang tải phiên…</p>;
+    return <PageLoading label="Đang tải phiên…" fullScreen />;
   }
 
   const navItem: GameNavItem =
@@ -131,7 +132,7 @@ export function GameSessionLayout({
         ) : null}
       </div>
 
-      {data.phase === "EVENT" ? (
+      {!isMap && data.phase === "EVENT" ? (
         <EventAnnouncementModal key={`event-${data.currentRound}`} round={data.currentRound} />
       ) : null}
     </SessionGuidanceScope>

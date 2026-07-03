@@ -5,7 +5,6 @@ import { apiFetch, ApiClientError } from "./use-api";
 import type { Role, ProductivityProfile } from "@/generated/prisma/enums";
 
 export type HostAction =
-  | "start"
   | "next"
   | "pause"
   | "resume"
@@ -15,7 +14,14 @@ export type HostAction =
   | "extendSoloLobby"
   | "setAutoHost";
 
+export type StartRoleAssignment = {
+  participantId: string;
+  role: Role;
+  productivityProfile?: ProductivityProfile | null;
+};
+
 export type HostLobbyAction =
+  | { action: "start"; roleAssignments?: StartRoleAssignment[] }
   | { action: "setAutoHost"; autoHost: boolean }
   | { action: "setAutoAssignRoles"; autoAssignRoles: boolean }
   | { action: "setGuidanceEnabled"; guidanceEnabled: boolean }
@@ -29,7 +35,7 @@ export type HostLobbyAction =
   | { action: "autoFillBots" }
   | { action: "removeBot"; participantId: string };
 
-export type HostMutationAction = HostAction | HostLobbyAction;
+export type HostMutationAction = HostAction | HostLobbyAction | "start";
 
 const STALE_HOST_CODES = new Set(["INVALID_STATE", "SESSION_LOCKED"]);
 
@@ -42,7 +48,11 @@ export function useHostControl(sessionId: string) {
       apiFetch(`/api/sessions/${sessionId}/host`, {
         method: "POST",
         body: JSON.stringify(
-          typeof action === "string" ? { action } : action,
+          typeof action === "string"
+            ? action === "start"
+              ? { action: "start" }
+              : { action }
+            : action,
         ),
       }),
     onSuccess: () => {

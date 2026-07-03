@@ -222,12 +222,10 @@ export function ConsumerInsightPanel({
   balanceVnd,
   fulfilled,
   needTarget,
-  marketActivity,
 }: {
   balanceVnd: number | null;
   fulfilled: number;
   needTarget: number;
-  marketActivity?: MarketActivityView[];
 }) {
   const pct = needTarget > 0 ? Math.round((fulfilled / needTarget) * 100) : 0;
   const missing = Math.max(0, needTarget - fulfilled);
@@ -282,8 +280,6 @@ export function ConsumerInsightPanel({
         title="Giá niêm yết ≠ Giá TT"
         body="Giá niêm yết là đề xuất của người bán. Giá thị trường chỉ hình thành khi có giao dịch thực tế."
       />
-
-      <InsightMarketActivity activity={marketActivity} />
     </div>
   );
 }

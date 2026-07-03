@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Pause } from "lucide-react";
+import { Clock, Loader2, Pause } from "lucide-react";
 import { useCountdown, formatClock } from "@/hooks/use-countdown";
 import { PHASE_BANNERS, ROUND_NAMES, EVENT_COPY } from "@/lib/labels";
 import { AiHostNarration } from "./ai-host-narration";
@@ -45,6 +45,11 @@ export function PhaseBanner({
           <span className="flex items-center gap-1 font-mono text-lg font-bold tabular-nums">
             {paused ? (
               <Pause className="size-4" />
+            ) : remaining === 0 ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                <span className="text-sm font-semibold">Đang chuyển giai đoạn…</span>
+              </>
             ) : (
               <>
                 <Clock className="size-4" />

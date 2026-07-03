@@ -14,6 +14,7 @@ import { errorMessage } from "@/lib/error-messages";
 import { formatThousandDong } from "@/lib/money";
 import type { GovernmentRoundState } from "@/lib/role-state";
 import type { PolicyType } from "@/generated/prisma/enums";
+import { PageLoading } from "@/components/ui/page-loading";
 
 const DECISION_POLICIES: {
   type: PolicyType;
@@ -67,7 +68,7 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
   const command = useCommand(sessionId, data?.stateVersion);
   const [selected, setSelected] = useState<PolicyType>("NONE");
-  if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
+  if (!data?.self) return <PageLoading />;
 
   const state = data.self.roleState as GovernmentRoundState | null;
   const used = state?.policyUsed ?? false;

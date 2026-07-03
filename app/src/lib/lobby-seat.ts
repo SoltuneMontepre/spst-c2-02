@@ -28,6 +28,7 @@ export async function ensureHostParticipant(
       displayNameSnapshot: user.displayName,
       avatarSnapshot: user.avatarUrl,
       presence: "ONLINE",
+      lastSeenAt: new Date(),
       ready: false,
     },
   });

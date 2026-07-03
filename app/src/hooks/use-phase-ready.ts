@@ -19,10 +19,18 @@ export function usePhaseReady(sessionId: string) {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);
       if (previous) {
+        const now = new Date().toISOString();
         queryClient.setQueryData<SessionSnapshot>(queryKey, {
           ...previous,
           participants: previous.participants.map((p) =>
-            p.isSelf ? { ...p, phaseReady: ready } : p,
+            p.isSelf
+              ? {
+                  ...p,
+                  phaseReady: ready,
+                  lastSeenAt: now,
+                  presence: "ONLINE",
+                }
+              : p,
           ),
         });
       }

@@ -92,6 +92,53 @@ export function ProducerQuantityControl({
   );
 }
 
+export function PriceStepper({
+  value,
+  onChange,
+  min = 1000,
+  max = 30000,
+  step = 1000,
+  disabled,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+}) {
+  const set = (next: number) => {
+    if (disabled) return;
+    onChange(Math.max(min, Math.min(max, next)));
+  };
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => set(value - step)}
+        disabled={disabled || value <= min}
+        className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+        aria-label="Giảm giá"
+      >
+        <Minus className="size-3" aria-hidden />
+      </button>
+      <span className="w-12 shrink-0 text-center font-mono text-sm font-bold tabular-nums">
+        {formatCompactVnd(value)}
+      </span>
+      <button
+        type="button"
+        onClick={() => set(value + step)}
+        disabled={disabled || value >= max}
+        className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground transition-colors hover:bg-muted disabled:opacity-40"
+        aria-label="Tăng giá"
+      >
+        <Plus className="size-3" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
 export function ProducerValueRow({
   label,
   value,

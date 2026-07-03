@@ -3,6 +3,7 @@
 import { ApiError } from "./api";
 import type { Tx, CommandContext } from "./commands";
 import type { RoundPhase } from "@/generated/prisma/enums";
+import { MIN_PRICE_VND } from "./money";
 
 function requirePhase(ctx: CommandContext, phase: RoundPhase): void {
   if (ctx.session.phase !== phase) throw new ApiError("WRONG_PHASE", 409);
@@ -56,7 +57,12 @@ export async function createWholesaleOffer(
 export async function respondWholesale(
   tx: Tx,
   ctx: CommandContext,
-  input: { offerId: string; decision: "ACCEPT" | "REJECT" | "COUNTER"; counterPriceVnd?: number },
+  input: {
+    offerId: string;
+    decision: "ACCEPT" | "REJECT" | "COUNTER";
+    counterPriceVnd?: number;
+    quantity?: number;
+  },
 ): Promise<{ transactionId?: string }> {
   requirePhase(ctx, "MARKET_OPEN");
 
@@ -88,7 +94,7 @@ export async function respondWholesale(
     if (ctx.participant.role !== "INTERMEDIARY" || offer.status !== "OPEN")
       throw new ApiError("WRONG_ROLE", 403);
     if (!input.counterPriceVnd) throw new ApiError("MISSING_COUNTER_PRICE", 422);
-    if (input.counterPriceVnd < offer.minimumPriceVnd)
+    if (input.counterPriceVnd < MIN_PRICE_VND)
       throw new ApiError("COUNTER_TOO_LOW", 422);
 
     await tx.wholesaleOffer.update({
@@ -105,10 +111,17 @@ export async function respondWholesale(
   // ACCEPT
   let unitPrice: number;
   let intermediaryId: string;
+  let tradeQuantity = offer.quantity;
 
   if (ctx.participant.role === "INTERMEDIARY" && offer.status === "OPEN") {
     unitPrice = offer.minimumPriceVnd;
     intermediaryId = ctx.participant.id;
+    if (input.quantity != null) {
+      if (input.quantity <= 0 || input.quantity > offer.quantity) {
+        throw new ApiError("INVALID_QUANTITY", 422);
+      }
+      tradeQuantity = input.quantity;
+    }
   } else if (ctx.participant.role === "PRODUCER" && offer.status === "COUNTERED") {
     if (!offer.counterPriceVnd || !offer.intermediaryId)
       throw new ApiError("OFFER_UNAVAILABLE", 409);
@@ -118,8 +131,25 @@ export async function respondWholesale(
     throw new ApiError("WRONG_ROLE", 403);
   }
 
-  const result = await executeWholesaleTrade(tx, ctx, offer, intermediaryId, unitPrice);
-  await tx.wholesaleOffer.update({ where: { id: offer.id }, data: { status: "ACCEPTED" } });
+  const result = await executeWholesaleTrade(
+    tx,
+    ctx,
+    offer,
+    intermediaryId,
+    unitPrice,
+    tradeQuantity,
+  );
+
+  // Partial fill (buying less than the full offer) leaves the remainder open
+  // at the original floor price for other intermediaries to negotiate.
+  if (tradeQuantity < offer.quantity) {
+    await tx.wholesaleOffer.update({
+      where: { id: offer.id },
+      data: { quantity: { decrement: tradeQuantity } },
+    });
+  } else {
+    await tx.wholesaleOffer.update({ where: { id: offer.id }, data: { status: "ACCEPTED" } });
+  }
   return { transactionId: result.transactionId };
 }
 
@@ -135,8 +165,9 @@ async function executeWholesaleTrade(
   },
   intermediaryId: string,
   unitPriceVnd: number,
+  quantity: number,
 ): Promise<{ transactionId: string }> {
-  const total = offer.quantity * unitPriceVnd;
+  const total = quantity * unitPriceVnd;
   const buyerWallet = await tx.wallet.findUniqueOrThrow({
     where: { participantId: intermediaryId },
   });
@@ -180,8 +211,8 @@ async function executeWholesaleTrade(
   await tx.inventoryLot.update({
     where: { id: offer.inventoryLotId },
     data: {
-      quantity: { decrement: offer.quantity },
-      status: producerLot.quantity - offer.quantity <= 0 ? "SOLD" : producerLot.status,
+      quantity: { decrement: quantity },
+      status: producerLot.quantity - quantity <= 0 ? "SOLD" : producerLot.status,
     },
   });
   await tx.inventoryLot.create({
@@ -189,8 +220,8 @@ async function executeWholesaleTrade(
       sessionId: ctx.session.id,
       roundIdProduced: round.id,
       ownerParticipantId: intermediaryId,
-      quantity: offer.quantity,
-      availableQuantity: offer.quantity,
+      quantity,
+      availableQuantity: quantity,
       unitCostVnd: unitPriceVnd,
       status: "AVAILABLE",
     },
@@ -204,7 +235,7 @@ async function executeWholesaleTrade(
       buyerType: "INTERMEDIARY",
       buyerId: intermediaryId,
       sellerId: offer.producerId,
-      quantity: offer.quantity,
+      quantity,
       unitPriceVnd,
       totalPriceVnd: total,
       status: "COMPLETED",

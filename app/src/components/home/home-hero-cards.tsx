@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, LogIn } from "lucide-react";
+import { Plus, LogIn, DoorClosed, Play, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,23 @@ import { MAX_ACTIVE_HOST_ROOMS } from "@/lib/scenario";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
+function CurrentRoomNotice() {
+  return (
+    <Card className="flex flex-col gap-4 p-6">
+      <div className="flex size-10 items-center justify-center rounded-xl bg-muted">
+        <DoorClosed className="size-5 text-muted-foreground" aria-hidden />
+      </div>
+      <div className="flex flex-1 flex-col gap-1">
+        <h2 className="text-lg font-semibold tracking-tight">Đang host phòng khác</h2>
+        <p className="text-sm text-muted-foreground">
+          Bạn không thể vào phòng khác khi đang host. Quay lại phòng bên cạnh và hủy hoặc
+          kết thúc nó trước, rồi mới vào phòng mới.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 export function HomeHeroCards({
   activeHostedSessions = [],
 }: {
@@ -18,6 +35,7 @@ export function HomeHeroCards({
 }) {
   const joinRoom = useJoinRoom();
   const [code, setCode] = useState("");
+  const isHosting = activeHostedSessions.length > 0;
   const atHostLimit = activeHostedSessions.length >= MAX_ACTIVE_HOST_ROOMS;
   const canCreate = !atHostLimit;
 
@@ -40,16 +58,16 @@ export function HomeHeroCards({
           </div>
           <div className="flex flex-1 flex-col gap-1">
             <h2 className="text-lg font-semibold tracking-tight">
-              {activeHostedSessions.length > 0 ? "Phòng đang mở" : "Tạo phòng mới"}
+              {isHosting ? "Phòng đang mở" : "Tạo phòng mới"}
             </h2>
             <p className="text-sm text-primary-foreground/80">
-              {activeHostedSessions.length > 0
+              {isHosting
                 ? `Bạn đang host ${activeHostedSessions.length}/${MAX_ACTIVE_HOST_ROOMS} phòng.`
                 : "Mở phiên chợ mới và mời bạn bè tham gia qua mã phòng."}
             </p>
           </div>
 
-          {activeHostedSessions.length > 0 ? (
+          {isHosting ? (
             <ul className="flex flex-col gap-2">
               {activeHostedSessions.map((room) => (
                 <li key={room.id}>
@@ -75,7 +93,7 @@ export function HomeHeroCards({
                 "w-full bg-surface text-foreground hover:bg-surface/90",
               )}
             >
-              {activeHostedSessions.length > 0 ? "Tạo phòng thêm" : "Tạo phòng"}
+              {isHosting ? "Tạo phòng thêm" : "Tạo phòng"}
             </Link>
           ) : (
             <p className="text-xs text-primary-foreground/80">
@@ -90,35 +108,44 @@ export function HomeHeroCards({
         />
       </Card>
 
-      <Card className="flex flex-col gap-4 p-6">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-          <LogIn className="size-5 text-primary" aria-hidden />
-        </div>
-        <div className="flex flex-1 flex-col gap-1">
-          <h2 className="text-lg font-semibold tracking-tight">Vào phòng</h2>
-          <p className="text-sm text-muted-foreground">
-            Nhập mã phòng 6 ký tự để tham gia phiên chợ đang mở.
-          </p>
-        </div>
-        <form onSubmit={handleJoin} className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="Mã phòng"
-            maxLength={6}
-            className="font-mono tracking-widest uppercase"
-            aria-label="Mã phòng"
-          />
-          <Button
-            type="submit"
-            size="lg"
-            className="shrink-0 sm:px-8"
-            disabled={joinRoom.isPending || code.trim().length < 4}
-          >
-            {joinRoom.isPending ? "Đang vào…" : "Vào phòng"}
-          </Button>
-        </form>
-      </Card>
+      {isHosting ? (
+        <CurrentRoomNotice />
+      ) : (
+        <Card className="flex flex-col gap-4 p-6">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
+            <LogIn className="size-5 text-primary" aria-hidden />
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <h2 className="text-lg font-semibold tracking-tight">Vào phòng</h2>
+            <p className="text-sm text-muted-foreground">
+              Nhập mã phòng 6 ký tự để tham gia phiên chợ đang mở.
+            </p>
+          </div>
+          <form onSubmit={handleJoin} className="flex items-center gap-2.5">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="MÃ PHÒNG"
+              maxLength={6}
+              className="h-14 min-w-0 flex-1 text-center font-mono text-lg font-bold tracking-[0.25em] uppercase"
+              aria-label="Mã phòng"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="size-14 shrink-0 rounded-2xl"
+              disabled={joinRoom.isPending || code.trim().length < 4}
+              aria-label="Vào phòng"
+            >
+              {joinRoom.isPending ? (
+                <Loader2 className="size-5 animate-spin" aria-hidden />
+              ) : (
+                <Play className="size-5 fill-current" aria-hidden />
+              )}
+            </Button>
+          </form>
+        </Card>
+      )}
     </div>
   );
 }

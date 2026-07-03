@@ -15,7 +15,6 @@ const SELLER_LABELS: Record<string, string> = {
 export function MarketTransactionDialog({
   listing,
   unitValueVnd,
-  affordable,
   pending,
   balanceVnd,
   onBuy,
@@ -24,7 +23,6 @@ export function MarketTransactionDialog({
 }: {
   listing: ListingView;
   unitValueVnd?: number | null;
-  affordable: boolean;
   pending: boolean;
   balanceVnd: number;
   onBuy: (quantity: number) => void;
@@ -45,6 +43,9 @@ export function MarketTransactionDialog({
 
   const totalBuy = quantity * listing.askPriceVnd;
   const totalOffer = quantity * offerPriceK * 1000;
+  // Trả giá is precisely for when the buyer *can't* afford the full ask —
+  // affordability must track the mode's own total, not always the ask price.
+  const canAfford = balanceVnd >= (mode === "buy" ? totalBuy : totalOffer);
 
   const handlePrimary = () => {
     if (mode === "buy") {
@@ -55,7 +56,7 @@ export function MarketTransactionDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-foreground/60 pt-[10vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/60 px-4 py-[6vh]">
       <div className="relative w-full max-w-[420px] rounded-[21px] bg-surface shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -213,7 +214,7 @@ export function MarketTransactionDialog({
               type="button"
               disabled={
                 pending ||
-                !affordable ||
+                !canAfford ||
                 quantity > listing.availableQuantity ||
                 (mode === "offer" && offerPriceK * 1000 >= listing.askPriceVnd)
               }

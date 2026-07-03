@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { RoleTask } from "@/components/session/role-task";
+import { PageLoading } from "@/components/ui/page-loading";
 
 /** Task zone for producer/intermediary/government; consumers redirect to market. */
 export function TaskPageClient({ sessionId }: { sessionId: string }) {
@@ -17,7 +18,7 @@ export function TaskPageClient({ sessionId }: { sessionId: string }) {
   }, [isLoading, data?.self?.role, sessionId, router]);
 
   if (isLoading || !data) {
-    return <p className="p-8 text-muted-foreground">Đang tải…</p>;
+    return <PageLoading fullScreen />;
   }
   if (data.self?.role === "CONSUMER") {
     return null;

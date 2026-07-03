@@ -12,7 +12,7 @@ import { parseAiDebrief } from "./debrief-review";
 
 interface AiDebriefJson {
   overall: { grade: number; comment: string };
-  participants: { participantId: string; grade: number; comment: string }[];
+  participants: { participantId: string; grade: number }[];
 }
 
 function clampGrade(n: number): number {
@@ -54,13 +54,6 @@ function fallbackReview(outcomes: ParticipantOutcome[]): AiDebriefReview {
     participants: outcomes.map((o) => ({
       participantId: o.participantId,
       grade: 6,
-      comment: o.isBot
-        ? `${o.displayName} (bot) tham gia mô phỏng thị trường.`
-        : `Kết quả ${scoreLabel(o.role)}: ${
-            o.role === "GOVERNMENT"
-              ? `${o.scoreVnd} điểm`
-              : formatThousandDong(o.scoreVnd)
-          }.`,
     })),
   };
 }
@@ -90,7 +83,7 @@ export async function generateAiDebriefReview(input: {
     "Bạn là trợ giảng Kinh tế Chính trị Mác-Lênin, chấm điểm và nhận xét phiên mô phỏng chợ thanh long. " +
     "Trả về JSON hợp lệ. Điểm (grade) là số nguyên 1–10 về mức độ hiểu và thực hành kinh tế chính trị, " +
     "KHÔNG thay thế lợi nhuận/hiệu ích trong game. " +
-    "Không đánh đồng giá trị với giá cả. Viết tiếng Việt, mỗi comment 2–3 câu, cụ thể theo số liệu. " +
+    "Không đánh đồng giá trị với giá cả. Nhận xét chung viết tiếng Việt, 2–3 câu, cụ thể theo số liệu. " +
     "participantId phải khớp chính xác id trong dữ liệu.";
 
   const prompt =
@@ -99,7 +92,7 @@ export async function generateAiDebriefReview(input: {
     `Người tham gia (${outcomes.length}):\n${participantLines.join("\n")}\n\n` +
     `Trả JSON:\n` +
     `{"overall":{"grade":<1-10>,"comment":"<nhận xét chung phiên>"},` +
-    `"participants":[{"participantId":"<uuid>","grade":<1-10>,"comment":"<nhận xét cá nhân>"},...]}\n` +
+    `"participants":[{"participantId":"<uuid>","grade":<1-10>},...]}\n` +
     `Phải có đủ ${outcomes.length} mục participants, mỗi participantId đúng một lần.`;
 
   try {
@@ -108,18 +101,10 @@ export async function generateAiDebriefReview(input: {
       (raw.participants ?? []).map((p) => [p.participantId, p]),
     );
 
-    const participants: AiDebriefParticipantReview[] = outcomes.map((o) => {
-      const hit = byId.get(o.participantId);
-      return {
-        participantId: o.participantId,
-        grade: clampGrade(hit?.grade ?? 5),
-        comment:
-          hit?.comment?.trim() ||
-          (o.isBot
-            ? `Bot ${o.displayName} hỗ trợ mô phỏng.`
-            : `Tham gia vai ${ROLE_LABELS[o.role as keyof typeof ROLE_LABELS] ?? o.role}.`),
-      };
-    });
+    const participants: AiDebriefParticipantReview[] = outcomes.map((o) => ({
+      participantId: o.participantId,
+      grade: clampGrade(byId.get(o.participantId)?.grade ?? 5),
+    }));
 
     return {
       overall: {

@@ -8,6 +8,7 @@ import { getRoleQuest } from "@/lib/role-quest";
 import { getTaskZoneForPhase } from "@/lib/zone-phase";
 import { zoneLabelForRole } from "@/lib/game-zones";
 import { buttonVariants } from "@/components/ui/button";
+import { EventPhaseBanner } from "@/components/session/event-announcement";
 import { cn } from "@/lib/utils";
 
 export function GamePhaseCta({
@@ -18,6 +19,7 @@ export function GamePhaseCta({
   roleState = null,
   marketListingCount = 0,
   variant = "default",
+  status,
 }: {
   sessionId: string;
   phase: string | null;
@@ -26,7 +28,15 @@ export function GamePhaseCta({
   roleState?: unknown;
   marketListingCount?: number;
   variant?: "default" | "map";
+  status?: string;
 }) {
+  if (variant === "map" && status === "INTRO") {
+    return <EventPhaseBanner round={1} preview />;
+  }
+  if (variant === "map" && phase === "EVENT" && round > 0) {
+    return <EventPhaseBanner round={round} />;
+  }
+
   if (phase !== "DECISION" && phase !== "MARKET_OPEN") return null;
 
   const event = EVENT_COPY[round];

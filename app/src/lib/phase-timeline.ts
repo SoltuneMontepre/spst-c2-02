@@ -2,7 +2,6 @@ import type { Role } from "@/generated/prisma/enums";
 import { PHASE_LABELS } from "@/lib/labels";
 import { getMapPhaseHint } from "@/lib/zone-phase";
 import { getRoleQuest, type RoleQuest } from "@/lib/role-quest";
-import { isDisconnectedForReady } from "@/lib/participant-presence";
 import type { ParticipantView, SessionSnapshot } from "@/lib/session-service";
 
 export const ROUND_PHASES = [
@@ -196,9 +195,11 @@ export function buildPlayerEntries(
       const quest = questForParticipant(snapshot, participant);
       const status = resolvePlayerStatus(snapshot, participant, quest);
       const showPhaseReady = canFastForwardPhase(snapshot.status, snapshot.phase);
-      const disconnected =
-        !participant.isBot &&
-        isDisconnectedForReady(participant.presence, participant.lastSeenAt);
+      // Trust server-computed presence from the snapshot / presence events.
+      // Do NOT re-age lastSeenAt with the client clock — heartbeats update the
+      // DB but not the cached lastSeenAt, so client-side aging falsely marks
+      // everyone "Mất kết nối" after ~20s (especially visible on ready clicks).
+      const disconnected = !participant.isBot && participant.presence === "OFFLINE";
 
       return {
         participant,

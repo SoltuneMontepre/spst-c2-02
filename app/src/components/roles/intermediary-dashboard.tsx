@@ -11,6 +11,7 @@ import { SellPanel } from "./sell-panel";
 import { OffersPanel } from "./offers-panel";
 import { WholesalePanel } from "./wholesale-panel";
 import { formatThousandDong } from "@/lib/money";
+import { PageLoading } from "@/components/ui/page-loading";
 
 function IntermediaryFlowGuide() {
   const steps = [
@@ -63,7 +64,7 @@ function IntermediaryFlowGuide() {
 
 export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
-  if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
+  if (!data?.self) return <PageLoading />;
 
   const open = data.phase === "MARKET_OPEN";
   const inventoryUnits = data.self.inventory.reduce((s, l) => s + l.availableQuantity, 0);

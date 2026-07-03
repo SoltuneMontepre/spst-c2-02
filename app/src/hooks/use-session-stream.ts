@@ -9,10 +9,13 @@ import {
   applySessionGameEvent,
   applySessionSnapshot,
 } from "@/lib/session-stream-utils";
+import { HEARTBEAT_INTERVAL_SEC } from "@/lib/scenario";
 
 export type SessionStreamState = "connecting" | "connected" | "disconnected";
 
-/** SSE-backed session stream (Redis fans out across instances) + heartbeat for presence (FR-GAME-03). */
+const HEARTBEAT_MS = HEARTBEAT_INTERVAL_SEC * 1000;
+
+/** SSE for game events + heartbeat for presence (lastSeenAt). */
 export function useSessionStream(
   sessionId: string,
   options?: { enabled?: boolean; onEvent?: (event: GameEvent) => void },
@@ -42,13 +45,33 @@ export function useSessionStream(
 
     loadInitialSnapshot();
 
-    const heartbeat = () => {
-      void apiFetch(`/api/sessions/${sessionId}/heartbeat`, { method: "POST" }).catch(
-        () => {},
-      );
+    // Presence = heartbeat only (not SSE connect/abort). Keep self's cached
+    // lastSeenAt/presence fresh so UI never ages a frozen snapshot timestamp.
+    const sendHeartbeat = () => {
+      void apiFetch(`/api/sessions/${sessionId}/heartbeat`, { method: "POST" })
+        .then(() => {
+          const now = new Date().toISOString();
+          queryClient.setQueryData<SessionSnapshot>(queryKey, (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              participants: old.participants.map((p) =>
+                p.isSelf
+                  ? { ...p, lastSeenAt: now, presence: "ONLINE" }
+                  : p,
+              ),
+            };
+          });
+        })
+        .catch(() => {});
     };
-    heartbeat();
-    const hb = setInterval(heartbeat, 10_000);
+    sendHeartbeat();
+    const hb = setInterval(sendHeartbeat, HEARTBEAT_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") sendHeartbeat();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     let closed = false;
     let source: EventSource | null = null;
@@ -89,6 +112,7 @@ export function useSessionStream(
     source_.addEventListener("open", () => {
       if (closed) return;
       if (wasDisconnected.current) {
+        sendHeartbeat();
         void queryClient.refetchQueries({ queryKey });
       }
       wasDisconnected.current = false;
@@ -105,6 +129,7 @@ export function useSessionStream(
     return () => {
       closed = true;
       clearInterval(hb);
+      document.removeEventListener("visibilitychange", onVisible);
       if (source) {
         source.close();
         source = null;

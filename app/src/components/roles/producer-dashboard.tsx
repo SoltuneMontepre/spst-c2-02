@@ -20,12 +20,15 @@ import {
 import { formatThousandDong } from "@/lib/money";
 import { ECONOMY_LABELS } from "@/lib/display-labels";
 import type { ProducerRoundState } from "@/lib/role-state";
+import { PageLoading } from "@/components/ui/page-loading";
 
 export function ProducerDashboard({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
-  if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
+  if (!data?.self) return <PageLoading />;
 
   const state = data.self.roleState as ProducerRoundState | null;
+  const selfPhaseReady =
+    data.participants.find((p) => p.isSelf)?.phaseReady ?? false;
   const social = unitValueVnd(data.currentRound);
   const marketPrice = data.liveRoundStats?.marketPriceVnd;
   const inventoryUnits = data.self.inventory.reduce((s, l) => s + l.availableQuantity, 0);
@@ -131,6 +134,7 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                 phase={data.phase}
                 phaseEndsAt={data.phaseEndsAt}
                 paused={data.paused}
+                phaseReady={selfPhaseReady}
               />
             ) : null}
 
@@ -144,6 +148,7 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
                   currentRound={data.currentRound}
                   phase={data.phase}
                   inventory={data.self.inventory}
+                  phaseReady={selfPhaseReady}
                 />
                 <OffersPanel
                   sessionId={sessionId}

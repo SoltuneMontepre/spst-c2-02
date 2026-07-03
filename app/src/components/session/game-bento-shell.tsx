@@ -17,6 +17,7 @@ import type { GameScreen } from "@/lib/game-zones";
 import { getZonePanelCopy } from "@/lib/zone-phase";
 import { getRoleQuest } from "@/lib/role-quest";
 import { RoleQuestCard } from "@/components/session/role-quest-card";
+import { PageLoading } from "@/components/ui/page-loading";
 
 export function GameBentoShell({
   sessionId,
@@ -35,7 +36,7 @@ export function GameBentoShell({
   const guidance = getGuidance(guidanceContext);
 
   if (isLoading || !data) {
-    return <p className="p-8 text-muted-foreground">Đang tải phiên…</p>;
+    return <PageLoading label="Đang tải phiên…" fullScreen />;
   }
 
   const panel = getZonePanelCopy({

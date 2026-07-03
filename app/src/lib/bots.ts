@@ -426,7 +426,25 @@ async function runBotMarketWave(
   sessionId: string,
   wave: number,
 ): Promise<void> {
-  await withSessionLock(sessionId, async () => {
+  await withSessionLock(sessionId, () => runBotMarketWaveInner(sessionId, wave));
+}
+
+/**
+ * Guarantee consumer bots get one last chance to buy before MARKET_OPEN ends.
+ * Waves 5/6 (consumer demand) are scheduled late (~70-88% through the phase)
+ * and are cancelled the moment the host force-advances or the round settles
+ * early, so call this synchronously before settlement.
+ * Caller must already hold the session lock (e.g. from within transition()).
+ */
+export async function runFinalBotConsumerPass(sessionId: string): Promise<void> {
+  await runBotMarketWaveInner(sessionId, 5);
+  await runBotMarketWaveInner(sessionId, 6);
+}
+
+async function runBotMarketWaveInner(
+  sessionId: string,
+  wave: number,
+): Promise<void> {
     let actions = 0;
     try {
       const session = await db.gameSession.findUniqueOrThrow({
@@ -489,13 +507,22 @@ async function runBotMarketWave(
         });
       }
       if (wave === 3) {
-        steps.push(async () => {
-          let n = 0;
-          await db.$transaction(async (tx) => {
-            n += await respondBotWholesaleOffers(tx, session, round.id, price);
-          });
-          return n;
-        });
+        steps.push(
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await respondBotWholesaleOffers(tx, session, round.id, price);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await respondBotRetailOffers(tx, session, price);
+            });
+            return n;
+          },
+        );
       }
       if (wave === 4) {
         steps.push(
@@ -510,6 +537,13 @@ async function runBotMarketWave(
             let n = 0;
             await db.$transaction(async (tx) => {
               n += await listBotIntermediaryRetail(tx, session);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await respondBotRetailOffers(tx, session, price);
             });
             return n;
           },
@@ -563,7 +597,6 @@ async function runBotMarketWave(
         console.error("bot:market_wave bump:", e),
       );
     }
-  });
 }
 
 async function applyBotExportPromotion(
@@ -599,6 +632,17 @@ async function applyBotExportPromotion(
   } catch {
     return 0;
   }
+}
+
+/** 70/30 variety split so producer bots don't push every lot through both
+ *  channels every round — most lots go retail, some go wholesale instead. */
+function producerLotChannel(
+  lot: { id: string },
+  session: BotSession,
+): "retail" | "wholesale" {
+  return seededUnit(session.id, session.currentRound, lot.id, "lot-channel") < 0.7
+    ? "retail"
+    : "wholesale";
 }
 
 async function botProducers(
@@ -638,6 +682,7 @@ async function listBotProducerRetail(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of lots) {
+      if (producerLotChannel(lot, session) !== "retail") continue;
       const ask = botAskPrice(
         seller,
         session,
@@ -698,6 +743,7 @@ async function createBotWholesaleOffers(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of lots) {
+      if (producerLotChannel(lot, session) !== "wholesale") continue;
       const ask = botAskPrice(
         seller,
         session,
@@ -886,11 +932,8 @@ async function acceptBotWholesaleCounters(
   for (const offer of countered) {
     const seller = producerById.get(offer.producerId);
     if (!seller) continue;
-    const acceptChance: Record<BotTemperament, number> = {
-      CAUTIOUS: 0.85,
-      BALANCED: 0.75,
-      BOLD: 0.65,
-    };
+    // 70/30 variety split: even a profitable counter gets held out/rejected
+    // 30% of the time, so producer bots don't all settle instantly.
     const accepts =
       Boolean(offer.counterPriceVnd) &&
       offer.counterPriceVnd! >= offer.inventoryLot.unitCostVnd &&
@@ -900,7 +943,7 @@ async function acceptBotWholesaleCounters(
         seller.id,
         offer.id,
         "accept-wholesale-counter",
-      ) < acceptChance[temperament(seller, session)];
+      ) < 0.7;
     try {
       await respondWholesale(tx, botCtx(seller, session), {
         offerId: offer.id,
@@ -937,12 +980,17 @@ async function listBotIntermediaryRetail(
       orderBy: { createdAt: "asc" },
     });
     for (const lot of stock) {
+      // 70/30 variety split: most lots get a modest markup, some go aggressive
+      // so retail asks don't all cluster in the same narrow band.
+      const aggressive =
+        seededUnit(session.id, session.currentRound, lot.id, "markup-mode") >= 0.7;
+      const [markupMin, markupMax] = aggressive ? [3, 6] : [1, 2];
       const markupSteps = botInt(
         im,
         session,
         `intermediary-markup-${lot.id}`,
-        1,
-        4,
+        markupMin,
+        markupMax,
       );
       const retailAsk = Math.min(30000, lot.unitCostVnd + markupSteps * 1000);
       const retailQty = botInt(
@@ -1011,16 +1059,28 @@ async function runBotConsumerDemand(
           sellerParticipantId: { not: consumer.id },
         },
         orderBy: [{ askPriceVnd: "asc" }, { createdAt: "asc" }],
-        take: 3,
+        take: 10,
       });
+      if (listings.length === 0) break;
+      // 70% of the time shop within the 3 cheapest listings; 30% of the time
+      // browse the wider pool so bots don't all pile onto the single best
+      // price every round.
+      const shopsWide =
+        seededUnit(
+          session.id,
+          session.currentRound,
+          consumer.id,
+          `consumer-pool-${maxActionsPerConsumer}-${attempts}`,
+        ) < 0.3;
+      const pool = shopsWide ? listings : listings.slice(0, 3);
       const listing =
-        listings[
+        pool[
           botInt(
             consumer,
             session,
             `consumer-listing-${maxActionsPerConsumer}-${attempts}`,
             0,
-            Math.max(0, listings.length - 1),
+            Math.max(0, pool.length - 1),
           )
         ];
       if (!listing) break;

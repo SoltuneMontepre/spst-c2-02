@@ -24,6 +24,7 @@ import {
   snapshotFromLiveRoom,
   type LiveRoomFrame,
 } from "./live-room";
+import { effectivePresence } from "./participant-presence";
 
 /** Bump stateVersion, refresh the live Redis/memory frame, then broadcast.
  *  Clients read the pre-calculated frame (TFT-style) instead of each rebuilding
@@ -118,7 +119,7 @@ export async function createSession(
         autoAssignRoles: config.autoAssignRoles,
         guidanceEnabled: config.guidanceEnabled,
         autoHost: config.autoHost ?? true,
-        lobbySoloSince: new Date(),
+        lobbySoloSince: null,
       },
       select: { id: true, code: true },
     });
@@ -190,6 +191,7 @@ export async function joinSession(
       displayNameSnapshot: user.displayName,
       avatarSnapshot: user.avatarUrl,
       presence: "ONLINE",
+      lastSeenAt: new Date(),
     },
   });
   await syncLobbySoloSince(session.id);
@@ -237,6 +239,8 @@ export interface OfferView {
   toName: string;
   quantity: number;
   offerPriceVnd: number;
+  /** Listing ask — seller counters must stay strictly below this. */
+  askPriceVnd: number | null;
   status: string;
   isIncoming: boolean;
 }
@@ -385,6 +389,10 @@ export async function getSnapshot(
   sessionId: string,
 ): Promise<SessionSnapshot> {
   await sweepAbandonedSoloLobbies();
+  // Derive online/offline from lastSeenAt (heartbeat), not SSE abort.
+  await import("./presence-service")
+    .then((m) => m.reconcileSessionPresence(sessionId))
+    .catch(() => {});
   // Serverless-safe: advance the phase machine if a timer elapsed.
   await maybeAutoAdvance(sessionId);
   void import("./ai-host").then((m) => m.maybeFastForwardPhase(sessionId));
@@ -497,20 +505,23 @@ async function buildLiveRoomFrame(sessionId: string): Promise<LiveRoomFrame> {
         recentTransactions,
         marketActivity,
         liveRoundStats,
-        participants: participants.map((p) => ({
-          id: p.id,
-          displayName: p.displayNameSnapshot,
-          avatarUrl: p.avatarSnapshot,
-          role: p.role,
-          productivityProfile: p.productivityProfile,
-          isBot: p.isBot,
-          presence: p.presence,
-          lastSeenAt: p.lastSeenAt?.toISOString() ?? null,
-          ready: p.ready,
-          phaseReady: p.phaseReady,
-          controlMode: p.controlMode,
-          isSelf: p.userId === userId,
-        })),
+        participants: participants.map((p) => {
+          const lastSeenAt = p.lastSeenAt?.toISOString() ?? null;
+          return {
+            id: p.id,
+            displayName: p.displayNameSnapshot,
+            avatarUrl: p.avatarSnapshot,
+            role: p.role,
+            productivityProfile: p.productivityProfile,
+            isBot: p.isBot,
+            presence: effectivePresence(p.isBot, p.presence, lastSeenAt),
+            lastSeenAt,
+            ready: p.ready,
+            phaseReady: p.phaseReady,
+            controlMode: p.controlMode,
+            isSelf: p.userId === userId,
+          };
+        }),
       };
     }),
   );
@@ -559,7 +570,7 @@ async function buildSelfState(
             listing: { round: { sessionId: participant.sessionId, number: currentRound } },
           },
           include: {
-            listing: { select: { id: true } },
+            listing: { select: { id: true, askPriceVnd: true } },
           },
         })
       : [];
@@ -571,6 +582,7 @@ async function buildSelfState(
     toName: nameById.get(o.toParticipantId) ?? "?",
     quantity: o.quantity,
     offerPriceVnd: o.offerPriceVnd,
+    askPriceVnd: o.listing?.askPriceVnd ?? null,
     status: o.status,
     isIncoming: o.toParticipantId === participantId,
   });
@@ -639,7 +651,9 @@ async function buildMarket(
       minimumPriceVnd: w.minimumPriceVnd,
       counterPriceVnd: w.counterPriceVnd,
       status: w.status,
-      isOwn: w.producerId === selfId,
+      // "Own" from either side of the negotiation: the producer who listed it,
+      // or the intermediary who already sent a counter on it.
+      isOwn: w.producerId === selfId || w.intermediaryId === selfId,
     })),
   };
 }
@@ -931,16 +945,17 @@ async function buildMarketActivity(
     });
   }
 
-  // Own actions first, then everyone else by recency — never drop your rows.
-  const selfItems = items
-    .filter((item) => item.isSelf)
-    .sort((a, b) => b.sortAt - a.sortAt);
+  // Single chronological timeline across all participants — cap everyone
+  // else's rows to keep the list short, but never drop your own actions.
+  const selfItems = items.filter((item) => item.isSelf);
   const otherItems = items
     .filter((item) => !item.isSelf)
     .sort((a, b) => b.sortAt - a.sortAt)
     .slice(0, 30);
 
-  return [...selfItems, ...otherItems].map(({ sortAt: _sortAt, ...item }) => item);
+  return [...selfItems, ...otherItems]
+    .sort((a, b) => b.sortAt - a.sortAt)
+    .map(({ sortAt: _sortAt, ...item }) => item);
 }
 
 async function buildLiveRoundStats(
@@ -986,38 +1001,16 @@ async function buildLiveRoundStats(
 }
 
 /** Mark a participant online/offline from the realtime connection (FR-ROOM-07). */
+/** @deprecated Presence is heartbeat-only. ONLINE delegates to heartbeat; OFFLINE is ignored. */
 export async function setPresence(
   userId: string,
   sessionId: string,
   presence: PresenceEnum,
 ): Promise<void> {
-  const participant = await db.participant.findFirst({
-    where: { sessionId, userId, isBot: false },
-    select: { id: true },
-  });
-  if (!participant) return;
-
-  const lastSeenAt = new Date();
-  await db.participant.update({
-    where: { id: participant.id },
-    data: { presence, lastSeenAt },
-  });
-  const session = await db.gameSession.update({
-    where: { id: sessionId },
-    data: { stateVersion: { increment: 1 } },
-    select: { stateVersion: true },
-  });
-  await publish({
-    sessionId,
-    type: "participant:presence",
-    stateVersion: session.stateVersion,
-    data: {
-      participantId: participant.id,
-      userId,
-      presence,
-      lastSeenAt: lastSeenAt.toISOString(),
-    },
-  });
+  if (presence === "ONLINE") {
+    await import("./presence-service").then((m) => m.heartbeat(userId, sessionId));
+  }
+  // OFFLINE is derived from stale lastSeenAt — do not trust SSE abort.
 }
 
 /** The user's active non-hosted session, for "return to your session" (§4.4). */

@@ -20,6 +20,7 @@ import { IncomingOfferPopup } from "./incoming-offer-popup";
 import { formatThousandDong } from "@/lib/money";
 import type { ConsumerRoundState } from "@/lib/role-state";
 import type { ListingView } from "@/lib/session-service";
+import { PageLoading } from "@/components/ui/page-loading";
 
 function priceRangeLabel(listings: { askPriceVnd: number }[]): string {
   if (listings.length === 0) return "—";
@@ -37,7 +38,7 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
     null,
   );
 
-  if (!data?.self) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
+  if (!data?.self) return <PageLoading />;
 
   const state = data.self.roleState as ConsumerRoundState | null;
   const allListings = data.market?.listings ?? [];
@@ -93,7 +94,6 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
           balanceVnd={data.self.balanceVnd}
           fulfilled={fulfilled}
           needTarget={needTarget}
-          marketActivity={data.marketActivity}
         />
       }
     >
@@ -169,7 +169,6 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
         <MarketTransactionDialog
           listing={selectedListing}
           unitValueVnd={unitValue}
-          affordable={(data.self?.balanceVnd ?? 0) >= selectedListing.askPriceVnd}
           pending={command.isPending}
           balanceVnd={data.self?.balanceVnd ?? 0}
           onBuy={(quantity) => {

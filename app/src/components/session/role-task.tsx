@@ -6,6 +6,7 @@ import { ConsumerMarket } from "@/components/roles/consumer-market";
 import { IntermediaryDashboard } from "@/components/roles/intermediary-dashboard";
 import { GovernmentConsole } from "@/components/roles/government-console";
 import { ComingSoon } from "./coming-soon";
+import { PageLoading } from "@/components/ui/page-loading";
 
 const TITLES: Record<string, string> = {
   INTERMEDIARY: "Trung tâm phân phối",
@@ -15,7 +16,7 @@ const TITLES: Record<string, string> = {
 /** Renders the dashboard for the player's role (task/market zones). */
 export function RoleTask({ sessionId }: { sessionId: string }) {
   const { data } = useSessionSnapshot(sessionId);
-  if (!data) return <p className="p-6 text-muted-foreground">Đang tải…</p>;
+  if (!data) return <PageLoading />;
 
   switch (data.self?.role) {
     case "PRODUCER":

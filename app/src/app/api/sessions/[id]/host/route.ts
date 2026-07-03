@@ -24,8 +24,19 @@ const profileSchema = z.enum(["TRADITIONAL", "SOCIAL_AVERAGE", "PIONEER"]);
 
 const schema = z.discriminatedUnion("action", [
   z.object({
+    action: z.literal("start"),
+    roleAssignments: z
+      .array(
+        z.object({
+          participantId: z.string().uuid(),
+          role: roleSchema,
+          productivityProfile: profileSchema.nullable().optional(),
+        }),
+      )
+      .optional(),
+  }),
+  z.object({
     action: z.enum([
-      "start",
       "next",
       "pause",
       "resume",
@@ -71,6 +82,11 @@ export async function POST(
   return handle(async () => {
     const body = schema.parse(await request.json());
     switch (body.action) {
+      case "start":
+        await startSession(user.id, id, {
+          roleAssignments: body.roleAssignments,
+        });
+        break;
       case "setAutoHost":
         await hostSetAutoHost(user.id, id, body.autoHost);
         break;
@@ -103,7 +119,6 @@ export async function POST(
         break;
       default: {
         const fns = {
-          start: startSession,
           next: hostNext,
           pause: hostPause,
           resume: hostResume,
