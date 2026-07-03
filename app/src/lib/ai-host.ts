@@ -4,18 +4,10 @@ import { db } from "./db";
 import { publish } from "./events";
 import { ApiError } from "./api";
 import { generateText, isGeminiQuotaError } from "./ai";
-import { ROUND_EVENTS, PHASE_DURATIONS_SEC, INTRO_DURATION_SEC, DEBRIEF_DURATION_SEC } from "./scenario";
+import { ROUND_EVENTS } from "./scenario";
 import { ROUND_NAMES, PHASE_BANNERS } from "./labels";
-import { canAutoStartLobby, startSession, requestPhaseTransition } from "./game-service";
-
-/** Minimum ms into a phase before all-ready fast-forward (anti-flash). */
-const MIN_PHASE_MS: Record<string, number> = {
-  EVENT: 12_000,
-  DECISION: 30_000,
-  MARKET_OPEN: 15_000,
-  RECAP: 8_000,
-  INTRO: 20_000,
-};
+import { canAutoStartLobby, startSession, startAllReadyCountdown } from "./game-service";
+import { isDisconnectedForReady } from "./participant-presence";
 
 /** Lobby: auto-start when every human is ready (AI host, no manual Start). */
 export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
@@ -43,7 +35,8 @@ export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
   }
 }
 
-/** In-game: skip remaining timer when all humans tap phase-ready (TFT-style). */
+/** In-game: when every connected human is ready, start a short 5s countdown
+ *  (does not advance immediately — TFT-style "all ready" beat). */
 export async function maybeFastForwardPhase(sessionId: string): Promise<void> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
@@ -51,42 +44,29 @@ export async function maybeFastForwardPhase(sessionId: string): Promise<void> {
   });
   if (!session?.autoHost || session.paused) return;
 
-  const humans = session.participants;
-  if (humans.length === 0) return;
-  if (!humans.every((p) => p.phaseReady)) return;
-
   const phaseKey =
     session.status === "INTRO"
       ? "INTRO"
       : session.status === "DEBRIEF"
         ? null
         : session.phase;
-  if (!phaseKey) return;
-
-  const minMs = MIN_PHASE_MS[phaseKey] ?? 3000;
-  if (session.phaseEndsAt) {
-    const totalMs = phaseDurationMs(session);
-    const elapsed = Date.now() - (session.phaseEndsAt.getTime() - totalMs);
-    if (elapsed < minMs) return;
+  // Only decision / market / recap support ready-to-advance.
+  if (
+    phaseKey !== "DECISION" &&
+    phaseKey !== "MARKET_OPEN" &&
+    phaseKey !== "RECAP"
+  ) {
+    return;
   }
 
-  await requestPhaseTransition(sessionId);
-}
+  // Players disconnected for a while don't block the round from advancing.
+  const humans = session.participants.filter(
+    (p) => !isDisconnectedForReady(p.presence, p.lastSeenAt),
+  );
+  if (humans.length === 0) return;
+  if (!humans.every((p) => p.phaseReady)) return;
 
-function phaseDurationMs(session: {
-  status: string;
-  phase: string | null;
-  autoHost: boolean;
-}): number {
-  if (session.status === "INTRO") return INTRO_DURATION_SEC * 1000;
-  if (session.status === "DEBRIEF") return DEBRIEF_DURATION_SEC * 1000;
-  if (session.phase && session.phase in PHASE_DURATIONS_SEC) {
-    const sec = PHASE_DURATIONS_SEC[session.phase as keyof typeof PHASE_DURATIONS_SEC];
-    if (session.phase === "RECAP" && session.autoHost) return 30_000;
-    if (session.phase === "SETTLEMENT") return 4_000;
-    return sec * 1000;
-  }
-  return 45_000;
+  await startAllReadyCountdown(sessionId);
 }
 
 /** Toggle human phase-ready during active phases. */

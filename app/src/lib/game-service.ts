@@ -11,6 +11,7 @@ import {
   MAX_PHASE_EXTENSIONS,
   INTRO_DURATION_SEC,
   DEBRIEF_DURATION_SEC,
+  ALL_READY_COUNTDOWN_SEC,
   PROFILE_ASSIGNMENT,
   ROUND_EVENTS,
   SCENARIO,
@@ -33,6 +34,7 @@ import {
   scheduleBotMarketWaves,
 } from "./bots";
 import { finalizeSession } from "./finalize";
+import { withSessionLock } from "./session-lock";
 import { scheduleTimer, clearTimer } from "./timer-service";
 import type {
   ProducerRoundState,
@@ -57,6 +59,9 @@ async function touch(sessionId: string, type: string, data?: unknown): Promise<v
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
+  await import("./session-service")
+    .then((m) => m.refreshLiveRoom(sessionId))
+    .catch((e) => console.error("live-room refresh:", e));
   await publish({ sessionId, type, stateVersion: updated.stateVersion, data });
 }
 
@@ -825,97 +830,79 @@ async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
   void import("./ai-host").then((m) => m.announcePhase(sessionId));
 }
 
-const TRANSITION_LEASE_MS = 30_000;
-
-/** One forward step in the round/phase machine. */
+/** One forward step in the round/phase machine.
+ *  Serialized by withSessionLock (Redis + in-process) — no DB lease needed. */
 async function transition(sessionId: string, auto: boolean): Promise<void> {
-  const session = await db.gameSession.findUnique({ where: { id: sessionId } });
-  if (!session) return;
-  let leaseEndsAt: Date | null = null;
-  if (auto) {
-    if (session.paused) return;
-    if (session.phaseEndsAt && Date.now() < session.phaseEndsAt.getTime() - 1000) return;
-    if (!session.phaseEndsAt) return;
-    leaseEndsAt = new Date(Date.now() + TRANSITION_LEASE_MS);
-    const claimed = await db.gameSession.updateMany({
-      where: {
-        id: sessionId,
-        paused: false,
-        phaseEndsAt: session.phaseEndsAt,
-      },
-      data: { phaseEndsAt: leaseEndsAt },
-    });
-    if (claimed.count === 0) return;
-  }
-  const n = session.currentRound;
-
-  try {
-    // INTRO -> Round 1
-    if (session.status === "INTRO") {
-      await enterRound(sessionId, 1);
-      return;
+  await withSessionLock(sessionId, async () => {
+    const session = await db.gameSession.findUnique({ where: { id: sessionId } });
+    if (!session) return;
+    if (auto) {
+      if (session.paused) return;
+      if (!session.phaseEndsAt) return;
+      const dueIn = session.phaseEndsAt.getTime() - Date.now();
+      // Timer fired early — reschedule the remainder instead of no-oping forever.
+      if (dueIn > 1000) {
+        scheduleAdvance(sessionId, dueIn);
+        return;
+      }
     }
-    // AI host finishes the session after the debrief settles.
-    if (session.status === "DEBRIEF") {
-      if (session.autoHost) await completeSession(sessionId);
-      return;
-    }
-    if (!session.phase) return;
+    const n = session.currentRound;
 
-    switch (session.phase) {
-      case "EVENT":
-        await setPhase(sessionId, "DECISION");
-        await runBotDecisions(sessionId);
+    try {
+      // INTRO -> Round 1
+      if (session.status === "INTRO") {
+        await enterRound(sessionId, 1);
         return;
-      case "DECISION":
-        await setPhase(sessionId, "MARKET_OPEN");
-        await runBotMarket(sessionId);
+      }
+      // AI host finishes the session after the debrief settles.
+      if (session.status === "DEBRIEF") {
+        if (session.autoHost) await completeSession(sessionId);
         return;
-      case "MARKET_OPEN":
-        await settleRound(sessionId, n);
-        await setPhase(sessionId, "SETTLEMENT");
-        await touch(sessionId, "round:settled", { round: n });
-        return;
-      case "SETTLEMENT":
-        await setPhase(sessionId, "RECAP");
-        return;
-      case "RECAP":
-        if (n >= session.totalRounds) {
-          const phaseEndsAt = session.autoHost
-            ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
-            : null;
-          await db.gameSession.update({
-            where: { id: sessionId },
-            data: { status: "DEBRIEF", phase: null, phaseEndsAt },
-          });
-          await finalizeSession(sessionId).catch((e) => console.error("finalize:", e));
-          if (session.autoHost && phaseEndsAt) {
-            scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
+      }
+      if (!session.phase) return;
+
+      switch (session.phase) {
+        case "EVENT":
+          await setPhase(sessionId, "DECISION");
+          await runBotDecisions(sessionId);
+          return;
+        case "DECISION":
+          await setPhase(sessionId, "MARKET_OPEN");
+          await runBotMarket(sessionId);
+          return;
+        case "MARKET_OPEN":
+          await settleRound(sessionId, n);
+          await setPhase(sessionId, "SETTLEMENT");
+          await touch(sessionId, "round:settled", { round: n });
+          return;
+        case "SETTLEMENT":
+          await setPhase(sessionId, "RECAP");
+          return;
+        case "RECAP":
+          if (n >= session.totalRounds) {
+            const phaseEndsAt = session.autoHost
+              ? new Date(Date.now() + DEBRIEF_DURATION_SEC * 1000)
+              : null;
+            await db.gameSession.update({
+              where: { id: sessionId },
+              data: { status: "DEBRIEF", phase: null, phaseEndsAt },
+            });
+            await finalizeSession(sessionId).catch((e) => console.error("finalize:", e));
+            if (session.autoHost && phaseEndsAt) {
+              scheduleAdvance(sessionId, phaseEndsAt.getTime() - Date.now());
+            }
+            void import("./ai-host").then((m) => m.announcePhase(sessionId));
+            await touch(sessionId, "session:debrief");
+          } else {
+            await enterRound(sessionId, n + 1);
           }
-          void import("./ai-host").then((m) => m.announcePhase(sessionId));
-          await touch(sessionId, "session:debrief");
-        } else {
-          await enterRound(sessionId, n + 1);
-        }
-        return;
+          return;
+      }
+    } catch (error) {
+      if (auto) scheduleAdvance(sessionId, 2_000);
+      throw error;
     }
-  } catch (error) {
-    if (auto && leaseEndsAt) {
-      const retryAt = new Date(Date.now() + 1_000);
-      const restored = await db.gameSession.updateMany({
-        where: {
-          id: sessionId,
-          status: session.status,
-          currentRound: session.currentRound,
-          phase: session.phase,
-          phaseEndsAt: leaseEndsAt,
-        },
-        data: { phaseEndsAt: retryAt },
-      });
-      if (restored.count > 0) scheduleAdvance(sessionId, 1_000);
-    }
-    throw error;
-  }
+  });
 }
 
 const transitionState = globalThis as typeof globalThis & {
@@ -938,7 +925,11 @@ function runPhaseTransition(sessionId: string, auto: boolean): Promise<void> {
 // Persistent server timers (Docker deployment).
 function scheduleAdvance(sessionId: string, ms: number): void {
   scheduleTimer(sessionId, ms, () => {
-    void runPhaseTransition(sessionId, true).catch((e) => console.error("advance:", e));
+    void runPhaseTransition(sessionId, true).catch((e) => {
+      console.error("advance:", e);
+      // Lock busy / transient failure — retry so the phase machine never stalls.
+      scheduleAdvance(sessionId, 2_000);
+    });
   });
 }
 
@@ -963,6 +954,43 @@ export async function requestPhaseTransition(sessionId: string): Promise<void> {
   await runPhaseTransition(sessionId, false);
 }
 
+/**
+ * All connected humans are ready — shorten the phase timer to a quick
+ * countdown (default 5s) and reschedule advance. Does not advance immediately.
+ */
+export async function startAllReadyCountdown(sessionId: string): Promise<void> {
+  await withSessionLock(sessionId, async () => {
+    const session = await db.gameSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.paused) return;
+
+    const readyEndsAt = new Date(Date.now() + ALL_READY_COUNTDOWN_SEC * 1000);
+    // Already ending sooner than the ready countdown — keep the shorter timer.
+    if (
+      session.phaseEndsAt &&
+      session.phaseEndsAt.getTime() <= readyEndsAt.getTime()
+    ) {
+      scheduleAdvance(
+        sessionId,
+        Math.max(0, session.phaseEndsAt.getTime() - Date.now()),
+      );
+      return;
+    }
+
+    await db.gameSession.update({
+      where: { id: sessionId },
+      data: { phaseEndsAt: readyEndsAt },
+    });
+    scheduleAdvance(sessionId, ALL_READY_COUNTDOWN_SEC * 1000);
+    await touch(sessionId, "round:phase_changed", {
+      phase: session.phase,
+      phaseEndsAt: readyEndsAt.toISOString(),
+      paused: session.paused,
+      phaseExtensions: session.phaseExtensions,
+      allReadyCountdown: true,
+    });
+  });
+}
+
 /** Mark session complete, persist final scores/badges. */
 async function completeSession(sessionId: string): Promise<void> {
   clearTimer(sessionId);
@@ -975,18 +1003,23 @@ async function completeSession(sessionId: string): Promise<void> {
   await touch(sessionId, "session:ended", { status: "COMPLETED" });
 }
 
-/** Lazy advance for serverless: call when reading state. */
+/** Lazy advance for serverless / missed timers: call when reading state. */
 export async function maybeAutoAdvance(sessionId: string): Promise<void> {
   const s = await db.gameSession.findUnique({ where: { id: sessionId } });
   if (!s || s.paused || !s.phaseEndsAt) return;
-  if (Date.now() < s.phaseEndsAt.getTime()) return;
+  if (Date.now() < s.phaseEndsAt.getTime()) {
+    // Timer still pending — ensure an in-process timer exists (e.g. after restart).
+    const ms = s.phaseEndsAt.getTime() - Date.now();
+    scheduleAdvance(sessionId, ms);
+    return;
+  }
 
   if (s.status === "INTRO" && s.autoHost) {
     await runPhaseTransition(sessionId, true);
     return;
   }
   if (s.status === "DEBRIEF" && s.autoHost) {
-    await completeSession(sessionId);
+    await runPhaseTransition(sessionId, true);
     return;
   }
   if (!s.phase) return;
@@ -1105,6 +1138,30 @@ export async function hostSetAutoHost(
   await ensureHostParticipant(sessionId, hostUserId);
   await db.gameSession.update({ where: { id: sessionId }, data: { autoHost } });
   await touch(sessionId, "session:auto_host", { autoHost });
+}
+
+/** Toggle automatic role assignment for new participants (lobby only). */
+export async function hostSetAutoAssignRoles(
+  hostUserId: string,
+  sessionId: string,
+  autoAssignRoles: boolean,
+): Promise<void> {
+  const s = await assertHost(hostUserId, sessionId);
+  if (s.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
+  await db.gameSession.update({ where: { id: sessionId }, data: { autoAssignRoles } });
+  await touch(sessionId, "session:auto_assign_roles", { autoAssignRoles });
+}
+
+/** Toggle in-session explanation guidance (lobby only). */
+export async function hostSetGuidanceEnabled(
+  hostUserId: string,
+  sessionId: string,
+  guidanceEnabled: boolean,
+): Promise<void> {
+  const s = await assertHost(hostUserId, sessionId);
+  if (s.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
+  await db.gameSession.update({ where: { id: sessionId }, data: { guidanceEnabled } });
+  await touch(sessionId, "session:guidance_enabled", { guidanceEnabled });
 }
 
 export async function hostCancel(hostUserId: string, sessionId: string): Promise<void> {

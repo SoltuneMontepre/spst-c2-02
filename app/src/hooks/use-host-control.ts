@@ -17,6 +17,8 @@ export type HostAction =
 
 export type HostLobbyAction =
   | { action: "setAutoHost"; autoHost: boolean }
+  | { action: "setAutoAssignRoles"; autoAssignRoles: boolean }
+  | { action: "setGuidanceEnabled"; guidanceEnabled: boolean }
   | {
       action: "setRole";
       participantId: string;

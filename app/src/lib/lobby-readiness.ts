@@ -3,7 +3,7 @@ import type { SessionSnapshot } from "@/lib/session-service";
 import { ROLE_LABELS } from "@/lib/display-labels";
 import { compositionTarget, START_MIN_HUMANS } from "@/lib/scenario";
 
-function lobbyMinHumans(autoHost: boolean): number {
+export function lobbyMinHumans(autoHost: boolean): number {
   return autoHost ? 1 : START_MIN_HUMANS;
 }
 

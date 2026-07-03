@@ -133,7 +133,7 @@ export const PHASE_DURATIONS_SEC = {
 } as const;
 
 /** AI-host timed intro / debrief (no manual host needed). */
-export const INTRO_DURATION_SEC = 45;
+export const INTRO_DURATION_SEC = 5;
 export const DEBRIEF_DURATION_SEC = 45;
 
 export const PHASE_EXTENSION_SEC = 30;
@@ -141,6 +141,10 @@ export const MAX_PHASE_EXTENSIONS = 2;
 export const PRODUCER_INPUT_LOCK_SEC = 15; // DECISION lock for state policies
 export const DISCONNECT_BOT_TAKEOVER_SEC = 15;
 export const HOST_RECONNECT_WINDOW_SEC = 120;
+/** Grace period before a disconnected player stops counting toward "everyone ready" (well before bot takeover). */
+export const DISCONNECT_READY_GRACE_SEC = 5;
+/** When every connected human is phase-ready, advance after this short countdown. */
+export const ALL_READY_COUNTDOWN_SEC = 5;
 
 /** Round event types in fixed order (SRS §5.7, BR-ROUND-01). */
 export const ROUND_EVENTS: Record<number, EventType> = {

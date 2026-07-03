@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package } from "lucide-react";
+import { Package, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
@@ -18,6 +18,7 @@ import {
   isProducerInputLockedAt,
   producerInputLockRemainingSec,
 } from "@/lib/producer-input-lock";
+import { UPGRADE_COSTS } from "@/lib/scenario";
 import {
   formatCompactVnd,
   ProducerActionCard,
@@ -91,10 +92,31 @@ export function ProducePanel({
       ? `${state.producedQuantity}/${productionCapacity} thùng`
       : `${state.producedQuantity} thùng`;
 
+  const upgradeCost =
+    state.profile === "TRADITIONAL"
+      ? UPGRADE_COSTS.TRADITIONAL_TO_SOCIAL_AVERAGE
+      : state.profile === "SOCIAL_AVERAGE"
+        ? UPGRADE_COSTS.SOCIAL_AVERAGE_TO_PIONEER
+        : null;
+  const discountedUpgrade =
+    state.techSupportActive && upgradeCost
+      ? Math.ceil(upgradeCost * 0.5)
+      : upgradeCost;
+  const canUpgrade =
+    phase === "DECISION" &&
+    currentRound < 4 &&
+    Boolean(discountedUpgrade) &&
+    !state.pendingUpgrade &&
+    state.profile !== "PIONEER" &&
+    balanceVnd >= (discountedUpgrade ?? 0) &&
+    !inputLocked;
+
   useEffect(() => {
     setQty((current) => Math.min(current, remaining));
   }, [remaining]);
 
+  const shortfallVnd =
+    unitCost > 0 && balanceVnd < unitCost ? unitCost - balanceVnd : 0;
   const disabledReason =
     inputLocked
       ? errorMessage("PRODUCER_INPUT_LOCKED")
@@ -103,7 +125,9 @@ export function ProducePanel({
         : remaining <= 0
           ? capacityRemaining <= 0
             ? "Bạn đã dùng hết sức sản xuất của vòng này."
-            : "Ví hiện không đủ để làm thêm thùng nào."
+            : shortfallVnd > 0
+              ? `Ví còn ${formatCompactVnd(balanceVnd)} nhưng mỗi thùng cần ${formatCompactVnd(unitCost)} (thiếu ${formatCompactVnd(shortfallVnd)}). Hãy bán hàng ở giai đoạn chợ mở để có vốn.`
+              : "Ví hiện không đủ để làm thêm thùng nào."
           : qty <= 0
             ? "Chọn số thùng muốn làm."
             : null;
@@ -191,6 +215,18 @@ export function ProducePanel({
             onClick={() => command.mutate({ action: "cancelProduction" })}
           >
             Hủy sản xuất vòng này
+          </Button>
+        ) : null}
+        {phase === "DECISION" && state.profile !== "PIONEER" && currentRound < 4 ? (
+          <Button
+            variant="outline"
+            className="h-11 gap-2 border-2 border-primary/30 bg-primary/5 font-bold text-primary hover:bg-primary/10"
+            disabled={!canUpgrade || command.isPending}
+            onClick={() => command.mutate({ action: "invest" })}
+          >
+            <Zap className="size-4" aria-hidden />
+            Nâng cấp công nghệ
+            {discountedUpgrade ? ` (−${formatCompactVnd(discountedUpgrade)})` : ""}
           </Button>
         ) : null}
       </div>

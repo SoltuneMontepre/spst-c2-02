@@ -74,7 +74,11 @@ export async function handle<T>(
     }
     const mapped = mapServiceError(err);
     if (mapped) {
-      return jsonError(mapped.code, mapped.status, mapped.message);
+      // ApiError.message defaults to the raw code when no custom message was
+      // given (see below) — only forward it if it's an actual override, so
+      // jsonError falls back to the localized errorMessage(code) table.
+      const customMessage = mapped.message === mapped.code ? undefined : mapped.message;
+      return jsonError(mapped.code, mapped.status, customMessage);
     }
     console.error("Unhandled API error:", err);
     return jsonError("INTERNAL_ERROR", 500);

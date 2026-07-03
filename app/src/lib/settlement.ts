@@ -2,6 +2,7 @@
 // resolves unsold inventory (spoilage / cold-storage carry-over).
 
 import { db } from "./db";
+import type { Prisma } from "@/generated/prisma/client";
 import { computeMarketPrice, unitValueVnd } from "./economy";
 import type { ConsumerRoundState, IntermediaryRoundState } from "./role-state";
 
@@ -27,19 +28,6 @@ export async function settleRound(sessionId: string, n: number): Promise<void> {
     return;
   }
 
-  // Expire open offers before settlement (§5.8, §6.4).
-  await db.offer.updateMany({
-    where: {
-      listing: { roundId: round.id },
-      status: { in: ["OPEN", "COUNTERED"] },
-    },
-    data: { status: "EXPIRED" },
-  });
-  await db.wholesaleOffer.updateMany({
-    where: { roundId: round.id, status: { in: ["OPEN", "COUNTERED"] } },
-    data: { status: "EXPIRED" },
-  });
-
   const retail = round.transactions.filter(
     (t) => t.status === "COMPLETED" && RETAIL_CHANNELS.includes(t.channel as never),
   );
@@ -56,27 +44,9 @@ export async function settleRound(sessionId: string, n: number): Promise<void> {
     .filter((r) => r.role === "CONSUMER")
     .reduce((sum, r) => sum + (r.state as unknown as ConsumerRoundState).needTarget, 0);
 
-  // Return unsold listed units to their lots, then close listings (§5.8).
-  for (const listing of round.listings) {
-    if (
-      (listing.status === "OPEN" || listing.status === "PARTIALLY_FILLED") &&
-      listing.availableQuantity > 0
-    ) {
-      await db.inventoryLot.update({
-        where: { id: listing.inventoryLotId },
-        data: {
-          availableQuantity: { increment: listing.availableQuantity },
-          status: "AVAILABLE",
-        },
-      });
-    }
-    await db.listing.update({
-      where: { id: listing.id },
-      data: { status: "EXPIRED", availableQuantity: 0 },
-    });
-  }
-
-  // Mark unsold inventory AT_RISK, then spoil or carry (§5.8).
+  // Unsold inventory still tied up in listings, wholesale reservations, or
+  // never listed at all — fetched once and reasoned about entirely in memory
+  // before any writes go out (§5.8).
   const unsold = await db.inventoryLot.findMany({
     where: {
       sessionId,
@@ -84,75 +54,125 @@ export async function settleRound(sessionId: string, n: number): Promise<void> {
       status: { in: ["AVAILABLE", "RESERVED_LISTING", "RESERVED_WHOLESALE"] },
     },
   });
-  for (const lot of unsold) {
-    await db.inventoryLot.update({
-      where: { id: lot.id },
-      data: { status: "AT_RISK" },
-    });
-  }
 
-  const atRisk = await db.inventoryLot.findMany({
-    where: {
-      sessionId,
-      availableQuantity: { gt: 0 },
-      status: "AT_RISK",
-    },
-  });
+  const ownerIds = [...new Set(unsold.map((lot) => lot.ownerParticipantId))];
+  const owners = ownerIds.length
+    ? await db.participant.findMany({
+        where: { id: { in: ownerIds } },
+        select: { id: true, role: true },
+      })
+    : [];
+  const ownerRoleById = new Map(owners.map((o) => [o.id, o.role]));
+
+  const carriedLotIds: string[] = [];
+  const spoiledLotIds: string[] = [];
+  const spoiledByOwner = new Map<string, number>();
   let spoiledQuantity = 0;
-  for (const lot of atRisk) {
+
+  for (const lot of unsold) {
     if (lot.protectionState === "PROTECTED") {
-      await db.inventoryLot.update({
-        where: { id: lot.id },
-        data: { status: "CARRIED", protectionState: "NONE" },
-      });
-    } else {
-      spoiledQuantity += lot.availableQuantity;
-      await db.inventoryLot.update({
-        where: { id: lot.id },
-        data: { status: "SPOILED" },
-      });
-      const owner = await db.participant.findUnique({
-        where: { id: lot.ownerParticipantId },
-      });
-      if (owner?.role === "INTERMEDIARY") {
-        const irs = await db.roleState.findFirst({
-          where: { participantId: lot.ownerParticipantId, roundId: round.id },
-        });
-        if (irs) {
-          const istate = irs.state as unknown as IntermediaryRoundState;
-          await db.roleState.update({
-            where: { id: irs.id },
-            data: {
-              state: {
-                ...istate,
-                spoiledQuantity: (istate.spoiledQuantity ?? 0) + lot.availableQuantity,
-              } as never,
-            },
-          });
-        }
-      }
+      carriedLotIds.push(lot.id);
+      continue;
+    }
+    spoiledLotIds.push(lot.id);
+    spoiledQuantity += lot.availableQuantity;
+    if (ownerRoleById.get(lot.ownerParticipantId) === "INTERMEDIARY") {
+      spoiledByOwner.set(
+        lot.ownerParticipantId,
+        (spoiledByOwner.get(lot.ownerParticipantId) ?? 0) + lot.availableQuantity,
+      );
     }
   }
 
-  await db.marketSnapshot.create({
-    data: {
-      roundId: round.id,
-      stateVersion: 0,
-      supplyQuantity,
-      demandQuantity,
-      retailSoldQuantity,
-      wholesaleQuantity,
-      spoiledQuantity,
-      unitValueVnd: round.unitValueVnd ?? unitValueVnd(n),
-      marketPriceNumeratorVndUnits: price.numeratorVndUnits,
-      marketPriceDenominatorUnits: price.denominatorUnits,
-      marketPriceVnd: price.marketPriceVnd,
-      isFinal: true,
-    },
-  });
+  const intermediaryRoleStates = spoiledByOwner.size
+    ? await db.roleState.findMany({
+        where: { participantId: { in: [...spoiledByOwner.keys()] }, roundId: round.id },
+      })
+    : [];
 
-  await db.round.update({
-    where: { id: round.id },
-    data: { settledAt: new Date(), phase: "SETTLEMENT" },
-  });
+  // Return unsold listed units to their lots (per-lot increments differ, so
+  // each stays a separate update — but all are queued, not awaited, until
+  // the closing transaction below).
+  const returningListings = round.listings.filter(
+    (l) => (l.status === "OPEN" || l.status === "PARTIALLY_FILLED") && l.availableQuantity > 0,
+  );
+
+  const writes: Prisma.PrismaPromise<unknown>[] = [
+    db.offer.updateMany({
+      where: { listing: { roundId: round.id }, status: { in: ["OPEN", "COUNTERED"] } },
+      data: { status: "EXPIRED" },
+    }),
+    db.wholesaleOffer.updateMany({
+      where: { roundId: round.id, status: { in: ["OPEN", "COUNTERED"] } },
+      data: { status: "EXPIRED" },
+    }),
+    ...returningListings.map((listing) =>
+      db.inventoryLot.update({
+        where: { id: listing.inventoryLotId },
+        data: { availableQuantity: { increment: listing.availableQuantity }, status: "AVAILABLE" },
+      }),
+    ),
+  ];
+
+  if (round.listings.length > 0) {
+    writes.push(
+      db.listing.updateMany({
+        where: { id: { in: round.listings.map((l) => l.id) } },
+        data: { status: "EXPIRED", availableQuantity: 0 },
+      }),
+    );
+  }
+  if (carriedLotIds.length > 0) {
+    writes.push(
+      db.inventoryLot.updateMany({
+        where: { id: { in: carriedLotIds } },
+        data: { status: "CARRIED", protectionState: "NONE" },
+      }),
+    );
+  }
+  if (spoiledLotIds.length > 0) {
+    writes.push(
+      db.inventoryLot.updateMany({
+        where: { id: { in: spoiledLotIds } },
+        data: { status: "SPOILED" },
+      }),
+    );
+  }
+  for (const irs of intermediaryRoleStates) {
+    const istate = irs.state as unknown as IntermediaryRoundState;
+    const delta = spoiledByOwner.get(irs.participantId) ?? 0;
+    writes.push(
+      db.roleState.update({
+        where: { id: irs.id },
+        data: {
+          state: { ...istate, spoiledQuantity: (istate.spoiledQuantity ?? 0) + delta } as never,
+        },
+      }),
+    );
+  }
+
+  writes.push(
+    db.marketSnapshot.create({
+      data: {
+        roundId: round.id,
+        stateVersion: 0,
+        supplyQuantity,
+        demandQuantity,
+        retailSoldQuantity,
+        wholesaleQuantity,
+        spoiledQuantity,
+        unitValueVnd: round.unitValueVnd ?? unitValueVnd(n),
+        marketPriceNumeratorVndUnits: price.numeratorVndUnits,
+        marketPriceDenominatorUnits: price.denominatorUnits,
+        marketPriceVnd: price.marketPriceVnd,
+        isFinal: true,
+      },
+    }),
+    db.round.update({
+      where: { id: round.id },
+      data: { settledAt: new Date(), phase: "SETTLEMENT" },
+    }),
+  );
+
+  await db.$transaction(writes);
 }

@@ -1,45 +1,14 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Landmark, Link2, ShoppingCart, Sprout } from "lucide-react";
+import { Bot } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Stepper } from "@/components/ui/stepper";
-import { CreateRoomSummary } from "@/components/create-room/create-room-summary";
-import { CreateRoomStepper } from "@/components/create-room/create-room-stepper";
 import type { CreateSessionInput } from "@/lib/create-session-schema";
-import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { apiFetch, ApiClientError } from "@/hooks/use-api";
-import { getRoleGoalSummary } from "@/lib/role-tutorial";
 import { cn } from "@/lib/utils";
-
-const ROLE_PREVIEW = [
-  {
-    role: "PRODUCER" as const,
-    icon: Sprout,
-    className: "border-success/20 bg-success/5",
-    iconClassName: "bg-success/15 text-success",
-  },
-  {
-    role: "CONSUMER" as const,
-    icon: ShoppingCart,
-    className: "border-primary/20 bg-primary/5",
-    iconClassName: "bg-primary/10 text-primary",
-  },
-  {
-    role: "INTERMEDIARY" as const,
-    icon: Link2,
-    className: "border-violet-200 bg-violet-50/70",
-    iconClassName: "bg-violet-600/10 text-violet-700",
-  },
-  {
-    role: "GOVERNMENT" as const,
-    icon: Landmark,
-    className: "border-amber-200 bg-amber-50/80",
-    iconClassName: "bg-amber-700/10 text-amber-800",
-  },
-];
 
 const DEFAULT_CONFIG: CreateSessionInput = {
   totalRounds: 4,
@@ -48,48 +17,6 @@ const DEFAULT_CONFIG: CreateSessionInput = {
   guidanceEnabled: true,
   autoHost: true,
 };
-
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  const id = useId();
-
-  return (
-    <div className="flex items-start justify-between gap-4 py-3">
-      <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
-        <span className="block text-sm font-semibold">{label}</span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
-      </label>
-      <button
-        id={id}
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-muted",
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            "absolute top-0.5 left-0.5 size-5 rounded-full bg-surface shadow transition-transform duration-200",
-            checked ? "translate-x-5" : "translate-x-0",
-          )}
-        />
-      </button>
-    </div>
-  );
-}
 
 export function CreateRoomConfigStep() {
   const router = useRouter();
@@ -105,7 +32,7 @@ export function CreateRoomConfigStep() {
         method: "POST",
         body: JSON.stringify(config),
       });
-      router.push(`/home/create/${created.id}`);
+      router.push(`/host/session/${created.id}`);
     } catch (e) {
       if (e instanceof ApiClientError && e.code === "HOST_SESSION_LIMIT") {
         setError(
@@ -121,9 +48,8 @@ export function CreateRoomConfigStep() {
 
   return (
     <div className="w-full">
-      <CreateRoomStepper step={1} />
-      <div className="mt-7 grid gap-4 lg:grid-cols-[1fr_1.1fr_0.9fr]">
-        <Card className="p-5">
+      <div className="flex justify-center">
+        <Card className="w-full max-w-md p-5">
           <h2 className="text-base font-semibold tracking-tight">Cài đặt phiên chơi</h2>
           <div className="mt-5 space-y-5">
             <div>
@@ -160,80 +86,16 @@ export function CreateRoomConfigStep() {
               </div>
             </div>
 
-            <ToggleRow
-              label="Phân vai tự động"
-              description="Hệ thống tự phân vai khi đủ số người"
-              checked={config.autoAssignRoles}
-              onChange={(autoAssignRoles) => setConfig((c) => ({ ...c, autoAssignRoles }))}
-            />
-            <ToggleRow
-              label="Hiển thị lý thuyết"
-              description="Panel giải thích kinh tế học khi chơi"
-              checked={config.guidanceEnabled}
-              onChange={(guidanceEnabled) => setConfig((c) => ({ ...c, guidanceEnabled }))}
-            />
-          </div>
-        </Card>
-
-        <div className="flex flex-col gap-4">
-          <CreateRoomSummary config={config} />
-          <Card className="border-dashed bg-muted/20 p-5">
-            <div className="flex gap-3">
-              <BookOpen className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Mục tiêu học tập
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Học sinh hiểu giá trị chuẩn, giá thị trường và cách cung–cầu tác
-                  động tới giá cả qua {config.totalRounds} vòng mô phỏng.
-                </p>
-              </div>
+            <div className="flex items-start gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-3 py-2.5">
+              <Bot className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Bot sẽ tự động lấp đầy các vị trí người chơi còn trống.
+              </p>
             </div>
-          </Card>
-        </div>
+          </div>
 
-        <Card className="flex flex-col p-5">
-          <h3 className="text-base font-semibold tracking-tight">Vai trò sẽ được phân</h3>
-          <ul className="mt-4 flex flex-1 flex-col gap-2">
-            {ROLE_PREVIEW.map(({ role, icon: Icon, className, iconClassName }) => {
-              const goal = getRoleGoalSummary(role);
-
-              return (
-                <li
-                  key={role}
-                  className={cn(
-                    "flex items-start gap-2.5 rounded-xl border px-3 py-2.5",
-                    className,
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                      iconClassName,
-                    )}
-                  >
-                    <Icon className="size-4" aria-hidden />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-sm font-semibold text-foreground">
-                        {ROLE_LABELS[role]}
-                      </span>
-                      <span className="rounded-full bg-surface/80 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        {goal.metricLabel}
-                      </span>
-                    </span>
-                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                      Thắng bằng {goal.shortWinText}
-                    </span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <Button size="lg" className="mt-5 w-full" disabled={pending} onClick={submit}>
-            {pending ? "Đang tạo…" : "Tiếp tục →"}
+          <Button size="lg" className="mt-6 w-full" disabled={pending} onClick={submit}>
+            {pending ? "Đang tạo…" : "Tạo phòng"}
           </Button>
           {error ? <p className="mt-2 text-center text-sm text-danger">{error}</p> : null}
         </Card>

@@ -20,7 +20,7 @@ function zoneHref(sessionId: string, screen: GameScreen, role: Role | null): str
       z.screen === screen &&
       (screen === "map" || screen === "observatory" ? z.role === "ALL" : z.role === role),
   );
-  return zone?.href(sessionId) ?? `/session/${sessionId}/map`;
+  return zone?.href(sessionId) ?? `/session/${sessionId}/game`;
 }
 
 /** Nội dung khu chưa «mở» trong giai đoạn hiện tại — copy khớp HUD bên phải. */

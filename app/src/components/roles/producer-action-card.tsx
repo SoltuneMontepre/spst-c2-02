@@ -32,7 +32,7 @@ export function ProducerActionCard({
   return (
     <section
       className={cn(
-        "flex min-h-[256.5px] w-full flex-col rounded-[14px] border border-border bg-surface p-[18.5px] shadow-sm sm:w-[277px]",
+        "flex min-h-[256.5px] w-full flex-col rounded-[14px] border border-border bg-surface p-[18.5px] shadow-sm",
         className,
       )}
     >

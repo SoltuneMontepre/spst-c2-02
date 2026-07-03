@@ -27,7 +27,7 @@ export const GAME_ZONES: GameZoneDef[] = [
     hint: "Xem toàn cảnh & chọn khu",
     icon: Map,
     role: "ALL",
-    href: (id) => `/session/${id}/map`,
+    href: (id) => `/session/${id}/game`,
   },
   {
     screen: "observatory",

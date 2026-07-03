@@ -13,10 +13,13 @@ const SELLER_LABELS: Record<string, string> = {
 export function MarketListingCard({
   listing,
   unitValueVnd,
+  pendingOfferVnd,
   onClick,
 }: {
   listing: ListingView;
   unitValueVnd?: number | null;
+  /** Price of this consumer's own pending (awaiting response) offer on this listing, if any. */
+  pendingOfferVnd?: number | null;
   onClick?: () => void;
 }) {
   const delta =
@@ -30,6 +33,11 @@ export function MarketListingCard({
       onClick={onClick}
       className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface p-4 shadow-sm text-left hover:border-primary/30 transition-colors w-full"
     >
+      {pendingOfferVnd != null ? (
+        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800">
+          Đã trả giá {(pendingOfferVnd / 1000).toFixed(0)}k Đ · đang chờ phản hồi
+        </span>
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-sm">{listing.sellerName}</p>

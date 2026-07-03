@@ -16,6 +16,7 @@ import {
 } from "./market-listing-card";
 import { MarketTransactionDialog } from "./market-transaction-dialog";
 import { OffersPanel } from "./offers-panel";
+import { IncomingOfferPopup } from "./incoming-offer-popup";
 import { formatThousandDong } from "@/lib/money";
 import type { ConsumerRoundState } from "@/lib/role-state";
 import type { ListingView } from "@/lib/session-service";
@@ -63,12 +64,15 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
       <MarketplaceFilters value={filter} onChange={setFilter} />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {listings.map((l) => {
-          const affordable = (data.self?.balanceVnd ?? 0) >= l.askPriceVnd;
+          const pendingOffer = data.self?.outgoingOffers.find(
+            (o) => o.listingId === l.id,
+          );
           return (
             <MarketListingCard
               key={l.id}
               listing={l}
               unitValueVnd={unitValue}
+              pendingOfferVnd={pendingOffer?.offerPriceVnd}
               onClick={() => setSelectedListing(l)}
             />
           );
@@ -148,9 +152,18 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
             stateVersion={data.stateVersion}
             incoming={data.self.incomingOffers}
             outgoing={data.self.outgoingOffers}
+            canCounter={false}
           />
         ) : null}
       </ZonePhaseGate>
+
+      {open ? (
+        <IncomingOfferPopup
+          sessionId={sessionId}
+          stateVersion={data.stateVersion}
+          offers={data.self.incomingOffers}
+        />
+      ) : null}
 
       {selectedListing ? (
         <MarketTransactionDialog

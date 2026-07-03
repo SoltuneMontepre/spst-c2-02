@@ -35,23 +35,49 @@ export async function finalizeSession(sessionId: string): Promise<void> {
   });
   const completed = session.status === "COMPLETED";
 
-  const txs = await db.transaction.findMany({
-    where: { sessionId, status: "COMPLETED" },
-  });
+  const [txs, snapshots, policyActions] = await Promise.all([
+    db.transaction.findMany({
+      where: { sessionId, status: "COMPLETED" },
+    }),
+    db.marketSnapshot.findMany({
+      where: { isFinal: true, round: { sessionId } },
+      include: { round: { select: { number: true } } },
+      orderBy: { round: { number: "asc" } },
+    }),
+    db.policyAction.findMany({
+      where: { status: "APPLIED", round: { sessionId } },
+      select: { fixedCostVnd: true, variableCostVnd: true },
+    }),
+  ]);
   const retailTxs = txs.filter((t) => RETAIL.includes(t.channel));
-  const snapshots = await db.marketSnapshot.findMany({
-    where: { isFinal: true, round: { sessionId } },
-    include: { round: { select: { number: true } } },
-    orderBy: { round: { number: "asc" } },
-  });
   const spoiledTotal = snapshots.reduce((s, r) => s + r.spoiledQuantity, 0);
   const completedRetailQuantity = retailTxs.reduce((s, t) => s + t.quantity, 0);
+  // Policy spend from applied PolicyAction rows — not roleState counters.
+  const policySpendVnd = policyActions.reduce(
+    (s, p) => s + p.fixedCostVnd + p.variableCostVnd,
+    0,
+  );
+
+  // Per-consumer, per-round retail purchases derived from the transaction log —
+  // the single source of truth for money and quantities (§5.9). Live roleState
+  // counters (fulfilledUnits/retailSpendingVnd) exist only for in-round UI and
+  // are intentionally NOT trusted here.
+  const consumerBuysByRound = new Map<string, Map<string, { qty: number; spendVnd: number }>>();
+  for (const t of retailTxs) {
+    if (t.buyerType !== "CONSUMER" || !t.buyerId) continue;
+    const byRound = consumerBuysByRound.get(t.buyerId) ?? new Map<string, { qty: number; spendVnd: number }>();
+    const cur = byRound.get(t.roundId) ?? { qty: 0, spendVnd: 0 };
+    cur.qty += t.quantity;
+    cur.spendVnd += t.totalPriceVnd;
+    byRound.set(t.roundId, cur);
+    consumerBuysByRound.set(t.buyerId, byRound);
+  }
 
   const outcomes: ParticipantOutcome[] = [];
   let totalNeed = 0;
   let totalFulfilled = 0;
   let insolventProducers = 0;
-  let policySpendVnd = 0;
+  const governmentParticipants = [] as typeof session.participants;
 
   for (const p of session.participants) {
     if (!p.role) continue;
@@ -61,13 +87,22 @@ export async function finalizeSession(sessionId: string): Promise<void> {
       if (balance <= 0) insolventProducers++;
       outcomes.push(base(p, producerProfitVnd(balance)));
     } else if (p.role === "CONSUMER") {
-      const consumerStates = p.roleStates.map((r) => r.state as unknown as ConsumerRoundState);
-      const fulfilled = consumerStates.reduce((s, c) => s + (c?.fulfilledUnits ?? 0), 0);
-      const need = consumerStates.reduce((s, c) => s + (c?.needTarget ?? 0), 0);
-      const spending = consumerStates.reduce((s, c) => s + (c?.retailSpendingVnd ?? 0), 0);
-      const bought = retailTxs
-        .filter((t) => t.buyerId === p.id)
-        .reduce((s, t) => s + t.quantity, 0);
+      // needTarget is set at round start and never mutated, so it stays the
+      // per-round demand cap; fulfillment/spend come from transactions.
+      const byRound = consumerBuysByRound.get(p.id) ?? new Map<string, { qty: number; spendVnd: number }>();
+      let need = 0;
+      let fulfilled = 0;
+      let spending = 0;
+      let bought = 0;
+      for (const rs of p.roleStates) {
+        const cs = rs.state as unknown as ConsumerRoundState;
+        const roundNeed = cs?.needTarget ?? 0;
+        const buy = byRound.get(rs.roundId) ?? { qty: 0, spendVnd: 0 };
+        need += roundNeed;
+        fulfilled += Math.min(buy.qty, roundNeed);
+        bought += buy.qty;
+        spending += buy.spendVnd;
+      }
       totalNeed += need;
       totalFulfilled += fulfilled;
       outcomes.push({
@@ -79,31 +114,25 @@ export async function finalizeSession(sessionId: string): Promise<void> {
     } else if (p.role === "INTERMEDIARY") {
       outcomes.push(base(p, intermediaryProfitVnd(balance)));
     } else {
-      const govStates = p.roleStates.map((r) => r.state as unknown as { policySpendVnd?: number });
-      policySpendVnd = govStates.reduce((s, g) => s + (g?.policySpendVnd ?? 0), 0);
-      const score = socialScore({
-        completedRetailQuantity,
-        consumerFulfillmentRate: 0,
-        spoiledQuantity: spoiledTotal,
-        insolventProducerCount: insolventProducers,
-        policySpendVnd,
-      });
-      outcomes.push(base(p, score));
+      // GOVERNMENT — social score needs the full fulfillment total, so defer.
+      governmentParticipants.push(p);
     }
   }
 
-  // Recompute government score now that fulfillment totals are known.
   const fulfillmentRate = totalNeed > 0 ? Math.min(1, totalFulfilled / totalNeed) : 0;
-  for (const o of outcomes) {
-    if (o.role === "GOVERNMENT") {
-      o.scoreVnd = socialScore({
-        completedRetailQuantity,
-        consumerFulfillmentRate: fulfillmentRate,
-        spoiledQuantity: spoiledTotal,
-        insolventProducerCount: insolventProducers,
-        policySpendVnd,
-      });
-    }
+  for (const p of governmentParticipants) {
+    outcomes.push(
+      base(
+        p,
+        socialScore({
+          completedRetailQuantity,
+          consumerFulfillmentRate: fulfillmentRate,
+          spoiledQuantity: spoiledTotal,
+          insolventProducerCount: insolventProducers,
+          policySpendVnd,
+        }),
+      ),
+    );
   }
 
   const badges = completed ? await computeBadges(outcomes, sessionId) : [];

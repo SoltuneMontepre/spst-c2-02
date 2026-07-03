@@ -9,11 +9,9 @@ import {
 import {
   buildPlayerEntries,
   buildRoleSummaries,
-  getIntroTimelineHint,
   getPhaseSteps,
   isInGameTimelineStatus,
 } from "@/lib/phase-timeline";
-import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { cn } from "@/lib/utils";
 
@@ -115,61 +113,69 @@ function PhaseStepper({
   );
 }
 
-function MapRoleActivityRow({
-  summaries,
+/** Compact horizontal timeline for the game top bar. */
+export function CompactPhaseTimeline({
+  phase,
+  currentRound,
+  totalRounds,
 }: {
-  summaries: ReturnType<typeof buildRoleSummaries>;
+  phase: string | null;
+  currentRound: number;
+  totalRounds: number;
 }) {
-  if (summaries.length === 0) return null;
+  const steps = getPhaseSteps(phase);
 
   return (
-    <div className="mt-3 border-t border-stone-200/70 pt-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-        Vai đang làm gì
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {summaries.map((summary) => {
-          const style = DUTY_STATUS_STYLES[summary.status];
-
+    <div
+      className="flex min-w-0 max-w-full items-center gap-2.5"
+      aria-label={`Vòng ${currentRound}/${totalRounds}`}
+    >
+      <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary">
+        Vòng {currentRound}/{totalRounds}
+      </span>
+      <ol className="flex min-w-0 items-center gap-0.5 overflow-hidden">
+        {steps.map((step, i) => {
+          const isCurrent = step.state === "current";
+          const isDone = step.state === "done";
           return (
-            <div
-              key={summary.role}
-              className={cn(
-                "flex min-w-[9.75rem] items-center gap-2 rounded-[10.5px] border bg-white/75 px-2.5 py-2",
-                summary.status === "active" && "border-[#c94a2d]/25 bg-[#c94a2d]/10",
-                summary.status === "done" && "border-emerald-200 bg-emerald-50/75",
-                summary.status === "waiting" && "border-stone-200/80",
-              )}
-              title={`${ROLE_SHORT_LABELS[summary.role]}: ${summary.activityLabel}`}
-              aria-label={`${ROLE_SHORT_LABELS[summary.role]}: ${summary.activityLabel}`}
-            >
-              <span className={cn("size-2 shrink-0 rounded-full", style.dot)} aria-hidden />
-              <span className="min-w-0 flex-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-[11px] font-bold text-stone-900">
-                    {ROLE_SHORT_LABELS[summary.role]}
-                  </span>
-                  {summary.count > 1 ? (
-                    <span className="shrink-0 text-[10px] font-semibold text-stone-500">
-                      x{summary.count}
-                    </span>
-                  ) : null}
-                </span>
+            <li key={step.key} className="flex min-w-0 items-center gap-0.5">
+              {i > 0 ? (
                 <span
                   className={cn(
-                    "block truncate text-[10px] font-semibold",
-                    summary.status === "active" && "text-[#c94a2d]",
-                    summary.status === "done" && "text-emerald-700",
-                    summary.status === "waiting" && "text-stone-600",
+                    "h-px w-2 shrink-0 sm:w-3",
+                    isDone || isCurrent ? "bg-primary/50" : "bg-border",
+                  )}
+                  aria-hidden
+                />
+              ) : null}
+              <span
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-[11px]",
+                  isCurrent && "bg-primary text-primary-foreground",
+                  isDone && "bg-success/15 text-success",
+                  !isCurrent && !isDone && "text-muted-foreground",
+                )}
+                aria-current={isCurrent ? "step" : undefined}
+                title={step.label}
+              >
+                {isDone ? (
+                  <Check className="size-3 shrink-0" aria-hidden />
+                ) : isCurrent ? (
+                  <Circle className="size-2.5 shrink-0 fill-current" aria-hidden />
+                ) : null}
+                <span
+                  className={cn(
+                    "truncate",
+                    !isCurrent && !isDone && "hidden sm:inline",
                   )}
                 >
-                  {summary.activityLabel}
+                  {step.label}
                 </span>
               </span>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }
@@ -179,6 +185,7 @@ export type GamePhaseStepperStripData = Pick<
   | "status"
   | "phase"
   | "currentRound"
+  | "totalRounds"
   | "self"
   | "market"
   | "autoHost"
@@ -194,39 +201,31 @@ export function GamePhaseStepperStrip({
 }) {
   if (!isInGameTimelineStatus(data.status)) return null;
 
-  const isIntro = data.status === "INTRO";
-  const introHint = isIntro ? getIntroTimelineHint(data) : null;
   const isMap = variant === "map";
-  const mapRoleSummaries = isMap && !isIntro ? buildRoleSummaries(data) : [];
 
   const content = (
     <>
-      <p
-        className={cn(
-          "text-[11px] font-semibold uppercase tracking-wider",
-          isMap ? "text-stone-500" : "text-muted-foreground",
-        )}
-      >
-        Timeline phiên
-      </p>
-      {isIntro && introHint ? (
-        <div className="mt-2">
-          <p className="text-sm font-semibold text-stone-900">{introHint.title}</p>
-          <p
-            className={cn(
-              "mt-0.5 text-xs",
-              isMap ? "text-stone-600" : "text-muted-foreground",
-            )}
-          >
-            {introHint.body}
-          </p>
-        </div>
-      ) : (
-        <div className="-mx-2 mt-3 overflow-x-auto px-2 pb-1">
-          <PhaseStepper phase={data.phase} variant={variant} />
-        </div>
-      )}
-      {isMap && !isIntro ? <MapRoleActivityRow summaries={mapRoleSummaries} /> : null}
+      <div className="flex items-center justify-between gap-2">
+        <p
+          className={cn(
+            "text-[11px] font-semibold uppercase tracking-wider",
+            isMap ? "text-stone-500" : "text-muted-foreground",
+          )}
+        >
+          Timeline phiên
+        </p>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
+            isMap ? "bg-primary/10 text-primary" : "bg-secondary text-primary",
+          )}
+        >
+          Vòng {data.currentRound}/{data.totalRounds}
+        </span>
+      </div>
+      <div className="-mx-2 mt-3 overflow-x-auto px-2 pb-1">
+        <PhaseStepper phase={data.phase} variant={variant} />
+      </div>
     </>
   );
 
@@ -315,16 +314,7 @@ function PlayerChipRow({
 export function GamePhaseTimeline({
   data,
 }: {
-  data: Pick<
-    SessionSnapshot,
-    | "status"
-    | "phase"
-    | "currentRound"
-    | "self"
-    | "market"
-    | "autoHost"
-    | "participants"
-  >;
+  data: GamePhaseStepperStripData;
 }) {
   if (!isInGameTimelineStatus(data.status)) return null;
 

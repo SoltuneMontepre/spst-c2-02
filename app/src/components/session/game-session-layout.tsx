@@ -5,6 +5,7 @@ import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionStream } from "@/hooks/use-session-stream";
 import { GameSidebar, GameMobileNav, type GameNavItem } from "@/components/session/game-sidebar";
 import { GameTopBar } from "@/components/session/game-top-bar";
+import { EventAnnouncementModal } from "@/components/session/event-announcement-modal";
 import { SessionGuidanceScope } from "@/components/learning/session-guidance-scope";
 import type { GameScreen } from "@/lib/game-zones";
 import { cn } from "@/lib/utils";
@@ -41,35 +42,53 @@ export function GameSessionLayout({
   const navItem: GameNavItem =
     activeZone === "debrief" ? "debrief" : navFromZone(activeZone, data.phase);
 
-  const isFocused = variant === "focused" || variant === "map";
+  const isMap = variant === "map";
+  const isFocused = variant === "focused" || isMap;
 
   return (
     <SessionGuidanceScope guidanceEnabled={data.guidanceEnabled}>
-      <div className="flex min-h-screen flex-col bg-background">
-        <div className="flex min-h-0 flex-1">
-          <GameSidebar
-            sessionId={sessionId}
-            active={navItem}
-            role={data.self?.role ?? null}
-            status={data.status}
-            phase={data.phase}
-            isHost={data.isHost}
-            sessionStatus={data.status}
-          />
+      <div
+        className={cn(
+          "flex flex-col bg-background",
+          isMap ? "h-dvh max-h-dvh overflow-hidden" : "min-h-screen",
+        )}
+      >
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {!isMap ? (
+            <GameSidebar
+              sessionId={sessionId}
+              active={navItem}
+              role={data.self?.role ?? null}
+              status={data.status}
+              phase={data.phase}
+              isHost={data.isHost}
+              sessionStatus={data.status}
+            />
+          ) : null}
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <GameTopBar
               data={data}
               streamState={streamState}
+              sessionId={sessionId}
+              variant={isMap ? "map" : "default"}
+              isHost={data.isHost}
             />
 
-            <div className="flex min-h-0 flex-1 overflow-auto pb-20 lg:pb-6">
+            <div
+              className={cn(
+                "flex min-h-0 flex-1",
+                isMap ? "overflow-hidden" : "overflow-auto pb-20 lg:pb-6",
+              )}
+            >
               <main
                 className={cn(
                   "min-w-0 flex-1",
-                  isFocused
-                    ? "flex flex-col gap-3.5 bg-[#f7f4ef] p-[17.5px]"
-                    : "p-4 sm:p-6",
+                  isMap
+                    ? "flex min-h-0 flex-col overflow-hidden bg-[#f7f4ef]"
+                    : isFocused
+                      ? "flex flex-col gap-3.5 bg-[#f7f4ef] p-[17.5px]"
+                      : "p-4 sm:p-6",
                 )}
               >
                 {!isFocused && title ? (
@@ -87,7 +106,7 @@ export function GameSessionLayout({
                 {children}
               </main>
 
-              {rightPanel ? (
+              {!isMap && rightPanel ? (
                 <aside
                   className={cn(
                     "hidden shrink-0 flex-col lg:flex",
@@ -103,12 +122,18 @@ export function GameSessionLayout({
           </div>
         </div>
 
-        <GameMobileNav
-          sessionId={sessionId}
-          active={navItem}
-          role={data.self?.role ?? null}
-        />
+        {!isMap ? (
+          <GameMobileNav
+            sessionId={sessionId}
+            active={navItem}
+            role={data.self?.role ?? null}
+          />
+        ) : null}
       </div>
+
+      {data.phase === "EVENT" ? (
+        <EventAnnouncementModal key={`event-${data.currentRound}`} round={data.currentRound} />
+      ) : null}
     </SessionGuidanceScope>
   );
 }

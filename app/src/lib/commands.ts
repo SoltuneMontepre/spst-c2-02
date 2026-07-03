@@ -6,6 +6,7 @@ import type { Prisma, Participant, GameSession } from "@/generated/prisma/client
 import { db } from "./db";
 import { ApiError } from "./api";
 import { publish } from "./events";
+import { withSessionLock } from "./session-lock";
 
 export type Tx = Prisma.TransactionClient;
 
@@ -18,6 +19,7 @@ export interface RunCommandArgs<T> {
   userId: string;
   sessionId: string;
   clientActionId: string;
+  /** @deprecated Ignored — bot traffic constantly bumps stateVersion. */
   expectedStateVersion?: number;
   payload: unknown;
   eventType: string;
@@ -29,70 +31,83 @@ export function hashPayload(payload: unknown): string {
 }
 
 /** Resolve the human participant, run the handler atomically with idempotency,
- *  then bump stateVersion and broadcast. */
+ *  then bump stateVersion and broadcast.
+ *
+ *  Commands always read the latest session/wallet/role state inside the
+ *  transaction. We intentionally do NOT reject on a stale client stateVersion —
+ *  bots and other players bump it constantly, which is unrelated to whether
+ *  *this* player's produce/buy/list is still valid.
+ */
 export async function runCommand<T>(args: RunCommandArgs<T>): Promise<T> {
   const participant = await db.participant.findFirst({
     where: { sessionId: args.sessionId, userId: args.userId, isBot: false },
   });
   if (!participant) throw new ApiError("FORBIDDEN", 403);
 
-  const session = await db.gameSession.findUniqueOrThrow({
-    where: { id: args.sessionId },
-  });
-  if (
-    args.expectedStateVersion !== undefined &&
-    args.expectedStateVersion !== session.stateVersion
-  ) {
-    throw new ApiError("STALE_STATE", 409);
-  }
   if (participant.controlMode === "READ_ONLY_DUPLICATE_TAB") {
     throw new ApiError("READ_ONLY_TAB", 403);
   }
   const requestHash = hashPayload({ action: args.eventType, payload: args.payload });
 
-  try {
-    const result = await db.$transaction(async (tx) => {
-      await tx.idempotencyRecord.create({
-        data: {
-          participantId: participant.id,
-          sessionId: args.sessionId,
-          clientActionId: args.clientActionId,
-          requestHash,
-        },
-      });
-      const out = await args.handler(tx, { participant, session });
-      await tx.idempotencyRecord.update({
-        where: {
-          participantId_clientActionId: {
+  // Serialize every mutation for this session so concurrent human commands and
+  // bot batches can never interleave and race on wallet/inventory/state.
+  return withSessionLock(args.sessionId, async () => {
+    try {
+      const result = await db.$transaction(async (tx) => {
+        await tx.idempotencyRecord.create({
+          data: {
             participantId: participant.id,
+            sessionId: args.sessionId,
             clientActionId: args.clientActionId,
+            requestHash,
           },
-        },
-        data: { response: (out ?? {}) as Prisma.InputJsonValue },
-      });
-      return out;
-    });
+        });
 
-    await bumpAndPublish(args.sessionId, args.eventType, result);
-    return result;
-  } catch (err) {
-    // Duplicate clientActionId → return the original response (TECH-IDEMPOTENCY).
-    if ((err as { code?: string }).code === "P2002") {
-      const prior = await db.idempotencyRecord.findUnique({
-        where: {
-          participantId_clientActionId: {
-            participantId: participant.id,
-            clientActionId: args.clientActionId,
+        // Fresh session row — phase/round/pause as of commit time.
+        const session = await tx.gameSession.findUniqueOrThrow({
+          where: { id: args.sessionId },
+        });
+        const liveParticipant = await tx.participant.findUniqueOrThrow({
+          where: { id: participant.id },
+        });
+
+        const out = await args.handler(tx, {
+          participant: liveParticipant,
+          session,
+        });
+        await tx.idempotencyRecord.update({
+          where: {
+            participantId_clientActionId: {
+              participantId: participant.id,
+              clientActionId: args.clientActionId,
+            },
           },
-        },
+          data: { response: (out ?? {}) as Prisma.InputJsonValue },
+        });
+        return out;
       });
-      if (prior && prior.requestHash !== requestHash) {
-        throw new ApiError("IDEMPOTENCY_CONFLICT", 409);
+
+      await bumpAndPublish(args.sessionId, args.eventType, result);
+      return result;
+    } catch (err) {
+      // Duplicate clientActionId → return the original response (TECH-IDEMPOTENCY).
+      if ((err as { code?: string }).code === "P2002") {
+        const prior = await db.idempotencyRecord.findUnique({
+          where: {
+            participantId_clientActionId: {
+              participantId: participant.id,
+              clientActionId: args.clientActionId,
+            },
+          },
+        });
+        if (prior && prior.requestHash !== requestHash) {
+          throw new ApiError("IDEMPOTENCY_CONFLICT", 409);
+        }
+        return (prior?.response ?? {}) as T;
       }
-      return (prior?.response ?? {}) as T;
+      throw err;
     }
-    throw err;
-  }
+  });
 }
 
 async function bumpAndPublish(
@@ -105,5 +120,8 @@ async function bumpAndPublish(
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
+  await import("./session-service")
+    .then((m) => m.refreshLiveRoom(sessionId))
+    .catch((e) => console.error("live-room refresh:", e));
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }

@@ -28,6 +28,18 @@ export function rememberProjectorView(
   }
 }
 
+/** The view the host last chose for this room (§ host doesn't want to re-pick every visit). */
+export function getRememberedProjectorView(
+  sessionId: string,
+): ProjectorViewMode | null {
+  try {
+    const value = sessionStorage.getItem(storageKey(sessionId));
+    return value === "player" || value === "projector" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useProjectorNavigation(sessionId: string) {
   const router = useRouter();
 

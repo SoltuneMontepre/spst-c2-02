@@ -15,13 +15,14 @@ function snapshot(): SessionSnapshot {
       {
         id: "participant-1",
         presence: "OFFLINE",
+        lastSeenAt: new Date(0).toISOString(),
         controlMode: "BOT_TAKEOVER",
       },
     ],
   } as unknown as SessionSnapshot;
 }
 
-function verifyAppwriteRowParsing(): void {
+function verifyEventRowParsing(): void {
   assert.deepEqual(
     parseSessionEventRow({
       sessionId: "session-1",
@@ -62,11 +63,13 @@ function verifyPresencePatch(): void {
       participantId: "participant-1",
       presence: "ONLINE",
       controlMode: "HUMAN",
+      lastSeenAt: "2026-07-04T00:00:00.000Z",
     },
   });
 
   assert.equal(updated?.participants[0]?.presence, "ONLINE");
   assert.equal(updated?.participants[0]?.controlMode, "HUMAN");
+  assert.equal(updated?.participants[0]?.lastSeenAt, "2026-07-04T00:00:00.000Z");
 }
 
 function verifyPhaseRefetch(): void {
@@ -89,6 +92,6 @@ function verifyPhaseRefetch(): void {
   assert.deepEqual(calls, ["refetch"]);
 }
 
-verifyAppwriteRowParsing();
+verifyEventRowParsing();
 verifyPresencePatch();
 verifyPhaseRefetch();

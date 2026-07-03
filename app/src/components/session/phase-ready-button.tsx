@@ -1,9 +1,7 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { apiFetch } from "@/hooks/use-api";
-import type { SessionSnapshot } from "@/lib/session-service";
+import { usePhaseReady } from "@/hooks/use-phase-ready";
 import { cn } from "@/lib/utils";
 
 /** TFT-style "ready" to fast-forward the current phase when everyone is done. */
@@ -14,6 +12,9 @@ export function PhaseReadyButton({
   phase,
   disabled,
   className,
+  idleLabel,
+  readyLabel,
+  attention = false,
 }: {
   sessionId: string;
   phaseReady: boolean;
@@ -21,51 +22,29 @@ export function PhaseReadyButton({
   phase?: string | null;
   disabled?: boolean;
   className?: string;
+  idleLabel?: string;
+  readyLabel?: string;
+  /** Pulse / glow after the player finishes an action. */
+  attention?: boolean;
 }) {
-  const queryClient = useQueryClient();
-  const queryKey = ["session", sessionId] as const;
-  const mutation = useMutation({
-    mutationFn: (ready: boolean) =>
-      apiFetch(`/api/sessions/${sessionId}/phase-ready`, {
-        method: "POST",
-        body: JSON.stringify({ ready }),
-      }),
-    onMutate: async (ready) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<SessionSnapshot>(queryKey);
-      if (previous) {
-        queryClient.setQueryData<SessionSnapshot>(queryKey, {
-          ...previous,
-          participants: previous.participants.map((p) =>
-            p.isSelf ? { ...p, phaseReady: ready } : p,
-          ),
-        });
-      }
-      return { previous };
-    },
-    onError: (_err, _ready, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
-      }
-    },
-  });
+  const mutation = usePhaseReady(sessionId);
 
-  const idleLabel =
+  const defaultIdleLabel =
     phase === "MARKET_OPEN"
       ? "Tôi đã giao dịch xong"
       : phase === "DECISION"
         ? "Tôi đã ra quyết định xong"
-      : autoHost
-        ? "Sẵn sàng — chuyển giai đoạn"
-        : "Báo đã xong cho host";
-  const readyLabel =
+        : autoHost
+          ? "Sẵn sàng — chuyển giai đoạn"
+          : "Báo đã xong cho host";
+  const defaultReadyLabel =
     phase === "MARKET_OPEN"
       ? "Đã xong — chờ cả chợ"
       : phase === "DECISION"
         ? "Đã quyết định — chờ mọi người"
-      : autoHost
-        ? "Đã sẵn sàng — chờ người khác"
-        : "Đã báo xong cho host";
+        : autoHost
+          ? "Đã sẵn sàng — chờ người khác"
+          : "Đã báo xong cho host";
 
   return (
     <Button
@@ -73,9 +52,17 @@ export function PhaseReadyButton({
       variant={phaseReady ? "secondary" : "primary"}
       disabled={disabled || mutation.isPending}
       onClick={() => mutation.mutate(!phaseReady)}
-      className={cn("w-full", className)}
+      className={cn(
+        "w-full",
+        attention &&
+          !phaseReady &&
+          "animate-bounce shadow-lg shadow-primary/40 ring-4 ring-primary/35",
+        className,
+      )}
     >
-      {phaseReady ? readyLabel : idleLabel}
+      {phaseReady
+        ? (readyLabel ?? defaultReadyLabel)
+        : (idleLabel ?? defaultIdleLabel)}
     </Button>
   );
 }

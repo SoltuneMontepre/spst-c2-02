@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
-import { EVENT_COPY, ROUND_NAMES } from "@/lib/labels";
+import { EVENT_COPY, PHASE_LABELS, ROUND_NAMES } from "@/lib/labels";
 import { getRoleQuest } from "@/lib/role-quest";
 import { getTaskZoneForPhase } from "@/lib/zone-phase";
 import { zoneLabelForRole } from "@/lib/game-zones";
 import { buttonVariants } from "@/components/ui/button";
-import { PhaseReadyButton } from "@/components/session/phase-ready-button";
 import { cn } from "@/lib/utils";
 
 export function GamePhaseCta({
@@ -19,10 +18,6 @@ export function GamePhaseCta({
   roleState = null,
   marketListingCount = 0,
   variant = "default",
-  phaseReady = false,
-  autoHost = false,
-  paused = false,
-  showPhaseReady = false,
 }: {
   sessionId: string;
   phase: string | null;
@@ -31,16 +26,12 @@ export function GamePhaseCta({
   roleState?: unknown;
   marketListingCount?: number;
   variant?: "default" | "map";
-  phaseReady?: boolean;
-  autoHost?: boolean;
-  paused?: boolean;
-  showPhaseReady?: boolean;
 }) {
   if (phase !== "DECISION" && phase !== "MARKET_OPEN") return null;
 
   const event = EVENT_COPY[round];
   const taskZone = getTaskZoneForPhase(role, phase, round);
-  const missionTitle =
+  const quest =
     role != null
       ? getRoleQuest({
           role,
@@ -48,62 +39,49 @@ export function GamePhaseCta({
           round,
           roleState,
           marketListingCount,
-        }).title
+        })
       : null;
+  const missionTitle = quest?.title ?? null;
+  const missionBody = quest?.objective ?? quest?.action ?? null;
   const href =
     taskZone === "market"
       ? `/session/${sessionId}/market`
       : taskZone === "task"
         ? `/session/${sessionId}/task`
-        : `/session/${sessionId}/map`;
-  const showTaskLink = taskZone != null && !(variant === "map" && taskZone === "map");
-  const showReadyButton =
-    variant === "map" &&
-    (phase === "DECISION" || phase === "MARKET_OPEN") &&
-    showPhaseReady;
-
+        : `/session/${sessionId}/game`;
+  const showTaskLink = variant !== "map" && taskZone != null;
   const phaseTitle =
     phase === "DECISION"
       ? `Giai đoạn Ra quyết định — Vòng ${round}`
       : `Giai đoạn Giao dịch — Vòng ${round}${ROUND_NAMES[round] ? `: ${ROUND_NAMES[round]}` : ""}`;
 
   if (variant === "map") {
+    const phaseBadge = phase ? PHASE_LABELS[phase] ?? phase : null;
     return (
-      <div className="flex w-full flex-col gap-3 rounded-[14.5px] bg-gradient-to-r from-[#c94a2d] to-[#e06040] px-[17.5px] py-[10.5px] sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Zap className="size-[15px] shrink-0 text-white" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-[13px] font-bold text-white">{phaseTitle}</p>
-            {missionTitle ? (
-              <p className="mt-0.5 truncate text-[11px] font-medium text-white/80">
-                {missionTitle}
-              </p>
-            ) : null}
-          </div>
+      <div className="flex w-full items-start gap-3.5 rounded-[18px] bg-gradient-to-r from-[#c94a2d] to-[#e06040] px-5 py-4 shadow-md sm:items-center sm:py-5">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+          <Zap className="size-6 text-white" aria-hidden />
         </div>
-        {showTaskLink || showReadyButton ? (
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-            {showTaskLink ? (
-              <Link
-                href={href}
-                className="inline-flex items-center justify-center gap-1.5 rounded-[10.5px] border border-white/20 bg-white/15 px-[15px] py-[7.25px] text-[12px] font-bold text-white transition-colors hover:bg-white/25"
-              >
-                Đi tới nhiệm vụ
-                <ArrowRight className="size-3.5" aria-hidden />
-              </Link>
-            ) : null}
-            {showReadyButton ? (
-              <PhaseReadyButton
-                sessionId={sessionId}
-                phaseReady={phaseReady}
-                autoHost={autoHost}
-                phase={phase}
-                disabled={paused}
-                className="h-8 border border-white/25 bg-white px-3 text-[#c94a2d] hover:bg-white/90"
-              />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/75">
+              Nhiệm vụ của bạn
+            </p>
+            {phaseBadge ? (
+              <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                {phaseBadge}
+              </span>
             ) : null}
           </div>
-        ) : null}
+          <p className="mt-0.5 text-lg font-extrabold leading-tight text-white sm:text-xl">
+            {missionTitle ?? phaseTitle}
+          </p>
+          {missionBody ? (
+            <p className="mt-1 line-clamp-2 text-sm font-medium text-white/85">
+              {missionBody}
+            </p>
+          ) : null}
+        </div>
       </div>
     );
   }

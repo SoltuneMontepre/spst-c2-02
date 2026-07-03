@@ -89,17 +89,24 @@ export function patchSessionSnapshot(
   }
 
   if (event.type === "participant:presence" && event.data) {
-    const { participantId, presence, controlMode } = event.data as {
+    const { participantId, presence, controlMode, lastSeenAt } = event.data as {
       participantId?: string;
       presence: Presence;
       controlMode?: ControlMode;
+      lastSeenAt?: string | null;
     };
     if (!participantId) return undefined;
     return {
       ...old,
       participants: old.participants.map((p) =>
         p.id === participantId
-          ? { ...p, presence, controlMode: controlMode ?? p.controlMode }
+          ? {
+              ...p,
+              presence,
+              controlMode: controlMode ?? p.controlMode,
+              lastSeenAt:
+                lastSeenAt === undefined ? p.lastSeenAt : lastSeenAt,
+            }
           : p,
       ),
     };
@@ -224,32 +231,26 @@ export function applySessionGameEvent(
   queryKey: readonly ["session", string],
   event: GameEvent,
 ): void {
-  if (
-    SESSION_LIFECYCLE_EVENTS.has(event.type) ||
-    SESSION_SNAPSHOT_REFETCH_EVENTS.has(event.type)
-  ) {
+  // Lifecycle events may navigate the client (lobby → game → debrief).
+  if (SESSION_LIFECYCLE_EVENTS.has(event.type)) {
     void queryClient.refetchQueries({ queryKey });
-    if (SESSION_LIFECYCLE_EVENTS.has(event.type)) {
-      void queryClient.invalidateQueries({ queryKey: [...queryKey, "result"] });
+    void queryClient.invalidateQueries({ queryKey: [...queryKey, "result"] });
+    return;
+  }
+
+  // Prefer live-room SSE snapshots over per-client HTTP refetches (TFT-style).
+  // Delta events patch optimistically; everything else waits for the stream
+  // snapshot that was pre-calculated into Redis/memory on the server.
+  if (SESSION_DELTA_PATCH_EVENTS.has(event.type)) {
+    const patched = patchSessionSnapshot(
+      queryClient.getQueryData<SessionSnapshot>(queryKey),
+      event,
+    );
+    if (patched) {
+      queryClient.setQueryData(queryKey, {
+        ...patched,
+        stateVersion: Math.max(patched.stateVersion, event.stateVersion),
+      });
     }
-    return;
-  }
-
-  if (!SESSION_DELTA_PATCH_EVENTS.has(event.type)) {
-    void queryClient.refetchQueries({ queryKey });
-    return;
-  }
-
-  const patched = patchSessionSnapshot(
-    queryClient.getQueryData<SessionSnapshot>(queryKey),
-    event,
-  );
-  if (patched) {
-    queryClient.setQueryData(queryKey, {
-      ...patched,
-      stateVersion: Math.max(patched.stateVersion, event.stateVersion),
-    });
-  } else {
-    void queryClient.refetchQueries({ queryKey });
   }
 }

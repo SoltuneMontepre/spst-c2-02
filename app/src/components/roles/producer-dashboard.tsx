@@ -121,37 +121,37 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
               ]}
             />
 
-            {data.phase === "DECISION" || data.phase === "MARKET_OPEN" ? (
-              <div className="grid gap-4 sm:grid-cols-[repeat(2,277px)]">
-                  <ProducePanel
-                    sessionId={sessionId}
-                    state={state}
-                    balanceVnd={data.self.balanceVnd ?? 0}
-                    stateVersion={data.stateVersion}
-                    currentRound={data.currentRound}
-                    phase={data.phase}
-                    phaseEndsAt={data.phaseEndsAt}
-                    paused={data.paused}
-                  />
-                  <ProducerSalesPanel
-                    sessionId={sessionId}
-                    state={state}
-                    balanceVnd={data.self.balanceVnd ?? 0}
-                    stateVersion={data.stateVersion}
-                    currentRound={data.currentRound}
-                    phase={data.phase}
-                    inventory={data.self.inventory}
-                  />
-              </div>
+            {data.phase === "DECISION" ? (
+              <ProducePanel
+                sessionId={sessionId}
+                state={state}
+                balanceVnd={data.self.balanceVnd ?? 0}
+                stateVersion={data.stateVersion}
+                currentRound={data.currentRound}
+                phase={data.phase}
+                phaseEndsAt={data.phaseEndsAt}
+                paused={data.paused}
+              />
             ) : null}
 
             {data.phase === "MARKET_OPEN" ? (
-              <OffersPanel
-                sessionId={sessionId}
-                stateVersion={data.stateVersion}
-                incoming={data.self.incomingOffers}
-                outgoing={data.self.outgoingOffers}
-              />
+              <>
+                <ProducerSalesPanel
+                  sessionId={sessionId}
+                  state={state}
+                  balanceVnd={data.self.balanceVnd ?? 0}
+                  stateVersion={data.stateVersion}
+                  currentRound={data.currentRound}
+                  phase={data.phase}
+                  inventory={data.self.inventory}
+                />
+                <OffersPanel
+                  sessionId={sessionId}
+                  stateVersion={data.stateVersion}
+                  incoming={data.self.incomingOffers}
+                  outgoing={data.self.outgoingOffers}
+                />
+              </>
             ) : null}
 
             {data.phase !== "DECISION" && data.phase !== "MARKET_OPEN" ? (

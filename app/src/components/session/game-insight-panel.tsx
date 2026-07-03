@@ -18,7 +18,7 @@ export function GameInsightPanel({
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
       <InsightSectionLabel>Biến cố · Vòng {round}</InsightSectionLabel>
-      <EventPanel round={round} variant="insight" />
+      <EventPanel round={round} />
 
       <InsightSectionLabel>Snapshot thị trường</InsightSectionLabel>
       <MarketSnapshotPanel stats={stats} variant="insight" />

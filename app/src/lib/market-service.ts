@@ -80,10 +80,18 @@ export async function produce(
   if (quantity === 0) return { produced: 0 };
 
   const cost = quantity * unitCost;
-  await tx.wallet.update({
-    where: { participantId: ctx.participant.id },
+  if (wallet.balanceVnd < cost) throw new ApiError("INSUFFICIENT_FUNDS", 409);
+
+  // Atomic debit: refuse if balance changed under us.
+  const debited = await tx.wallet.updateMany({
+    where: {
+      participantId: ctx.participant.id,
+      balanceVnd: { gte: cost },
+    },
     data: { balanceVnd: { decrement: cost } },
   });
+  if (debited.count !== 1) throw new ApiError("INSUFFICIENT_FUNDS", 409);
+
   await tx.ledgerEntry.create({
     data: {
       sessionId: ctx.session.id,
@@ -103,12 +111,27 @@ export async function produce(
       unitCostVnd: unitCost,
     },
   });
+
+  // Re-read inside the transaction so we apply on the latest row, then write.
+  const latest = await tx.roleState.findUniqueOrThrow({ where: { id: rs.id } });
+  const latestState = latest.state as unknown as ProducerRoundState;
+  const alreadyProduced = latestState.producedQuantity ?? 0;
+  const capacity = latestState.productionCapacity ?? latestState.productionCap ?? 0;
+  if (alreadyProduced + quantity > capacity) {
+    throw new ApiError("INVALID_QUANTITY", 422);
+  }
+
   await tx.roleState.update({
-    where: { id: rs.id },
+    where: { id: latest.id },
     data: {
-      state: { ...state, producedQuantity: state.producedQuantity + quantity } as never,
+      version: { increment: 1 },
+      state: {
+        ...latestState,
+        producedQuantity: alreadyProduced + quantity,
+      } as never,
     },
   });
+
   return { produced: quantity };
 }
 

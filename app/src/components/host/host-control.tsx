@@ -9,16 +9,21 @@ import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redir
 import { SessionNav } from "@/components/session/session-nav";
 import { BentoTile } from "@/components/ui/bento-tile";
 import { PhaseBanner } from "@/components/session/phase-banner";
-import { HostLobbyView } from "@/components/host/host-lobby-view";
+import { LobbyRoom } from "@/components/lobby/lobby-room";
 import { HostRoster } from "@/components/host/host-roster";
 import { HostControls } from "./host-controls";
 import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { SupplyDemandMeter } from "@/components/learning/supply-demand-meter";
 import { ChartLegend } from "@/components/observatory/chart-legend";
 import { PlayAsPlayerButton } from "@/components/host/projector-mode-toggle";
+import {
+  getRememberedProjectorView,
+  playerHref,
+} from "@/hooks/use-projector-mode";
 import { STATUS_LABELS, PHASE_LABELS } from "@/lib/labels";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
+import type { SessionSnapshot } from "@/lib/session-service";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
 
@@ -59,37 +64,20 @@ function SessionStats({
   );
 }
 
-export function HostControl({
+/** Orchestrator dashboard shown once the round is running (post-lobby).
+ *  Owns the session stream itself so there is exactly one live subscription
+ *  per view (LobbyRoom owns its own while the session is still in LOBBY). */
+function HostDashboard({
   sessionId,
   displayName,
+  data,
 }: {
   sessionId: string;
   displayName: string;
+  data: SessionSnapshot;
 }) {
-  const router = useRouter();
   useSessionStream(sessionId);
-  const { data, isLoading } = useSessionSnapshot(sessionId);
   const host = useHostControl(sessionId);
-
-  useSessionCancelledRedirect(data?.status, "solo_timeout");
-
-  useEffect(() => {
-    if (!data) return;
-    if (ENDED.includes(data.status)) router.replace(`/session/${sessionId}/debrief`);
-  }, [data, router, sessionId]);
-
-  if (isLoading || !data) {
-    return (
-      <div className="flex min-h-full flex-col">
-        <SessionNav displayName={displayName} sessionLabel="Điều phối" />
-        <p className="p-8 text-muted-foreground">Đang tải bảng điều khiển…</p>
-      </div>
-    );
-  }
-
-  if (data.status === "LOBBY") {
-    return <HostLobbyView sessionId={sessionId} displayName={displayName} />;
-  }
 
   const latest = data.analytics[data.analytics.length - 1];
   const humans = data.participants.filter((p) => !p.isBot);
@@ -221,5 +209,49 @@ export function HostControl({
         </div>
       </div>
     </div>
+  );
+}
+
+export function HostControl({
+  sessionId,
+  displayName,
+}: {
+  sessionId: string;
+  displayName: string;
+}) {
+  const router = useRouter();
+  const { data, isLoading } = useSessionSnapshot(sessionId);
+
+  useSessionCancelledRedirect(data?.status, "solo_timeout");
+
+  useEffect(() => {
+    if (!data) return;
+    if (ENDED.includes(data.status)) router.replace(`/session/${sessionId}/debrief`);
+  }, [data, router, sessionId]);
+
+  // Once the host picks "play as player" for this room, keep landing them
+  // there instead of the orchestrator dashboard for the rest of the session.
+  useEffect(() => {
+    if (!data || data.status === "LOBBY") return;
+    if (getRememberedProjectorView(sessionId) === "player") {
+      router.replace(playerHref(sessionId, data.status));
+    }
+  }, [data, router, sessionId]);
+
+  if (isLoading || !data) {
+    return (
+      <div className="flex min-h-full flex-col">
+        <SessionNav displayName={displayName} sessionLabel="Điều phối" />
+        <p className="p-8 text-muted-foreground">Đang tải bảng điều khiển…</p>
+      </div>
+    );
+  }
+
+  if (data.status === "LOBBY") {
+    return <LobbyRoom sessionId={sessionId} />;
+  }
+
+  return (
+    <HostDashboard sessionId={sessionId} displayName={displayName} data={data} />
   );
 }

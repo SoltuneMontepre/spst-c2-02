@@ -96,10 +96,27 @@ export function ProducerSalesPanel({
 
   return (
     <ProducerActionCard icon={Store} title="Bán hàng">
-      <div className="flex h-[50.5px] items-center justify-between pt-[17.5px]">
-        <p className="text-[13px] leading-[19.5px] text-muted-foreground">
-          Đưa ra chợ
-        </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-[14px] border border-success/25 bg-success/10 px-3 py-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-success/80">
+            Tồn kho chờ bán
+          </p>
+          <p className="mt-0.5 font-mono text-xl font-black text-success">
+            {maxQty} <span className="text-xs font-semibold">thùng</span>
+          </p>
+        </div>
+        <div className="rounded-[14px] border border-border bg-muted/25 px-3 py-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Đã sản xuất
+          </p>
+          <p className="mt-0.5 font-mono text-xl font-black text-foreground">
+            {state.producedQuantity} <span className="text-xs font-semibold">thùng</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between rounded-[14px] bg-muted/25 px-4 py-3">
+        <p className="text-sm font-bold text-foreground">Số lượng đưa ra chợ</p>
         <ProducerQuantityControl
           value={qty}
           max={maxQty}
@@ -108,18 +125,9 @@ export function ProducerSalesPanel({
         />
       </div>
 
-      <div className="mt-1 space-y-0.5 text-[11px] leading-4 text-muted-foreground">
-        <p className="font-semibold text-success">
-          Tồn kho chờ bán: {maxQty} thùng
-        </p>
-        <p>
-          Đã sản xuất vòng này: {state.producedQuantity} thùng
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-[8.75px] pt-[17.5px]">
+      <div className="mt-3 flex flex-col gap-2.5">
         <Button
-          className="h-[37px] rounded-[14.5px] bg-danger text-[13px] font-bold hover:bg-danger/90"
+          className="h-14 gap-3 rounded-2xl bg-danger text-base font-extrabold uppercase tracking-wide text-white shadow-md shadow-danger/25 transition-transform hover:bg-danger/90 active:scale-[0.98] disabled:shadow-none"
           disabled={!canSell || command.isPending}
           onClick={() => {
             if (!activeLot) return;
@@ -131,12 +139,14 @@ export function ProducerSalesPanel({
             });
           }}
         >
-          <Store className="size-3.5" aria-hidden />
-          Đưa ra chợ bán lẻ
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Store className="size-4" aria-hidden />
+          </span>
+          Bán lẻ ra chợ
         </Button>
 
         <Button
-          className="h-[37px] rounded-[14.5px] bg-violet-600 text-[13px] font-semibold text-white hover:bg-violet-700"
+          className="h-14 gap-3 rounded-2xl bg-violet-600 text-base font-extrabold uppercase tracking-wide text-white shadow-md shadow-violet-600/25 transition-transform hover:bg-violet-700 active:scale-[0.98] disabled:shadow-none"
           disabled={!canSell || command.isPending}
           onClick={() => {
             if (!activeLot) return;
@@ -148,31 +158,33 @@ export function ProducerSalesPanel({
             });
           }}
         >
-          <Truck className="size-3.5" aria-hidden />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20">
+            <Truck className="size-4" aria-hidden />
+          </span>
           Bán sỉ cho đại lý
         </Button>
 
         <Button
           variant="outline"
-          className="h-[37.5px] rounded-[14.5px] text-xs font-semibold text-muted-foreground"
+          className="h-11 gap-2.5 rounded-2xl border-2 border-primary/30 bg-primary/5 text-sm font-bold text-primary hover:bg-primary/10 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
           disabled={!canUpgrade || command.isPending}
           onClick={() => command.mutate({ action: "invest" })}
         >
-          <Zap className="size-[13px]" aria-hidden />
+          <Zap className="size-4" aria-hidden />
           Nâng cấp công nghệ
           {discountedUpgrade ? ` (−${formatCompactVnd(discountedUpgrade)})` : ""}
         </Button>
       </div>
 
       {sellDisabledReason || upgradeDisabledReason ? (
-        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+        <div className="mt-3 space-y-1 rounded-xl bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
           {sellDisabledReason ? <p>{sellDisabledReason}</p> : null}
           {upgradeDisabledReason ? <p>{upgradeDisabledReason}</p> : null}
         </div>
       ) : null}
 
       {state.pendingUpgrade ? (
-        <p className="mt-2 text-xs text-primary">
+        <p className="mt-2 text-xs font-semibold text-primary">
           Nâng cấp chờ áp dụng từ vòng sau.
         </p>
       ) : null}
@@ -183,7 +195,7 @@ export function ProducerSalesPanel({
         </p>
       ) : null}
       {commandError ? (
-        <p className="mt-2 text-sm text-danger" role="alert">
+        <p className="mt-2 text-sm font-semibold text-danger" role="alert">
           {commandError}
         </p>
       ) : null}

@@ -1,0 +1,522 @@
+"use client";
+
+import { useState } from "react";
+import { AlertCircle, Hourglass, Inbox, Store } from "lucide-react";
+import { useSessionSnapshot } from "@/hooks/use-session-room";
+import { useCommand } from "@/hooks/use-command";
+import { ApiClientError } from "@/hooks/use-api";
+import { ProducePanel } from "@/components/roles/produce-panel";
+import { ProducerSalesPanel } from "@/components/roles/producer-sales-panel";
+import { OffersPanel } from "@/components/roles/offers-panel";
+import { SellPanel } from "@/components/roles/sell-panel";
+import { WholesalePanel } from "@/components/roles/wholesale-panel";
+import { PolicyCard } from "@/components/roles/policy-card";
+import {
+  MarketListingCard,
+  MarketplaceFilters,
+  filterListings,
+  type MarketplaceFilter,
+} from "@/components/roles/market-listing-card";
+import { MarketTransactionDialog } from "@/components/roles/market-transaction-dialog";
+import { RoleActionCard } from "@/components/session/role-task-screen";
+import { Button } from "@/components/ui/button";
+import { getRoleQuest } from "@/lib/role-quest";
+import { POLICIES } from "@/lib/scenario";
+import { errorMessage } from "@/lib/error-messages";
+import { formatThousandDong } from "@/lib/money";
+import type { PolicyType } from "@/generated/prisma/enums";
+import type {
+  ConsumerRoundState,
+  GovernmentRoundState,
+  ProducerRoundState,
+} from "@/lib/role-state";
+import type { ListingView } from "@/lib/session-service";
+
+function WaitingCard({
+  title,
+  body,
+  footer,
+}: {
+  title: string;
+  body: string;
+  footer?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-border bg-surface/80 px-6 py-12 text-center">
+      <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+        <Hourglass className="size-5 text-muted-foreground" aria-hidden />
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
+          {body}
+        </p>
+      </div>
+      {footer ? (
+        <p className="text-[11px] font-medium text-primary">{footer}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function QuestIdleCard({
+  title,
+  body,
+  status,
+}: {
+  title: string;
+  body: string;
+  status: "waiting" | "done";
+}) {
+  return (
+    <WaitingCard
+      title={title}
+      body={body}
+      footer={
+        status === "done"
+          ? "Nhấn «Tôi đã sẵn sàng» ở thanh dưới để tiếp tục"
+          : "Đã tự động sẵn sàng — chờ mọi người…"
+      }
+    />
+  );
+}
+
+function ProducerActions({ sessionId }: { sessionId: string }) {
+  const { data } = useSessionSnapshot(sessionId);
+  if (!data?.self) return null;
+
+  const state = data.self.roleState as ProducerRoundState | null;
+  if (state?.kind !== "PRODUCER") {
+    return (
+      <WaitingCard
+        title="Đang chuẩn bị vai trò"
+        body="Vai trò nhà cung cấp sẽ sẵn sàng khi vào vòng chơi."
+      />
+    );
+  }
+
+  const quest = getRoleQuest({
+    role: "PRODUCER",
+    phase: data.phase,
+    round: data.currentRound,
+    roleState: state,
+    marketListingCount: data.market?.listings.length ?? 0,
+  });
+
+  if (quest.status !== "active") {
+    return (
+      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+    );
+  }
+
+  // DECISION = sản xuất only; MARKET_OPEN = bán hàng / chợ only.
+  if (data.phase === "DECISION") {
+    return (
+      <ProducePanel
+        sessionId={sessionId}
+        state={state}
+        balanceVnd={data.self.balanceVnd ?? 0}
+        stateVersion={data.stateVersion}
+        currentRound={data.currentRound}
+        phase={data.phase}
+        phaseEndsAt={data.phaseEndsAt}
+        paused={data.paused}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ProducerSalesPanel
+        sessionId={sessionId}
+        state={state}
+        balanceVnd={data.self.balanceVnd ?? 0}
+        stateVersion={data.stateVersion}
+        currentRound={data.currentRound}
+        phase={data.phase}
+        inventory={data.self.inventory}
+      />
+
+      {data.phase === "MARKET_OPEN" ? (
+        <OffersPanel
+          sessionId={sessionId}
+          stateVersion={data.stateVersion}
+          incoming={data.self.incomingOffers}
+          outgoing={data.self.outgoingOffers}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ConsumerActions({ sessionId }: { sessionId: string }) {
+  const { data } = useSessionSnapshot(sessionId);
+  const command = useCommand(sessionId, data?.stateVersion);
+  const [filter, setFilter] = useState<MarketplaceFilter>("all");
+  const [selectedListing, setSelectedListing] = useState<ListingView | null>(null);
+
+  if (!data?.self) return null;
+
+  const state = data.self.roleState as ConsumerRoundState | null;
+  const quest = getRoleQuest({
+    role: "CONSUMER",
+    phase: data.phase,
+    round: data.currentRound,
+    roleState: state,
+    marketListingCount: data.market?.listings.length ?? 0,
+  });
+
+  if (quest.status !== "active") {
+    return (
+      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+    );
+  }
+
+  const allListings = data.market?.listings ?? [];
+  const listings = filterListings(allListings, filter);
+  const unitValue = data.liveRoundStats?.unitValueVnd;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
+        <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+        <span>
+          Giá niêm yết chưa phải giá thị trường — chỉ giao dịch thực tế mới xác lập giá
+          TT.
+        </span>
+      </div>
+
+      {listings.length === 0 ? (
+        <div className="rounded-[14px] border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm">
+          <p className="font-medium text-foreground">Chưa có quầy niêm yết</p>
+          <p className="mt-2 text-muted-foreground">
+            Nhà cung cấp và đại lý đang đưa hàng lên chợ.
+          </p>
+        </div>
+      ) : (
+        <>
+          <MarketplaceFilters value={filter} onChange={setFilter} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {listings.map((l) => (
+              <MarketListingCard
+                key={l.id}
+                listing={l}
+                unitValueVnd={unitValue}
+                onClick={() => setSelectedListing(l)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <OffersPanel
+        sessionId={sessionId}
+        stateVersion={data.stateVersion}
+        incoming={data.self.incomingOffers}
+        outgoing={data.self.outgoingOffers}
+      />
+
+      {selectedListing ? (
+        <MarketTransactionDialog
+          listing={selectedListing}
+          unitValueVnd={unitValue}
+          affordable={(data.self.balanceVnd ?? 0) >= selectedListing.askPriceVnd}
+          pending={command.isPending}
+          balanceVnd={data.self.balanceVnd ?? 0}
+          onBuy={(quantity) => {
+            command.mutate({
+              action: "buy",
+              listingId: selectedListing.id,
+              quantity,
+            });
+            setSelectedListing(null);
+          }}
+          onOffer={(quantity, offerPriceVnd) => {
+            command.mutate({
+              action: "offer",
+              listingId: selectedListing.id,
+              quantity,
+              offerPriceVnd,
+            });
+            setSelectedListing(null);
+          }}
+          onClose={() => setSelectedListing(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function IntermediaryActions({ sessionId }: { sessionId: string }) {
+  const { data } = useSessionSnapshot(sessionId);
+  if (!data?.self) return null;
+
+  const quest = getRoleQuest({
+    role: "INTERMEDIARY",
+    phase: data.phase,
+    round: data.currentRound,
+    roleState: data.self.roleState,
+    marketListingCount: data.market?.listings.length ?? 0,
+  });
+
+  if (quest.status !== "active") {
+    return (
+      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+    );
+  }
+
+  const inventoryUnits = data.self.inventory.reduce((s, l) => s + l.availableQuantity, 0);
+  const listedUnits = data.self.listings.reduce((s, l) => s + l.availableQuantity, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RoleActionCard title="Đề nghị bán sỉ nhận được" icon={Inbox}>
+          <WholesalePanel
+            sessionId={sessionId}
+            stateVersion={data.stateVersion}
+            inventory={data.self.inventory}
+            offers={data.market?.wholesaleOffers ?? []}
+            role="INTERMEDIARY"
+            balanceVnd={data.self.balanceVnd}
+          />
+        </RoleActionCard>
+
+        <RoleActionCard title="Niêm yết bán lẻ" icon={Store}>
+          {listedUnits > 0 ? (
+            <p className="mb-2 text-xs text-muted-foreground">
+              {listedUnits} thùng đang niêm yết
+            </p>
+          ) : null}
+          <SellPanel
+            sessionId={sessionId}
+            stateVersion={data.stateVersion}
+            inventory={data.self.inventory}
+            listings={data.self.listings}
+          />
+        </RoleActionCard>
+      </div>
+
+      {inventoryUnits > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Tồn kho {inventoryUnits} thùng chưa bán sẽ giảm điểm lợi nhuận cuối vòng.
+        </p>
+      ) : null}
+
+      <OffersPanel
+        sessionId={sessionId}
+        stateVersion={data.stateVersion}
+        incoming={data.self.incomingOffers}
+        outgoing={data.self.outgoingOffers}
+      />
+    </div>
+  );
+}
+
+const DECISION_POLICIES: {
+  type: PolicyType;
+  title: string;
+  description: string;
+  costLabel: string;
+  footer?: string;
+  rounds?: number[];
+  marketOpenOnly?: boolean;
+}[] = [
+  {
+    type: "INFO_DISCLOSURE",
+    title: "Công bố thông tin",
+    description: "Công khai dữ liệu cung-cầu cho mọi người chơi.",
+    costLabel: formatThousandDong(POLICIES.INFO_DISCLOSURE.fixedCostVnd),
+    footer: "Tăng minh bạch",
+  },
+  {
+    type: "COLD_STORAGE",
+    title: "Kho lạnh dự trữ",
+    description: `Bảo vệ tối đa ${POLICIES.COLD_STORAGE.maxUnits} thùng khỏi hư hỏng khi dư hàng.`,
+    costLabel: `${formatThousandDong(POLICIES.COLD_STORAGE.perUnitCostVnd)}/thùng`,
+    footer: "Tốn ngân sách",
+  },
+  {
+    type: "TECH_SUPPORT",
+    title: "Hỗ trợ công nghệ",
+    description: "Giảm chi phí riêng cho nhà cung cấp được chọn.",
+    costLabel: formatThousandDong(POLICIES.TECH_SUPPORT.fixedCostVnd),
+    footer: "Tốn ngân sách",
+    rounds: [2, 3],
+  },
+  {
+    type: "EXPORT_PROMOTION",
+    title: "Xúc tiến xuất khẩu",
+    description: "15 giây đầu chợ mở: mua ~25% cung bán lẻ.",
+    costLabel: "120k Đ",
+    footer: "Chi phí cao, tác động dài hạn",
+    marketOpenOnly: true,
+  },
+  {
+    type: "NONE",
+    title: "Không can thiệp",
+    description: "Thị trường tự điều chỉnh qua cung-cầu.",
+    costLabel: "Miễn phí",
+    footer: "Không tốn ngân sách",
+  },
+];
+
+function GovernmentActions({ sessionId }: { sessionId: string }) {
+  const { data } = useSessionSnapshot(sessionId);
+  const command = useCommand(sessionId, data?.stateVersion);
+  const [selected, setSelected] = useState<PolicyType>("NONE");
+
+  if (!data?.self) return null;
+
+  const state = data.self.roleState as GovernmentRoundState | null;
+  const quest = getRoleQuest({
+    role: "GOVERNMENT",
+    phase: data.phase,
+    round: data.currentRound,
+    roleState: state,
+    marketListingCount: data.market?.listings.length ?? 0,
+  });
+
+  if (quest.status !== "active") {
+    return (
+      <QuestIdleCard title={quest.title} body={quest.action} status={quest.status} />
+    );
+  }
+
+  const used = state?.policyUsed ?? false;
+  const decisionOpen = data.phase === "DECISION" && data.currentRound >= 2;
+  const exportOpen =
+    data.phase === "MARKET_OPEN" && data.currentRound >= 2 && !used;
+  const visiblePolicies = DECISION_POLICIES.filter(
+    (p) => !p.rounds || p.rounds.includes(data.currentRound),
+  );
+  const commandError =
+    command.isError && command.error instanceof ApiClientError
+      ? errorMessage(command.error.code, command.error.message)
+      : null;
+
+  const applyPolicy = () => {
+    if (selected === "EXPORT_PROMOTION") {
+      command.mutate({ action: "applyPolicy", policyType: "EXPORT_PROMOTION" });
+      return;
+    }
+    command.mutate({
+      action: "applyPolicy",
+      policyType: selected,
+      targetIds:
+        selected === "TECH_SUPPORT"
+          ? data.participants
+              .filter((x) => x.role === "PRODUCER")
+              .slice(0, 1)
+              .map((x) => x.id)
+          : undefined,
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm font-semibold">Chọn chính sách điều tiết cho vòng này</p>
+      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+        {visiblePolicies.map((p) => {
+          const cardDisabled =
+            command.isPending || (p.marketOpenOnly ? !exportOpen : !decisionOpen);
+          return (
+            <PolicyCard
+              key={p.type}
+              policyType={p.type}
+              title={p.title}
+              description={p.description}
+              costLabel={p.costLabel}
+              footer={p.footer}
+              selected={selected === p.type}
+              onSelect={() => setSelected(p.type)}
+              disabled={cardDisabled}
+            />
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-[14px] border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
+          <span>Cơ quan quản lý không trực tiếp ấn định giá thị trường.</span>
+        </div>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <Button
+            disabled={
+              command.isPending ||
+              (selected === "EXPORT_PROMOTION" ? !exportOpen : !decisionOpen)
+            }
+            onClick={applyPolicy}
+          >
+            {command.isPending ? "Đang áp dụng…" : "Áp dụng chính sách"}
+          </Button>
+          {commandError ? (
+            <p className="max-w-xs text-xs text-danger" role="alert">
+              {commandError}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
+  const { data } = useSessionSnapshot(sessionId);
+  if (!data) return null;
+
+  if (data.status === "INTRO") {
+    return (
+      <WaitingCard
+        title="Phiên sắp bắt đầu"
+        body="Chờ vòng 1 — biến cố và nhiệm vụ sẽ hiện tại đây."
+      />
+    );
+  }
+
+  if (data.phase === "EVENT") {
+    return (
+      <WaitingCard
+        title="Biến cố thị trường"
+        body="Một sự kiện bất ngờ vừa xảy ra — theo dõi thông báo rồi tiếp tục vòng chơi."
+      />
+    );
+  }
+
+  if (data.phase === "SETTLEMENT") {
+    return (
+      <WaitingCard
+        title="Đang chốt sổ"
+        body="Hệ thống đang tính toán kết quả vòng — chờ tổng kết."
+      />
+    );
+  }
+
+  if (!data.self?.role) {
+    return (
+      <WaitingCard
+        title="Chưa có vai trò"
+        body="Bạn sẽ nhận nhiệm vụ khi phiên bắt đầu."
+      />
+    );
+  }
+
+  switch (data.self.role) {
+    case "PRODUCER":
+      return <ProducerActions sessionId={sessionId} />;
+    case "CONSUMER":
+      return <ConsumerActions sessionId={sessionId} />;
+    case "INTERMEDIARY":
+      return <IntermediaryActions sessionId={sessionId} />;
+    case "GOVERNMENT":
+      return <GovernmentActions sessionId={sessionId} />;
+    default:
+      return (
+        <WaitingCard
+          title="Đang chờ"
+          body="Theo dõi danh sách người chơi và chờ giai đoạn tiếp theo."
+        />
+      );
+  }
+}

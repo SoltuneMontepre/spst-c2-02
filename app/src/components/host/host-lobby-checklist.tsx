@@ -2,17 +2,20 @@
 
 import { AlertTriangle, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import type { ChecklistItem } from "@/lib/lobby-readiness";
+import type { ChecklistItem, RoleDistribution } from "@/lib/lobby-readiness";
+import { RoleDistributionDots } from "@/components/lobby/role-distribution-dots";
 import { cn } from "@/lib/utils";
 
 export function HostLobbyChecklist({
   items,
   completedCount,
   totalCount,
+  roles,
 }: {
   items: ChecklistItem[];
   completedCount: number;
   totalCount: number;
+  roles: RoleDistribution[];
 }) {
   return (
     <Card className="p-5">
@@ -50,6 +53,13 @@ export function HostLobbyChecklist({
           </li>
         ))}
       </ul>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <h4 className="text-xs font-semibold text-muted-foreground">Phân bổ vai trò</h4>
+        <div className="mt-3">
+          <RoleDistributionDots roles={roles} />
+        </div>
+      </div>
     </Card>
   );
 }

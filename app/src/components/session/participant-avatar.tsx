@@ -30,11 +30,17 @@ export function ParticipantAvatar({
   showStatus = true,
 }: {
   participant: ParticipantAvatarData;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   showStatus?: boolean;
 }) {
   const dim =
-    size === "sm" ? "size-9" : size === "lg" ? "size-12" : "size-10";
+    size === "xs"
+      ? "size-6"
+      : size === "sm"
+        ? "size-9"
+        : size === "lg"
+          ? "size-12"
+          : "size-10";
   const ring = p.role ? ROLE_RING[p.role] : "ring-border";
   const online = p.isBot || p.presence === "ONLINE" || p.presence === undefined;
 
@@ -43,16 +49,18 @@ export function ParticipantAvatar({
       <span
         className={cn(
           "inline-flex items-center justify-center overflow-hidden rounded-full bg-muted ring-2",
+          size === "xs" && "ring-1",
           dim,
           ring,
           p.isSelf && "ring-primary ring-offset-1 ring-offset-background",
+          p.isSelf && size === "xs" && "ring-offset-0",
         )}
       >
         {p.isBot ? (
           <Bot
             className={cn(
               "text-muted-foreground",
-              size === "lg" ? "size-5" : "size-4",
+              size === "lg" ? "size-5" : size === "xs" ? "size-3" : "size-4",
             )}
             aria-hidden
           />
@@ -63,7 +71,7 @@ export function ParticipantAvatar({
           <span
             className={cn(
               "font-bold text-muted-foreground",
-              size === "lg" ? "text-xs" : "text-[10px]",
+              size === "lg" ? "text-xs" : size === "xs" ? "text-[8px]" : "text-[10px]",
             )}
           >
             {participantInitials(p.displayName)}
@@ -73,7 +81,10 @@ export function ParticipantAvatar({
       {showStatus ? (
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 z-10 size-2.5 rounded-full border-2 border-background",
+            "absolute z-10 rounded-full border-2 border-background",
+            size === "xs"
+              ? "-bottom-px -right-px size-1.5 border"
+              : "-bottom-0.5 -right-0.5 size-2.5",
             p.isBot
               ? "bg-sky-500"
               : online

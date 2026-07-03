@@ -10,6 +10,8 @@ import {
   hostCancel,
   hostExtendSoloLobby,
   hostSetAutoHost,
+  hostSetAutoAssignRoles,
+  hostSetGuidanceEnabled,
   hostSetParticipantRole,
   hostAddBot,
   hostAutoFillBots,
@@ -34,6 +36,8 @@ const schema = z.discriminatedUnion("action", [
     ]),
   }),
   z.object({ action: z.literal("setAutoHost"), autoHost: z.boolean() }),
+  z.object({ action: z.literal("setAutoAssignRoles"), autoAssignRoles: z.boolean() }),
+  z.object({ action: z.literal("setGuidanceEnabled"), guidanceEnabled: z.boolean() }),
   z.object({
     action: z.literal("setRole"),
     participantId: z.string().uuid(),
@@ -69,6 +73,12 @@ export async function POST(
     switch (body.action) {
       case "setAutoHost":
         await hostSetAutoHost(user.id, id, body.autoHost);
+        break;
+      case "setAutoAssignRoles":
+        await hostSetAutoAssignRoles(user.id, id, body.autoAssignRoles);
+        break;
+      case "setGuidanceEnabled":
+        await hostSetGuidanceEnabled(user.id, id, body.guidanceEnabled);
         break;
       case "setRole":
         await hostSetParticipantRole(

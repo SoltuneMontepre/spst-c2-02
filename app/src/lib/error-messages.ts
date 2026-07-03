@@ -7,6 +7,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_LISTING: "Hàng đã được bán hoặc không còn đủ số lượng.",
   OFFER_EXPIRED: "Lượt chợ đã đóng; đề nghị này không còn hiệu lực.",
   STALE_STATE: "Thị trường vừa thay đổi. Dữ liệu đang được cập nhật.",
+  SESSION_BUSY: "Phiên đang xử lý thao tác khác. Vui lòng thử lại.",
   ROLE_FORBIDDEN: "Vai của bạn không có quyền thực hiện thao tác này.",
   WRONG_ROLE: "Vai của bạn không có quyền thực hiện thao tác này.",
   PHASE_FORBIDDEN: "Thao tác không khả dụng trong giai đoạn hiện tại.",

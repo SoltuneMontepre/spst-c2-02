@@ -12,7 +12,7 @@ export function ComingSoon({ sessionId, title }: { sessionId: string; title: str
         Khu vực này đang được xây dựng trong giai đoạn tiếp theo.
       </p>
       <Link
-        href={`/session/${sessionId}/map`}
+        href={`/session/${sessionId}/game`}
         className={cn(buttonVariants({ variant: "outline" }))}
       >
         Về bản đồ

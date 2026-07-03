@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { currentUser } from "@/lib/api";
 import { resolveSessionAccess } from "@/lib/session-access";
-import { LobbyView } from "@/components/lobby/lobby-view";
+import { LobbyRoom } from "@/components/lobby/lobby-room";
 
 export default async function LobbyPage({
   params,
@@ -18,10 +18,5 @@ export default async function LobbyPage({
   const access = await resolveSessionAccess(user.id, id);
   if (access === "not_found" || access === "denied") redirect("/home");
 
-  return (
-    <LobbyView
-      sessionId={id}
-      displayName={session.user.name ?? "Người chơi"}
-    />
-  );
+  return <LobbyRoom sessionId={id} />;
 }

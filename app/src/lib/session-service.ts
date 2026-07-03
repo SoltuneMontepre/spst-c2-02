@@ -17,8 +17,17 @@ import {
   ensureAiDebriefReview,
 } from "./debrief-ai";
 import type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
+import {
+  readLiveRoom,
+  writeLiveRoom,
+  invalidateLiveRoom,
+  snapshotFromLiveRoom,
+  type LiveRoomFrame,
+} from "./live-room";
 
-/** Bump stateVersion and broadcast so all members refresh immediately. */
+/** Bump stateVersion, refresh the live Redis/memory frame, then broadcast.
+ *  Clients read the pre-calculated frame (TFT-style) instead of each rebuilding
+ *  from Postgres on every bot/human action. */
 async function bumpAndPublish(
   sessionId: string,
   type: string,
@@ -29,6 +38,9 @@ async function bumpAndPublish(
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
+  await refreshLiveRoom(sessionId).catch((e) =>
+    console.error("live-room refresh:", e),
+  );
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }
 
@@ -194,6 +206,8 @@ export interface ParticipantView {
   productivityProfile: string | null;
   isBot: boolean;
   presence: Presence;
+  /** ISO timestamp of last heartbeat / presence change. */
+  lastSeenAt: string | null;
   ready: boolean;
   phaseReady: boolean;
   controlMode: ControlMode;
@@ -266,6 +280,7 @@ export interface TransactionView {
 }
 
 export type MarketActivityKind =
+  | "produce"
   | "listing"
   | "wholesale"
   | "offer"
@@ -276,11 +291,14 @@ export interface MarketActivityView {
   id: string;
   at: string;
   kind: MarketActivityKind;
+  actorParticipantId: string | null;
   actorName: string;
   actorIsBot: boolean;
   role: Role | null;
   label: string;
   detail?: string;
+  /** True when this row is the viewing player's own action. */
+  isSelf: boolean;
 }
 
 export interface LiveRoundStats {
@@ -351,7 +369,17 @@ export interface SessionResultView {
   selfAiReview: AiDebriefParticipantReview | null;
 }
 
-/** Role-filtered snapshot (FR-MARKET-07, TECH-PRIVACY). */
+/** Rebuild the shared live frame (memory + Redis) for one session. */
+export async function refreshLiveRoom(sessionId: string): Promise<LiveRoomFrame> {
+  const frame = await buildLiveRoomFrame(sessionId);
+  await writeLiveRoom(sessionId, frame);
+  return frame;
+}
+
+/** Role-filtered snapshot (FR-MARKET-07, TECH-PRIVACY).
+ *  Prefers the live Redis/memory frame so bots and humans share one
+ *  pre-calculated state (TFT-style) instead of each client triggering a
+ *  full Postgres rebuild. */
 export async function getSnapshot(
   userId: string,
   sessionId: string,
@@ -361,101 +389,133 @@ export async function getSnapshot(
   await maybeAutoAdvance(sessionId);
   void import("./ai-host").then((m) => m.maybeFastForwardPhase(sessionId));
 
+  const sessionMeta = await db.gameSession.findUnique({
+    where: { id: sessionId },
+    select: { hostUserId: true, stateVersion: true },
+  });
+  if (!sessionMeta) throw new ApiError("ROOM_NOT_FOUND", 404);
+
+  const isHost = sessionMeta.hostUserId === userId;
+  if (isHost) {
+    const created = await ensureHostParticipant(sessionId, userId);
+    if (created) await invalidateLiveRoom(sessionId);
+  }
+
+  let frame = await readLiveRoom(sessionId);
+  if (!frame || frame.stateVersion < sessionMeta.stateVersion) {
+    frame = await refreshLiveRoom(sessionId);
+  }
+
+  const snapshot = snapshotFromLiveRoom(frame, userId);
+  if (!snapshot) throw new ApiError("FORBIDDEN", 403);
+  return snapshot;
+}
+
+/** Build projected snapshots for every human viewer in one pass. */
+async function buildLiveRoomFrame(sessionId: string): Promise<LiveRoomFrame> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
     include: { participants: { orderBy: { createdAt: "asc" } } },
   });
   if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
 
-  const isHost = session.hostUserId === userId;
-  let participants = session.participants;
-  if (isHost) {
-    const created = await ensureHostParticipant(session.id, userId);
-    if (created) {
-      participants = await db.participant.findMany({
-        where: { sessionId },
-        orderBy: { createdAt: "asc" },
-      });
-    }
-  }
-
-  const selfParticipant = participants.find((p) => p.userId === userId);
-  if (!isHost && !selfParticipant) throw new ApiError("FORBIDDEN", 403);
-
+  const participants = session.participants;
   const nameById = new Map(
     participants.map((p) => [p.id, p.displayNameSnapshot]),
   );
-  const self = await buildSelfState(
-    selfParticipant?.id,
-    session.currentRound,
-    nameById,
-  );
-  const market = await buildMarket(
-    session.id,
-    session.currentRound,
-    session.phase,
-    selfParticipant?.id,
-    nameById,
-  );
-  const analytics = await buildAnalytics(session.id);
-  const recentTransactions = selfParticipant
-    ? await buildRecentTransactions(
-        selfParticipant.id,
-        session.id,
-        session.currentRound,
-        nameById,
-      )
-    : [];
-  const marketActivity = await buildMarketActivity(
-    session.id,
-    session.currentRound,
-    participants,
-  );
-  const liveRoundStats = await buildLiveRoundStats(
-    session.id,
-    session.currentRound,
-    session.phase,
+
+  const [analytics, liveRoundStats] = await Promise.all([
+    buildAnalytics(session.id),
+    buildLiveRoundStats(session.id, session.currentRound, session.phase),
+  ]);
+
+  const viewerIds = new Set<string>([session.hostUserId]);
+  for (const p of participants) {
+    if (p.userId) viewerIds.add(p.userId);
+  }
+
+  const byUserId: Record<string, SessionSnapshot> = {};
+
+  await Promise.all(
+    [...viewerIds].map(async (userId) => {
+      const isHost = session.hostUserId === userId;
+      const selfParticipant = participants.find((p) => p.userId === userId);
+      if (!isHost && !selfParticipant) return;
+
+      const [self, market, recentTransactions, marketActivity] =
+        await Promise.all([
+          buildSelfState(
+            selfParticipant?.id,
+            session.currentRound,
+            nameById,
+          ),
+          buildMarket(
+            session.id,
+            session.currentRound,
+            session.phase,
+            selfParticipant?.id,
+            nameById,
+          ),
+          selfParticipant
+            ? buildRecentTransactions(
+                selfParticipant.id,
+                session.id,
+                session.currentRound,
+                nameById,
+              )
+            : Promise.resolve([]),
+          buildMarketActivity(
+            session.id,
+            session.currentRound,
+            participants,
+            selfParticipant?.id,
+          ),
+        ]);
+
+      byUserId[userId] = {
+        id: session.id,
+        code: session.code,
+        status: session.status,
+        phase: session.phase,
+        phaseEndsAt: session.phaseEndsAt?.toISOString() ?? null,
+        paused: session.paused,
+        phaseExtensions: session.phaseExtensions,
+        currentRound: session.currentRound,
+        stateVersion: session.stateVersion,
+        maxPlayers: session.maxPlayers,
+        totalRounds: session.totalRounds,
+        autoAssignRoles: session.autoAssignRoles,
+        guidanceEnabled: session.guidanceEnabled,
+        autoHost: session.autoHost,
+        aiNarration: session.aiNarration,
+        isHost,
+        lobbySoloSince: session.lobbySoloSince?.toISOString() ?? null,
+        lobbySoloExtendUsed: session.lobbySoloExtendUsed,
+        self,
+        market,
+        analytics,
+        recentTransactions,
+        marketActivity,
+        liveRoundStats,
+        participants: participants.map((p) => ({
+          id: p.id,
+          displayName: p.displayNameSnapshot,
+          avatarUrl: p.avatarSnapshot,
+          role: p.role,
+          productivityProfile: p.productivityProfile,
+          isBot: p.isBot,
+          presence: p.presence,
+          lastSeenAt: p.lastSeenAt?.toISOString() ?? null,
+          ready: p.ready,
+          phaseReady: p.phaseReady,
+          controlMode: p.controlMode,
+          isSelf: p.userId === userId,
+        })),
+      };
+    }),
   );
 
-  return {
-    id: session.id,
-    code: session.code,
-    status: session.status,
-    phase: session.phase,
-    phaseEndsAt: session.phaseEndsAt?.toISOString() ?? null,
-    paused: session.paused,
-    phaseExtensions: session.phaseExtensions,
-    currentRound: session.currentRound,
-    stateVersion: session.stateVersion,
-    maxPlayers: session.maxPlayers,
-    totalRounds: session.totalRounds,
-    autoAssignRoles: session.autoAssignRoles,
-    guidanceEnabled: session.guidanceEnabled,
-    autoHost: session.autoHost,
-    aiNarration: session.aiNarration,
-    isHost,
-    lobbySoloSince: session.lobbySoloSince?.toISOString() ?? null,
-    lobbySoloExtendUsed: session.lobbySoloExtendUsed,
-    self,
-    market,
-    analytics,
-    recentTransactions,
-    marketActivity,
-    liveRoundStats,
-    participants: participants.map((p) => ({
-      id: p.id,
-      displayName: p.displayNameSnapshot,
-      avatarUrl: p.avatarSnapshot,
-      role: p.role,
-      productivityProfile: p.productivityProfile,
-      isBot: p.isBot,
-      presence: p.presence,
-      ready: p.ready,
-      phaseReady: p.phaseReady,
-      controlMode: p.controlMode,
-      isSelf: p.userId === userId,
-    })),
-  };
+  return { stateVersion: session.stateVersion, byUserId };
 }
 
 async function buildSelfState(
@@ -674,6 +734,7 @@ async function buildMarketActivity(
     isBot: boolean;
     role: Role | null;
   }[],
+  selfParticipantId?: string,
 ): Promise<MarketActivityView[]> {
   if (!currentRound) return [];
   const round = await db.round.findUnique({
@@ -683,58 +744,108 @@ async function buildMarketActivity(
   if (!round) return [];
 
   const meta = participantActivityMeta(participants);
-  const [listings, wholesale, offers, transactions, policies] = await Promise.all([
-    db.listing.findMany({
-      where: { roundId: round.id },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    db.wholesaleOffer.findMany({
-      where: { roundId: round.id },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    db.offer.findMany({
-      where: { listing: { roundId: round.id } },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    db.transaction.findMany({
-      where: { roundId: round.id, status: "COMPLETED" },
-      orderBy: { completedAt: "desc" },
-      take: 12,
-    }),
-    db.policyAction.findMany({
-      where: { roundId: round.id, status: "APPLIED" },
-      orderBy: [{ appliedAt: "desc" }, { createdAt: "desc" }],
-      take: 8,
-    }),
-  ]);
+  const isSelf = (participantId: string | null | undefined) =>
+    Boolean(selfParticipantId && participantId && participantId === selfParticipantId);
+
+  const [lots, listings, wholesale, offers, transactions, policies, selfTxs] =
+    await Promise.all([
+      db.inventoryLot.findMany({
+        where: { roundIdProduced: round.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      db.listing.findMany({
+        where: { roundId: round.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      db.wholesaleOffer.findMany({
+        where: { roundId: round.id },
+        orderBy: { createdAt: "desc" },
+        take: 16,
+      }),
+      db.offer.findMany({
+        where: { listing: { roundId: round.id } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      db.transaction.findMany({
+        where: { roundId: round.id, status: "COMPLETED" },
+        orderBy: { completedAt: "desc" },
+        take: 24,
+      }),
+      db.policyAction.findMany({
+        where: { roundId: round.id, status: "APPLIED" },
+        orderBy: [{ appliedAt: "desc" }, { createdAt: "desc" }],
+        take: 8,
+      }),
+      selfParticipantId
+        ? db.transaction.findMany({
+            where: {
+              roundId: round.id,
+              status: "COMPLETED",
+              OR: [
+                { buyerId: selfParticipantId },
+                { sellerId: selfParticipantId },
+              ],
+            },
+            orderBy: { completedAt: "desc" },
+            take: 20,
+          })
+        : Promise.resolve([]),
+    ]);
 
   const items: (MarketActivityView & { sortAt: number })[] = [];
 
+  const pushActivity = (
+    item: Omit<MarketActivityView, "isSelf"> & { sortAt: number },
+  ) => {
+    items.push({
+      ...item,
+      isSelf: isSelf(item.actorParticipantId),
+    });
+  };
+
+  for (const lot of lots) {
+    const actor = activityActor(meta, lot.ownerParticipantId);
+    pushActivity({
+      id: `produce:${lot.id}`,
+      at: lot.createdAt.toISOString(),
+      sortAt: lot.createdAt.getTime(),
+      kind: "produce",
+      actorParticipantId: lot.ownerParticipantId,
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label: `tạo ${lot.quantity} sản phẩm`,
+      detail: `${lot.quantity} thùng`,
+    });
+  }
+
   for (const listing of listings) {
     const actor = activityActor(meta, listing.sellerParticipantId);
-    items.push({
+    pushActivity({
       id: `listing:${listing.id}`,
       at: listing.createdAt.toISOString(),
       sortAt: listing.createdAt.getTime(),
       kind: "listing",
+      actorParticipantId: listing.sellerParticipantId,
       actorName: actor.name,
       actorIsBot: actor.isBot,
       role: actor.role,
-      label: `niêm yết ${listing.quantity} thùng`,
+      label: `đưa ${listing.quantity} thùng ra chợ`,
       detail: `${formatThousandDong(listing.askPriceVnd)}/thùng`,
     });
   }
 
   for (const w of wholesale) {
     const actor = activityActor(meta, w.producerId);
-    items.push({
+    pushActivity({
       id: `wholesale:${w.id}`,
       at: w.createdAt.toISOString(),
       sortAt: w.createdAt.getTime(),
       kind: "wholesale",
+      actorParticipantId: w.producerId,
       actorName: actor.name,
       actorIsBot: actor.isBot,
       role: actor.role,
@@ -749,11 +860,12 @@ async function buildMarketActivity(
   for (const offer of offers) {
     const actor = activityActor(meta, offer.fromParticipantId);
     const target = activityActor(meta, offer.toParticipantId);
-    items.push({
+    pushActivity({
       id: `offer:${offer.id}`,
       at: offer.createdAt.toISOString(),
       sortAt: offer.createdAt.getTime(),
       kind: "offer",
+      actorParticipantId: offer.fromParticipantId,
       actorName: actor.name,
       actorIsBot: actor.isBot,
       role: actor.role,
@@ -765,22 +877,34 @@ async function buildMarketActivity(
     });
   }
 
-  for (const tx of transactions) {
+  const txById = new Map<string, (typeof transactions)[number]>();
+  for (const tx of transactions) txById.set(tx.id, tx);
+  for (const tx of selfTxs) txById.set(tx.id, tx);
+
+  for (const tx of txById.values()) {
+    const selfIsBuyer = isSelf(tx.buyerId);
+    const selfIsSeller = isSelf(tx.sellerId);
+    const actorId = selfIsSeller && !selfIsBuyer ? tx.sellerId : tx.buyerId;
     const actor = activityActor(
       meta,
-      tx.buyerId,
+      actorId,
       tx.channel === "SYSTEM_EXPORT" ? "Hệ thống xuất khẩu" : "Hệ thống",
     );
-    items.push({
+    const isWholesale = tx.channel === "WHOLESALE";
+    pushActivity({
       id: `trade:${tx.id}`,
       at: tx.completedAt.toISOString(),
       sortAt: tx.completedAt.getTime(),
       kind: "trade",
+      actorParticipantId: actorId ?? null,
       actorName: actor.name,
       actorIsBot: actor.isBot,
       role: actor.role,
-      label:
-        tx.channel === "WHOLESALE"
+      label: selfIsSeller && !selfIsBuyer
+        ? isWholesale
+          ? `bán sỉ ${tx.quantity} thùng`
+          : `bán ${tx.quantity} thùng`
+        : isWholesale
           ? `chốt sỉ ${tx.quantity} thùng`
           : `mua ${tx.quantity} thùng`,
       detail: `${formatThousandDong(tx.unitPriceVnd)}/thùng`,
@@ -790,11 +914,12 @@ async function buildMarketActivity(
   for (const policy of policies) {
     const actor = activityActor(meta, policy.stateParticipantId);
     const at = policy.appliedAt ?? policy.createdAt;
-    items.push({
+    pushActivity({
       id: `policy:${policy.id}`,
       at: at.toISOString(),
       sortAt: at.getTime(),
       kind: "policy",
+      actorParticipantId: policy.stateParticipantId,
       actorName: actor.name,
       actorIsBot: actor.isBot,
       role: actor.role,
@@ -806,10 +931,16 @@ async function buildMarketActivity(
     });
   }
 
-  return items
+  // Own actions first, then everyone else by recency — never drop your rows.
+  const selfItems = items
+    .filter((item) => item.isSelf)
+    .sort((a, b) => b.sortAt - a.sortAt);
+  const otherItems = items
+    .filter((item) => !item.isSelf)
     .sort((a, b) => b.sortAt - a.sortAt)
-    .slice(0, 24)
-    .map(({ sortAt: _sortAt, ...item }) => item);
+    .slice(0, 30);
+
+  return [...selfItems, ...otherItems].map(({ sortAt: _sortAt, ...item }) => item);
 }
 
 async function buildLiveRoundStats(
@@ -866,9 +997,10 @@ export async function setPresence(
   });
   if (!participant) return;
 
+  const lastSeenAt = new Date();
   await db.participant.update({
     where: { id: participant.id },
-    data: { presence, lastSeenAt: new Date() },
+    data: { presence, lastSeenAt },
   });
   const session = await db.gameSession.update({
     where: { id: sessionId },
@@ -879,7 +1011,12 @@ export async function setPresence(
     sessionId,
     type: "participant:presence",
     stateVersion: session.stateVersion,
-    data: { participantId: participant.id, userId, presence },
+    data: {
+      participantId: participant.id,
+      userId,
+      presence,
+      lastSeenAt: lastSeenAt.toISOString(),
+    },
   });
 }
 

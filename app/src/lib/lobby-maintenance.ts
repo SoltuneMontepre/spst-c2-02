@@ -22,7 +22,7 @@ async function cancelLobby(sessionId: string, reason: string): Promise<void> {
   });
 }
 
-/** Start or clear the solo-host countdown based on human headcount. */
+/** Start or clear the abandoned-lobby countdown based on human presence, not headcount. */
 export async function syncLobbySoloSince(sessionId: string): Promise<void> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
@@ -30,11 +30,11 @@ export async function syncLobbySoloSince(sessionId: string): Promise<void> {
   });
   if (!session || session.status !== "LOBBY") return;
 
-  const humanCount = await db.participant.count({
-    where: { sessionId, isBot: false },
+  const onlineHumanCount = await db.participant.count({
+    where: { sessionId, isBot: false, presence: "ONLINE" },
   });
 
-  if (humanCount <= 1) {
+  if (onlineHumanCount === 0) {
     if (!session.lobbySoloSince) {
       await db.gameSession.update({
         where: { id: sessionId },
@@ -52,7 +52,7 @@ export async function syncLobbySoloSince(sessionId: string): Promise<void> {
   }
 }
 
-/** Cancel LOBBY rooms where only the host remains after SOLO_LOBBY_CANCEL_MS. */
+/** Cancel LOBBY rooms where every player has been offline for SOLO_LOBBY_CANCEL_MS. */
 export async function sweepAbandonedSoloLobbies(): Promise<void> {
   const cutoff = new Date(Date.now() - SOLO_LOBBY_CANCEL_MS);
   const candidates = await db.gameSession.findMany({
@@ -64,10 +64,10 @@ export async function sweepAbandonedSoloLobbies(): Promise<void> {
   });
 
   for (const { id } of candidates) {
-    const humanCount = await db.participant.count({
-      where: { sessionId: id, isBot: false },
+    const onlineHumanCount = await db.participant.count({
+      where: { sessionId: id, isBot: false, presence: "ONLINE" },
     });
-    if (humanCount <= 1) {
+    if (onlineHumanCount === 0) {
       await cancelLobby(id, "solo_timeout");
     }
   }

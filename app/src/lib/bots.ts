@@ -3,6 +3,7 @@
 import type { Participant, Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
 import { publish } from "./events";
+import { withSessionLock } from "./session-lock";
 import { clearNamedTimer, scheduleNamedTimer } from "./timer-service";
 import {
   produce,
@@ -93,7 +94,16 @@ function seededInt(
 
 function temperament(bot: Participant, session: BotSession): BotTemperament {
   const options: BotTemperament[] = ["CAUTIOUS", "BALANCED", "BOLD"];
-  return options[seededInt(0, options.length - 1, session.id, session.currentRound, bot.id, "temperament")];
+  return options[
+    seededInt(
+      0,
+      options.length - 1,
+      session.id,
+      session.currentRound,
+      bot.id,
+      "temperament",
+    )
+  ];
 }
 
 function botConfig(bot: Participant, session: BotSession) {
@@ -152,13 +162,43 @@ function seededOrder<T extends { id: string }>(
   );
 }
 
-async function bump(sessionId: string, type: string, data?: unknown): Promise<void> {
+async function bump(
+  sessionId: string,
+  type: string,
+  data?: unknown,
+): Promise<void> {
   const s = await db.gameSession.update({
     where: { id: sessionId },
     data: { stateVersion: { increment: 1 } },
     select: { stateVersion: true },
   });
+  await import("./session-service")
+    .then((m) => m.refreshLiveRoom(sessionId))
+    .catch((e) => console.error("live-room refresh:", e));
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
+}
+
+/** Mark all bots ready after they finish their phase actions. */
+async function markBotsPhaseReady(sessionId: string): Promise<void> {
+  await db.participant.updateMany({
+    where: { sessionId, isBot: true },
+    data: { phaseReady: true },
+  });
+}
+
+/** Run a bot action without aborting the whole batch on a single failure. */
+async function botTry(
+  label: string,
+  sessionId: string,
+  fn: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    await fn();
+    return true;
+  } catch (e) {
+    console.error(`bot ${label} (${sessionId}):`, e);
+    return false;
+  }
 }
 
 function botCtx(bot: Participant, session: BotSession) {
@@ -169,114 +209,162 @@ function botParticipants<
   T extends { role: string | null; controlMode: string },
 >(bots: T[]): T[] {
   return bots.filter(
-    (b) => b.role && (b.controlMode === "BOT_PERMANENT" || b.controlMode === "BOT_TAKEOVER"),
+    (b) =>
+      b.role &&
+      (b.controlMode === "BOT_PERMANENT" || b.controlMode === "BOT_TAKEOVER"),
   );
 }
 
 /** DECISION: produce, upgrade, government policies (not export). */
 export async function runBotDecisions(sessionId: string): Promise<void> {
-  const session = await db.gameSession.findUniqueOrThrow({ where: { id: sessionId } });
-  if (session.phase !== "DECISION") return;
-  const round = await db.round.findUniqueOrThrow({
-    where: { sessionId_number: { sessionId, number: session.currentRound } },
-  });
-  const bots = await db.participant.findMany({
-    where: { sessionId, isBot: true },
-    include: { wallet: true, roleStates: { where: { roundId: round.id }, take: 1 } },
-  });
+  await withSessionLock(sessionId, async () => {
+    try {
+      const session = await db.gameSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      });
+      if (session.phase !== "DECISION") return;
+      const round = await db.round.findUniqueOrThrow({
+        where: { sessionId_number: { sessionId, number: session.currentRound } },
+      });
+      const bots = await db.participant.findMany({
+        where: { sessionId, isBot: true },
+        include: {
+          wallet: true,
+          roleStates: { where: { roundId: round.id }, take: 1 },
+        },
+      });
 
-  await db.$transaction(async (tx) => {
-    for (const bot of botParticipants(bots)) {
-      if (bot.role === "PRODUCER") {
-        const state = bot.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
-        if (!state || !bot.wallet) continue;
-        const config = botConfig(bot, session);
+      // One transaction per bot so a single failure cannot roll back the batch.
+      for (const bot of botParticipants(bots)) {
+        await botTry(`decision:${bot.id}`, sessionId, async () => {
+          await db.$transaction(async (tx) => {
+            if (bot.role === "PRODUCER") {
+              const state = bot.roleStates[0]?.state as unknown as
+                | ProducerRoundState
+                | undefined;
+              if (!state || !bot.wallet) return;
+              const config = botConfig(bot, session);
 
-        // Upgrade if economical (§13.1).
-        if (session.currentRound < 4 && !state.pendingUpgrade) {
-          const nextCost =
-            state.profile === "TRADITIONAL"
-              ? UPGRADE_COSTS.TRADITIONAL_TO_SOCIAL_AVERAGE
-              : state.profile === "SOCIAL_AVERAGE"
-                ? UPGRADE_COSTS.SOCIAL_AVERAGE_TO_PIONEER
-                : 0;
-          const roundsLeft = 4 - session.currentRound;
-          if (
-            nextCost > 0 &&
-            roundsLeft >= 2 &&
-            nextCost <= bot.wallet.balanceVnd * config.upgradeBalanceShare
-          ) {
-            try {
-              await investUpgrade(tx, botCtx(bot, session));
-            } catch {
-              /* skip if locked or insufficient */
-            }
-          }
-        }
+              if (session.currentRound < 4 && !state.pendingUpgrade) {
+                const nextCost =
+                  state.profile === "TRADITIONAL"
+                    ? UPGRADE_COSTS.TRADITIONAL_TO_SOCIAL_AVERAGE
+                    : state.profile === "SOCIAL_AVERAGE"
+                      ? UPGRADE_COSTS.SOCIAL_AVERAGE_TO_PIONEER
+                      : 0;
+                const roundsLeft = 4 - session.currentRound;
+                if (
+                  nextCost > 0 &&
+                  roundsLeft >= 2 &&
+                  nextCost <= bot.wallet.balanceVnd * config.upgradeBalanceShare
+                ) {
+                  await botTry(`upgrade:${bot.id}`, sessionId, () =>
+                    investUpgrade(tx, botCtx(bot, session)),
+                  );
+                }
+              }
 
-        const allowed = allowedProductionQuantity({
-          productionCapacity: state.productionCapacity,
-          producedQuantity: state.producedQuantity,
-          availableLaborPoints: state.availableLaborPoints,
-          individualLaborTime: state.individualLaborTime,
-          productionCap: state.productionCap,
-          balanceVnd: bot.wallet.balanceVnd,
-          unitCostVnd: producerUnitCostVnd(state),
-          individualUnitCostVnd: state.individualUnitCostVnd,
-        });
-        const productionShare =
-          config.productionShare[0] +
-          seededUnit(
-            session.id,
-            session.currentRound,
-            bot.id,
-            "production-share",
-          ) *
-            (config.productionShare[1] - config.productionShare[0]);
-        const qty = Math.min(
-          allowed,
-          Math.max(allowed > 0 ? 1 : 0, Math.round(allowed * productionShare)),
-        );
-        if (qty > 0) await produce(tx, botCtx(bot, session), qty);
-      }
-
-      if (bot.role === "GOVERNMENT") {
-        const gstate = bot.roleStates[0]?.state as unknown as GovernmentRoundState | undefined;
-        if (!gstate || gstate.policyUsed || !bot.wallet) continue;
-        const n = session.currentRound;
-
-        if (n === 2) {
-          const listings = await tx.listing.count({
-            where: { roundId: round.id },
-          });
-          const coldCost = POLICIES.COLD_STORAGE.perUnitCostVnd;
-          if (listings > 0 && bot.wallet.balanceVnd >= coldCost + 2000) {
-            const lots = await tx.inventoryLot.findMany({
-              where: { sessionId, availableQuantity: { gt: 0 } },
-              take: 3,
-            });
-            if (lots.length > 0) {
-              await applyPolicy(tx, botCtx(bot, session), {
-                policyType: "COLD_STORAGE",
-                targetIds: lots.map((l) => l.id),
+              // Fresh wallet/state inside the tx — not the preloaded snapshot.
+              const wallet = await tx.wallet.findUnique({
+                where: { participantId: bot.id },
               });
+              const rs = await tx.roleState.findUnique({
+                where: {
+                  participantId_roundId: {
+                    participantId: bot.id,
+                    roundId: round.id,
+                  },
+                },
+              });
+              const live = (rs?.state ?? state) as unknown as ProducerRoundState;
+              if (!wallet) return;
+
+              const allowed = allowedProductionQuantity({
+                productionCapacity: live.productionCapacity,
+                producedQuantity: live.producedQuantity,
+                availableLaborPoints: live.availableLaborPoints,
+                individualLaborTime: live.individualLaborTime,
+                productionCap: live.productionCap,
+                balanceVnd: wallet.balanceVnd,
+                unitCostVnd: producerUnitCostVnd(live),
+                individualUnitCostVnd: live.individualUnitCostVnd,
+              });
+              const productionShare =
+                config.productionShare[0] +
+                seededUnit(
+                  session.id,
+                  session.currentRound,
+                  bot.id,
+                  "production-share",
+                ) *
+                  (config.productionShare[1] - config.productionShare[0]);
+              const qty = Math.min(
+                allowed,
+                Math.max(
+                  allowed > 0 ? 1 : 0,
+                  Math.round(allowed * productionShare),
+                ),
+              );
+              if (qty > 0) await produce(tx, botCtx(bot, session), qty);
             }
-          }
-        } else if (n === 3) {
-          if (bot.wallet.balanceVnd >= POLICIES.INFO_DISCLOSURE.fixedCostVnd) {
-            await applyPolicy(tx, botCtx(bot, session), {
-              policyType: "INFO_DISCLOSURE",
-            });
-          } else {
-            await applyPolicy(tx, botCtx(bot, session), { policyType: "NONE" });
-          }
-        } else if (n === 4) {
-          await applyPolicy(tx, botCtx(bot, session), { policyType: "NONE" });
-        }
+
+            if (bot.role === "GOVERNMENT") {
+              const gstate = bot.roleStates[0]?.state as unknown as
+                | GovernmentRoundState
+                | undefined;
+              if (!gstate || gstate.policyUsed || !bot.wallet) return;
+              const n = session.currentRound;
+
+              if (n === 2) {
+                const listings = await tx.listing.count({
+                  where: { roundId: round.id },
+                });
+                const coldCost = POLICIES.COLD_STORAGE.perUnitCostVnd;
+                if (listings > 0 && bot.wallet.balanceVnd >= coldCost + 2000) {
+                  const lots = await tx.inventoryLot.findMany({
+                    where: { sessionId, availableQuantity: { gt: 0 } },
+                    take: 3,
+                  });
+                  if (lots.length > 0) {
+                    await applyPolicy(tx, botCtx(bot, session), {
+                      policyType: "COLD_STORAGE",
+                      targetIds: lots.map((l) => l.id),
+                    });
+                  }
+                }
+              } else if (n === 3) {
+                if (
+                  bot.wallet.balanceVnd >= POLICIES.INFO_DISCLOSURE.fixedCostVnd
+                ) {
+                  await applyPolicy(tx, botCtx(bot, session), {
+                    policyType: "INFO_DISCLOSURE",
+                  });
+                } else {
+                  await applyPolicy(tx, botCtx(bot, session), {
+                    policyType: "NONE",
+                  });
+                }
+              } else if (n === 4) {
+                await applyPolicy(tx, botCtx(bot, session), {
+                  policyType: "NONE",
+                });
+              }
+            }
+          });
+        });
       }
+    } catch (e) {
+      console.error(`bot decisions (${sessionId}):`, e);
+    } finally {
+      // Always mark ready + broadcast so the UI never stalls on a partial failure.
+      await markBotsPhaseReady(sessionId).catch((e) =>
+        console.error("markBotsPhaseReady:", e),
+      );
+      await bump(sessionId, "bot:decisions").catch((e) =>
+        console.error("bot:decisions bump:", e),
+      );
     }
   });
-  await bump(sessionId, "bot:decisions");
 }
 
 const BOT_MARKET_WAVE_COUNT = 6;
@@ -289,8 +377,12 @@ function botMarketTimerName(wave: number): string {
 function marketWaveOffsets(sessionId: string, totalMs: number): number[] {
   const safeTotal = Math.max(20_000, totalMs);
   return [0.02, 0.16, 0.32, 0.5, 0.7, 0.88].map((pct, index) => {
-    const jitter = (seededUnit(sessionId, index + 1, "wave-timing") - 0.5) * 0.05;
-    return Math.max(1_000, Math.floor(safeTotal * Math.max(0.01, pct + jitter)));
+    const jitter =
+      (seededUnit(sessionId, index + 1, "wave-timing") - 0.5) * 0.05;
+    return Math.max(
+      1_000,
+      Math.floor(safeTotal * Math.max(0.01, pct + jitter)),
+    );
   });
 }
 
@@ -319,7 +411,9 @@ export function scheduleBotMarketWaves(
 
 /** MARKET_OPEN: start staggered bot trading waves. */
 export async function runBotMarket(sessionId: string): Promise<void> {
-  const session = await db.gameSession.findUniqueOrThrow({ where: { id: sessionId } });
+  const session = await db.gameSession.findUniqueOrThrow({
+    where: { id: sessionId },
+  });
   if (session.phase !== "MARKET_OPEN") return;
   const remaining = session.phaseEndsAt
     ? session.phaseEndsAt.getTime() - Date.now()
@@ -328,53 +422,148 @@ export async function runBotMarket(sessionId: string): Promise<void> {
   await runBotMarketWave(sessionId, 1);
 }
 
-async function runBotMarketWave(sessionId: string, wave: number): Promise<void> {
-  const session = await db.gameSession.findUniqueOrThrow({ where: { id: sessionId } });
-  if (session.phase !== "MARKET_OPEN" || session.paused) return;
-  const price = unitValueVnd(session.currentRound);
-  const round = await db.round.findUniqueOrThrow({
-    where: { sessionId_number: { sessionId, number: session.currentRound } },
-  });
-  let actions = 0;
+async function runBotMarketWave(
+  sessionId: string,
+  wave: number,
+): Promise<void> {
+  await withSessionLock(sessionId, async () => {
+    let actions = 0;
+    try {
+      const session = await db.gameSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      });
+      if (session.phase !== "MARKET_OPEN" || session.paused) return;
+      const price = unitValueVnd(session.currentRound);
+      const round = await db.round.findUniqueOrThrow({
+        where: {
+          sessionId_number: { sessionId, number: session.currentRound },
+        },
+      });
 
-  await db.$transaction(
-    async (tx) => {
+      // Separate transactions per step so one failure does not wipe the wave.
+      const steps: Array<() => Promise<number>> = [];
       if (wave === 1) {
-        actions += await applyBotExportPromotion(tx, session, round.id);
-        actions += await createHumanIntermediaryStarterOffers(
-          tx,
-          session,
-          round.id,
+        steps.push(
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await applyBotExportPromotion(tx, session, round.id);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await createHumanIntermediaryStarterOffers(
+                tx,
+                session,
+                round.id,
+              );
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(
+              async (tx) => {
+                n += await listBotProducerRetail(
+                  tx,
+                  session,
+                  round.id,
+                  price,
+                );
+              },
+              { timeout: 15_000 },
+            );
+            return n;
+          },
         );
-        actions += await listBotProducerRetail(tx, session, round.id, price);
       }
-
       if (wave === 2) {
-        actions += await createBotWholesaleOffers(tx, session, round.id, price);
+        steps.push(async () => {
+          let n = 0;
+          await db.$transaction(async (tx) => {
+            n += await createBotWholesaleOffers(tx, session, round.id, price);
+          });
+          return n;
+        });
       }
-
       if (wave === 3) {
-        actions += await respondBotWholesaleOffers(tx, session, round.id, price);
+        steps.push(async () => {
+          let n = 0;
+          await db.$transaction(async (tx) => {
+            n += await respondBotWholesaleOffers(tx, session, round.id, price);
+          });
+          return n;
+        });
       }
-
       if (wave === 4) {
-        actions += await acceptBotWholesaleCounters(tx, session, round.id);
-        actions += await listBotIntermediaryRetail(tx, session);
+        steps.push(
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await acceptBotWholesaleCounters(tx, session, round.id);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await listBotIntermediaryRetail(tx, session);
+            });
+            return n;
+          },
+        );
       }
-
       if (wave === 5) {
-        actions += await runBotConsumerDemand(tx, session, 1);
+        steps.push(async () => {
+          let n = 0;
+          await db.$transaction(async (tx) => {
+            n += await runBotConsumerDemand(tx, session, 1);
+          });
+          return n;
+        });
       }
-
       if (wave === 6) {
-        actions += await respondBotRetailOffers(tx, session, price);
-        actions += await runBotConsumerDemand(tx, session, 2);
+        steps.push(
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await respondBotRetailOffers(tx, session, price);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await runBotConsumerDemand(tx, session, 2);
+            });
+            return n;
+          },
+        );
       }
-    },
-    { timeout: 15_000 },
-  );
 
-  await bump(sessionId, "bot:market_wave", { wave, actions });
+      for (const step of steps) {
+        const ok = await botTry(`market-wave-${wave}`, sessionId, async () => {
+          actions += await step();
+        });
+        if (!ok) continue;
+      }
+    } catch (e) {
+      console.error(`bot market wave ${wave} (${sessionId}):`, e);
+    } finally {
+      // Ready after the first listing wave (and again at the end) so the UI
+      // does not wait on later optional trading waves.
+      if (wave === 1 || wave >= BOT_MARKET_WAVE_COUNT) {
+        await markBotsPhaseReady(sessionId).catch((e) =>
+          console.error("markBotsPhaseReady:", e),
+        );
+      }
+      await bump(sessionId, "bot:market_wave", { wave, actions }).catch((e) =>
+        console.error("bot:market_wave bump:", e),
+      );
+    }
+  });
 }
 
 async function applyBotExportPromotion(
@@ -389,7 +578,9 @@ async function applyBotExportPromotion(
       roleStates: { where: { roundId }, take: 1 },
     },
   });
-  const gstate = govBot?.roleStates[0]?.state as unknown as GovernmentRoundState | undefined;
+  const gstate = govBot?.roleStates[0]?.state as unknown as
+    | GovernmentRoundState
+    | undefined;
   if (
     !govBot?.wallet ||
     !gstate ||
@@ -401,7 +592,9 @@ async function applyBotExportPromotion(
   }
 
   try {
-    await applyPolicy(tx, botCtx(govBot, session), { policyType: "EXPORT_PROMOTION" });
+    await applyPolicy(tx, botCtx(govBot, session), {
+      policyType: "EXPORT_PROMOTION",
+    });
     return 1;
   } catch {
     return 0;
@@ -432,7 +625,9 @@ async function listBotProducerRetail(
     "producer-retail-order",
   );
   for (const seller of producers) {
-    const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
+    const pstate = seller.roleStates[0]?.state as unknown as
+      | ProducerRoundState
+      | undefined;
     const unitCost = pstate ? producerUnitCostVnd(pstate) : price;
     const lots = await tx.inventoryLot.findMany({
       where: {
@@ -490,7 +685,9 @@ async function createBotWholesaleOffers(
     "producer-wholesale-order",
   );
   for (const seller of producers) {
-    const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
+    const pstate = seller.roleStates[0]?.state as unknown as
+      | ProducerRoundState
+      | undefined;
     const unitCost = pstate ? producerUnitCostVnd(pstate) : price;
     const lots = await tx.inventoryLot.findMany({
       where: {
@@ -573,7 +770,9 @@ async function createHumanIntermediaryStarterOffers(
   let actions = 0;
   for (const seller of producers) {
     if (needed === 0) break;
-    const pstate = seller.roleStates[0]?.state as unknown as ProducerRoundState | undefined;
+    const pstate = seller.roleStates[0]?.state as unknown as
+      | ProducerRoundState
+      | undefined;
     if (!pstate) continue;
     const lots = await tx.inventoryLot.findMany({
       where: {
@@ -587,8 +786,7 @@ async function createHumanIntermediaryStarterOffers(
     for (const lot of lots) {
       if (needed === 0) break;
       const buyer = buyers[actions % buyers.length];
-      const budget =
-        Math.floor((buyer.wallet?.balanceVnd ?? 0) / 1000) * 1000;
+      const budget = Math.floor((buyer.wallet?.balanceVnd ?? 0) / 1000) * 1000;
       const minimumPriceVnd = Math.max(
         MIN_PRICE_VND,
         Math.min(producerUnitCostVnd(pstate), budget),
@@ -776,7 +974,9 @@ async function runBotConsumerDemand(
 ): Promise<number> {
   let actions = 0;
   const round = await tx.round.findUniqueOrThrow({
-    where: { sessionId_number: { sessionId: session.id, number: session.currentRound } },
+    where: {
+      sessionId_number: { sessionId: session.id, number: session.currentRound },
+    },
     select: { id: true },
   });
   const consumers = seededOrder(
@@ -791,13 +991,17 @@ async function runBotConsumerDemand(
     `consumer-demand-order-${maxActionsPerConsumer}`,
   );
   for (const consumer of consumers) {
-    const state = consumer.roleStates[0]?.state as unknown as ConsumerRoundState | undefined;
+    const state = consumer.roleStates[0]?.state as unknown as
+      | ConsumerRoundState
+      | undefined;
     if (!state) continue;
     let need = Math.max(0, state.needTarget - state.fulfilledUnits);
     let attempts = 0;
     while (need > 0 && attempts < maxActionsPerConsumer) {
       attempts++;
-      const wallet = await tx.wallet.findUnique({ where: { participantId: consumer.id } });
+      const wallet = await tx.wallet.findUnique({
+        where: { participantId: consumer.id },
+      });
       if (!wallet) break;
       const listings = await tx.listing.findMany({
         where: {
@@ -848,8 +1052,14 @@ async function runBotConsumerDemand(
             config.offerDiscountSteps[0],
             config.offerDiscountSteps[1],
           );
-          const offerPrice = Math.max(1000, listing.askPriceVnd - discountSteps * 1000);
-          if (offerPrice < listing.askPriceVnd && wallet.balanceVnd >= offerPrice) {
+          const offerPrice = Math.max(
+            1000,
+            listing.askPriceVnd - discountSteps * 1000,
+          );
+          if (
+            offerPrice < listing.askPriceVnd &&
+            wallet.balanceVnd >= offerPrice
+          ) {
             await makeOffer(tx, botCtx(consumer, session), {
               listingId: listing.id,
               quantity: 1,
@@ -902,7 +1112,9 @@ async function respondBotRetailOffers(
   );
   for (const offer of offers) {
     if (!offer.listing) continue;
-    const seller = await tx.participant.findUnique({ where: { id: offer.toParticipantId } });
+    const seller = await tx.participant.findUnique({
+      where: { id: offer.toParticipantId },
+    });
     if (!seller?.isBot) continue;
     const config = botConfig(seller, session);
     const concessionSteps = botInt(
@@ -932,7 +1144,8 @@ async function respondBotRetailOffers(
         });
         actions++;
       } else if (
-        offer.listing.askPriceVnd - offer.offerPriceVnd >= counterGapSteps * 1000 &&
+        offer.listing.askPriceVnd - offer.offerPriceVnd >=
+          counterGapSteps * 1000 &&
         counterPrice < offer.listing.askPriceVnd
       ) {
         await respondOffer(tx, botCtx(seller, session), {
@@ -954,5 +1167,6 @@ export async function runBotTakeover(sessionId: string): Promise<void> {
   const session = await db.gameSession.findUnique({ where: { id: sessionId } });
   if (!session?.phase) return;
   if (session.phase === "DECISION") await runBotDecisions(sessionId);
-  else if (session.phase === "MARKET_OPEN") await runBotMarketWave(sessionId, 5);
+  else if (session.phase === "MARKET_OPEN")
+    await runBotMarketWave(sessionId, 5);
 }

@@ -2,6 +2,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { PHASE_LABELS } from "@/lib/labels";
 import { getMapPhaseHint } from "@/lib/zone-phase";
 import { getRoleQuest, type RoleQuest } from "@/lib/role-quest";
+import { isDisconnectedForReady } from "@/lib/participant-presence";
 import type { ParticipantView, SessionSnapshot } from "@/lib/session-service";
 
 export const ROUND_PHASES = [
@@ -77,6 +78,8 @@ export interface PlayerTimelineEntry {
   action: string;
   status: DutyStatus;
   showPhaseReady: boolean;
+  /** Human offline long enough that we no longer wait on them. */
+  disconnected: boolean;
 }
 
 function activityLabelForRole(params: {
@@ -87,32 +90,43 @@ function activityLabelForRole(params: {
 }): string {
   const { role, phase, round, status } = params;
 
-  if (phase === "EVENT") return "Đang đọc biến cố";
-  if (phase === "SETTLEMENT") return "Đang chốt sổ";
-  if (phase === "RECAP") return "Đang tổng kết";
-  if (!phase) return "Đang chờ";
+  if (status === "done") return "Đã xong";
+
+  if (phase === "EVENT") return "Đang đọc biến cố...";
+  if (phase === "SETTLEMENT") return "Đang chốt sổ...";
+  if (phase === "RECAP") return "Đang tổng kết...";
+  if (!phase) return "Đang chờ...";
+
+  if (status === "waiting") {
+    if (phase === "DECISION") {
+      if (role === "CONSUMER") return "Đang chờ chợ mở...";
+      if (role === "INTERMEDIARY") return "Đang chờ nguồn hàng...";
+      if (role === "GOVERNMENT" && round < 2) return "Đang quan sát...";
+    }
+    return "Đang chờ...";
+  }
 
   if (phase === "DECISION") {
-    if (role === "PRODUCER") return "Đang sản xuất";
-    if (role === "CONSUMER") return "Chờ chợ mở";
-    if (role === "INTERMEDIARY") return "Chờ nguồn hàng";
+    if (role === "PRODUCER") return "Đang tạo sản phẩm...";
+    if (role === "CONSUMER") return "Đang chờ chợ mở...";
+    if (role === "INTERMEDIARY") return "Đang chờ nguồn hàng...";
     if (role === "GOVERNMENT") {
-      if (round < 2) return "Đang quan sát";
-      return "Đang điều tiết";
+      if (round < 2) return "Đang quan sát...";
+      return "Đang điều tiết thị trường...";
     }
   }
 
   if (phase === "MARKET_OPEN") {
-    if (role === "PRODUCER") return "Đang bán hàng";
-    if (role === "CONSUMER") return "Đang mua hàng";
-    if (role === "INTERMEDIARY") return "Đang phân phối";
+    if (role === "PRODUCER") return "Đang bán hàng...";
+    if (role === "CONSUMER") return "Đang mua hàng...";
+    if (role === "INTERMEDIARY") return "Đang phân phối hàng...";
     if (role === "GOVERNMENT") {
-      if (round < 2) return "Đang quan sát";
-      return "Đang xuất khẩu";
+      if (round < 2) return "Đang quan sát...";
+      return "Đang xuất khẩu...";
     }
   }
 
-  return status === "done" ? "Đã xong" : status === "active" ? "Đang làm" : "Đang chờ";
+  return status === "active" ? "Đang làm..." : "Đang chờ...";
 }
 
 function questForParticipant(
@@ -138,7 +152,6 @@ function resolvePlayerStatus(
   quest: RoleQuest,
 ): DutyStatus {
   if (
-    !participant.isBot &&
     canFastForwardPhase(snapshot.status, snapshot.phase) &&
     participant.phaseReady
   ) {
@@ -182,22 +195,26 @@ export function buildPlayerEntries(
     .map((participant) => {
       const quest = questForParticipant(snapshot, participant);
       const status = resolvePlayerStatus(snapshot, participant, quest);
-      const showPhaseReady =
+      const showPhaseReady = canFastForwardPhase(snapshot.status, snapshot.phase);
+      const disconnected =
         !participant.isBot &&
-        canFastForwardPhase(snapshot.status, snapshot.phase);
+        isDisconnectedForReady(participant.presence, participant.lastSeenAt);
 
       return {
         participant,
         title: quest.title,
-        activityLabel: activityLabelForRole({
-          role: participant.role,
-          phase: snapshot.phase,
-          round: snapshot.currentRound,
-          status,
-        }),
+        activityLabel: disconnected
+          ? "Mất kết nối"
+          : activityLabelForRole({
+              role: participant.role,
+              phase: snapshot.phase,
+              round: snapshot.currentRound,
+              status,
+            }),
         action: quest.action,
-        status,
+        status: disconnected ? ("waiting" as DutyStatus) : status,
         showPhaseReady,
+        disconnected,
       };
     });
 }

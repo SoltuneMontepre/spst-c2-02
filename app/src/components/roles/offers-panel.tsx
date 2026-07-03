@@ -13,11 +13,14 @@ export function OffersPanel({
   stateVersion,
   incoming,
   outgoing,
+  canCounter = true,
 }: {
   sessionId: string;
   stateVersion?: number;
   incoming: OfferView[];
   outgoing: OfferView[];
+  /** Only sellers (PRODUCER/INTERMEDIARY) can counter-offer; consumers can only accept/reject. */
+  canCounter?: boolean;
 }) {
   const command = useCommand(sessionId, stateVersion);
   const [counterPrices, setCounterPrices] = useState<Record<string, number>>({});
@@ -64,31 +67,35 @@ export function OffersPanel({
               >
                 Từ chối
               </Button>
-              <Input
-                type="number"
-                step={1000}
-                min={MIN_PRICE_VND}
-                className="h-9 w-24"
-                value={counterPrices[o.id] ?? o.offerPriceVnd + 1000}
-                onChange={(e) =>
-                  setCounterPrices((p) => ({ ...p, [o.id]: Number(e.target.value) }))
-                }
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={command.isPending}
-                onClick={() =>
-                  command.mutate({
-                    action: "respondOffer",
-                    offerId: o.id,
-                    decision: "COUNTER",
-                    counterPriceVnd: counterPrices[o.id] ?? o.offerPriceVnd + 1000,
-                  })
-                }
-              >
-                Phản đề nghị
-              </Button>
+              {canCounter ? (
+                <>
+                  <Input
+                    type="number"
+                    step={1000}
+                    min={MIN_PRICE_VND}
+                    className="h-9 w-24"
+                    value={counterPrices[o.id] ?? o.offerPriceVnd + 1000}
+                    onChange={(e) =>
+                      setCounterPrices((p) => ({ ...p, [o.id]: Number(e.target.value) }))
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={command.isPending}
+                    onClick={() =>
+                      command.mutate({
+                        action: "respondOffer",
+                        offerId: o.id,
+                        decision: "COUNTER",
+                        counterPriceVnd: counterPrices[o.id] ?? o.offerPriceVnd + 1000,
+                      })
+                    }
+                  >
+                    Phản đề nghị
+                  </Button>
+                </>
+              ) : null}
             </div>
           </div>
         ))}

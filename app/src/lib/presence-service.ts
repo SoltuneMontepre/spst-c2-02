@@ -6,9 +6,11 @@ import { ApiError } from "./api";
 import { ensureHostParticipant } from "./lobby-seat";
 import {
   DISCONNECT_BOT_TAKEOVER_SEC,
+  DISCONNECT_READY_GRACE_SEC,
   HOST_RECONNECT_WINDOW_SEC,
 } from "./scenario";
 import { hostPause, hostEnd } from "./game-service";
+import { syncLobbySoloSince } from "./lobby-maintenance";
 
 const disconnectTimers = new Map<string, NodeJS.Timeout>();
 const hostOfflineTimers = new Map<string, NodeJS.Timeout>();
@@ -78,11 +80,12 @@ export async function heartbeat(
   const shouldBroadcast =
     participant.presence !== "ONLINE" || participant.controlMode !== controlMode;
 
+  const lastSeenAt = new Date();
   await db.participant.update({
     where: { id: participant.id },
     data: {
       presence: "ONLINE",
-      lastSeenAt: new Date(),
+      lastSeenAt,
       controlMode,
       ...(tabId ? {} : {}),
     },
@@ -90,12 +93,17 @@ export async function heartbeat(
 
   scheduleStaleHeartbeat(userId, sessionId, participant.id);
 
+  if (session.status === "LOBBY") {
+    await syncLobbySoloSince(sessionId);
+  }
+
   if (shouldBroadcast) {
     await bump(sessionId, "participant:presence", {
       participantId: participant.id,
       userId,
       presence: "ONLINE",
       controlMode,
+      lastSeenAt: lastSeenAt.toISOString(),
     });
   }
   return { controlMode };
@@ -109,16 +117,25 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
   if (!participant) return;
   clearParticipantTimer(sessionId, participant.id);
 
+  const lastSeenAt = new Date();
   await db.participant.update({
     where: { id: participant.id },
-    data: { presence: "OFFLINE", lastSeenAt: new Date() },
+    data: { presence: "OFFLINE", lastSeenAt },
   });
 
   const session = await db.gameSession.findUnique({ where: { id: sessionId } });
   if (!session) return;
 
+  // After the grace window, stop waiting on this player for phase advance.
+  setTimeout(() => {
+    void import("./ai-host")
+      .then((m) => m.maybeFastForwardPhase(sessionId))
+      .catch((e) => console.error("ready-grace fast-forward:", e));
+  }, DISCONNECT_READY_GRACE_SEC * 1000);
+
   // Lobby: not-ready after 15s (FR-ROOM-03).
   if (session.status === "LOBBY") {
+    await syncLobbySoloSince(sessionId);
     const key = participantTimerKey(sessionId, participant.id);
     disconnectTimers.set(
       key,
@@ -164,6 +181,7 @@ export async function markOffline(userId: string, sessionId: string): Promise<vo
     participantId: participant.id,
     userId,
     presence: "OFFLINE",
+    lastSeenAt: lastSeenAt.toISOString(),
   });
 }
 

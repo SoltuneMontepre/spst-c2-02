@@ -10,7 +10,7 @@ export function playerSessionHref(session: { id: string; status: string }): stri
   if (["COMPLETED", "INCOMPLETE", "CANCELLED"].includes(session.status)) {
     return `/session/${session.id}/debrief`;
   }
-  return `/session/${session.id}/map`;
+  return `/session/${session.id}/game`;
 }
 
 export function historySessionHref(session: {
@@ -21,5 +21,5 @@ export function historySessionHref(session: {
   if (["COMPLETED", "INCOMPLETE"].includes(session.status)) {
     return `/session/${session.sessionId}/debrief`;
   }
-  return `/session/${session.sessionId}/map`;
+  return `/session/${session.sessionId}/game`;
 }

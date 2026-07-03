@@ -68,8 +68,8 @@ export function SoloLobbyCountdown({
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {isHost
-              ? "Chưa có người tham gia. Chia sẻ mã phòng hoặc gia hạn thêm 1 phút."
-              : "Chưa đủ người trong phòng. Host có thể gia hạn thêm thời gian chờ."}
+              ? "Mọi người đều đã ngoại tuyến. Quay lại phòng hoặc gia hạn thêm 1 phút."
+              : "Mọi người trong phòng đều đã ngoại tuyến. Host có thể gia hạn thêm thời gian chờ."}
           </p>
           {isHost && onExtend && !extendUsed ? (
             <Button

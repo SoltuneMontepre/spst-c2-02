@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useSessionCancelledRedirect } from "@/hooks/use-session-cancelled-redirect";
+import { useAutoPhaseReady } from "@/hooks/use-phase-ready";
 import { GameSessionLayout } from "@/components/session/game-session-layout";
 import { GamePhaseCta } from "@/components/session/game-phase-cta";
-import { GameInsightPanel } from "@/components/session/game-insight-panel";
-import { GamePhaseStepperStrip } from "@/components/session/game-phase-timeline";
-import { MapZones } from "./map-zones";
+import { GameBottomPill } from "@/components/session/game-bottom-pill";
+import { MapPlayerRoster } from "@/components/session/map-player-roster";
+import { MapRoleActionPanel } from "@/components/session/map-role-action-panel";
+import { MapResourcesPanel } from "@/components/session/map-resources-panel";
 import { RoundRecapCard } from "@/components/observatory/round-recap-card";
+import { getRoleQuest } from "@/lib/role-quest";
 
 const ENDED = ["COMPLETED", "INCOMPLETE"];
 
@@ -26,60 +29,97 @@ export function MapShell({ sessionId }: { sessionId: string }) {
       router.replace(`/session/${sessionId}/debrief`);
   }, [data, router, sessionId]);
 
+  const selfParticipant = data?.participants.find((p) => p.isSelf);
+  const role = data?.self?.role ?? null;
+  const quest = useMemo(() => {
+    if (!data || !role) return null;
+    return getRoleQuest({
+      role,
+      phase: data.phase,
+      round: data.currentRound,
+      roleState: data.self?.roleState ?? null,
+      marketListingCount: data.market?.listings.length ?? 0,
+    });
+  }, [data, role]);
+
+  const questStatus = quest?.status;
+  // Only auto-ready when waiting (nothing to do). After an action (done),
+  // the bottom pill ready button pulses so the player confirms.
+  const shouldAutoReady = questStatus === "waiting";
+  const phaseReady = selfParticipant?.phaseReady ?? false;
+  const canPhaseReady = Boolean(selfParticipant && !selfParticipant.isBot);
+
+  useAutoPhaseReady({
+    sessionId,
+    phase: data?.phase ?? null,
+    phaseReady,
+    shouldAutoReady,
+    paused: data?.paused ?? false,
+    enabled: canPhaseReady,
+  });
+
   if (isLoading || !data) {
     return <p className="p-6 text-muted-foreground">Đang tải phiên…</p>;
   }
 
   const recapRound = data.analytics.find((r) => r.number === data.currentRound);
-  const role = data.self?.role ?? null;
-  const selfParticipant = data.participants.find((p) => p.isSelf);
-  const mapInteractive =
-    data.status !== "INTRO" &&
-    (data.phase === "DECISION" || data.phase === "MARKET_OPEN");
 
   return (
-    <GameSessionLayout
-      variant="map"
-      sessionId={sessionId}
-      activeZone="map"
-      rightPanel={
-        <GameInsightPanel
-          round={data.currentRound}
-          stats={data.liveRoundStats}
-          activity={data.marketActivity}
+    <GameSessionLayout variant="map" sessionId={sessionId} activeZone="map">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <MapPlayerRoster
+          snapshot={{
+            phase: data.phase,
+            status: data.status,
+            currentRound: data.currentRound,
+            self: data.self,
+            market: data.market,
+            autoHost: data.autoHost,
+            participants: data.participants,
+          }}
         />
-      }
-    >
-      <GamePhaseCta
-        variant="map"
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-3 pb-[4.75rem]">
+          <div className="shrink-0">
+            <GamePhaseCta
+              variant="map"
+              sessionId={sessionId}
+              phase={data.phase}
+              round={data.currentRound}
+              role={role}
+              roleState={data.self?.roleState ?? null}
+              marketListingCount={data.market?.listings.length ?? 0}
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {data.phase === "RECAP" && recapRound ? (
+              <RoundRecapCard
+                sessionId={sessionId}
+                round={recapRound}
+                analytics={data.analytics}
+                selfTransactions={data.recentTransactions}
+              />
+            ) : (
+              <MapRoleActionPanel sessionId={sessionId} />
+            )}
+          </div>
+        </div>
+
+        <MapResourcesPanel data={data} className="hidden min-h-0 lg:flex" />
+      </div>
+
+      <GameBottomPill
         sessionId={sessionId}
+        self={data.self}
+        selfParticipant={selfParticipant}
         phase={data.phase}
-        round={data.currentRound}
-        role={role}
-        roleState={data.self?.roleState ?? null}
-        marketListingCount={data.market?.listings.length ?? 0}
-        phaseReady={selfParticipant?.phaseReady ?? false}
-        autoHost={data.autoHost}
+        phaseEndsAt={data.phaseEndsAt}
         paused={data.paused}
-        showPhaseReady={Boolean(selfParticipant && !selfParticipant.isBot)}
+        status={data.status}
+        phaseReady={phaseReady}
+        autoHost={data.autoHost}
+        questStatus={questStatus}
       />
-      <GamePhaseStepperStrip data={data} variant="map" />
-      {data.phase === "RECAP" && recapRound ? (
-        <RoundRecapCard sessionId={sessionId} round={recapRound} />
-      ) : (
-        <MapZones
-          sessionId={sessionId}
-          role={role}
-          round={data.currentRound}
-          phase={data.phase}
-          status={data.status}
-          self={data.self}
-          market={data.market}
-          autoHost={data.autoHost}
-          participants={data.participants}
-          interactive={mapInteractive}
-        />
-      )}
     </GameSessionLayout>
   );
 }

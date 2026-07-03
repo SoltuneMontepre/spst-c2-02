@@ -40,7 +40,7 @@ function playNavItems(sessionId: string, role: Role | null) {
     {
       id: "map" as const,
       label: "Bản đồ chợ",
-      href: `/session/${sessionId}/map`,
+      href: `/session/${sessionId}/game`,
       icon: Map,
     },
     {
@@ -139,7 +139,7 @@ export function GameSidebar({
     {
       id: "recap",
       label: "Tổng kết vòng",
-      href: `/session/${sessionId}/map`,
+      href: `/session/${sessionId}/game`,
       icon: BarChart3,
     },
     {
