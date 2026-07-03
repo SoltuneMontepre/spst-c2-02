@@ -131,7 +131,7 @@ export function PriceValueChart({
       ) : null}
 
       {displayRounds.map((round, i) => (
-        <g key={round.number}>
+        <g key={`${round.number}-${i}`}>
           {round.marketPriceVnd != null ? (
             <circle
               cx={x(i)}

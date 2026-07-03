@@ -23,6 +23,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   MISSING_COUNTER_PRICE: "Vui lòng nhập giá gửi lại.",
   POLICY_ROUND_FORBIDDEN: "Chính sách chỉ áp dụng từ vòng 2.",
   POLICY_ALREADY_USED: "Cơ quan quản lý đã dùng chính sách trong vòng này.",
+  INVALID_POLICY: "Chính sách chưa đủ điều kiện hoặc mục tiêu không hợp lệ.",
   UPGRADE_NOT_AVAILABLE: "Nâng cấp không khả dụng cho hồ sơ hoặc vòng hiện tại.",
   UNDER_MIN_PLAYERS: "Cần ít nhất 4 người chơi để bắt đầu.",
   NOT_ALL_READY: "Mọi người chơi cần sẵn sàng trước khi bắt đầu.",

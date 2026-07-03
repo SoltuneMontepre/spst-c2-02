@@ -36,7 +36,6 @@ export function GameAnnouncementBanner({
   const self = data.participants.find((p) => p.isSelf);
   const event = data.phase === "EVENT" ? EVENT_COPY[data.currentRound] : null;
   const showReady =
-    data.autoHost &&
     data.status !== "LOBBY" &&
     data.phase !== "SETTLEMENT" &&
     canFastForwardPhase(data.status, data.phase) &&
@@ -111,6 +110,7 @@ export function GameAnnouncementBanner({
                 sessionId={sessionId}
                 phaseReady={self.phaseReady}
                 autoHost={data.autoHost}
+                phase={data.phase}
                 disabled={data.paused}
               />
               {tutorialOn ? (

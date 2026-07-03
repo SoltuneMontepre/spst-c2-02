@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import {
@@ -48,11 +49,17 @@ export function HomeSidebar({
     <aside className="hidden min-h-0 w-[240px] shrink-0 flex-col border-r border-border bg-surface lg:flex">
       <div className="p-4">
         <div className="flex items-center gap-2">
-          <div className="size-7 rounded-[14.5px] bg-gradient-to-br from-[#c94a2d] to-[#e06040]" />
-          <div className="flex flex-col leading-none">
-            <span className="text-[12px] font-black tracking-[-0.3px]">PHIÊN CHỢ</span>
-            <span className="text-[9px] font-bold uppercase tracking-[1.35px] text-primary">GIÁ TRỊ ONLINE</span>
-          </div>
+          <Image
+            src="/dragonfruit.svg"
+            alt=""
+            width={32}
+            height={32}
+            priority
+            className="size-8 shrink-0 object-contain"
+          />
+          <span className="text-sm font-black leading-tight text-foreground">
+            Thanh Long Market
+          </span>
         </div>
       </div>
 
@@ -87,7 +94,7 @@ export function HomeSidebar({
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/auth" })}
-          className="flex w-full items-center gap-[10.5px] rounded-[14px] px-[10.5px] py-[8.75px] text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted/60"
+          className="flex w-full cursor-pointer items-center gap-[10.5px] rounded-[14px] px-[10.5px] py-[8.75px] text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <LogOut className="size-[16px] shrink-0" aria-hidden />
           Đăng xuất

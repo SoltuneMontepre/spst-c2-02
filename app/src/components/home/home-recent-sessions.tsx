@@ -253,17 +253,20 @@ export function HomeRecentSessions({
             </section>
           ) : null}
           {endedSessions.length > 0 ? (
-            <section>
-              {activeSessions.length > 0 ? (
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Đã kết thúc
-                </p>
-              ) : null}
-              <ul className="flex flex-col gap-2">
-                {endedSessions.map((s) => (
-                  <RecentSessionRow key={s.sessionId} session={s} />
-                ))}
-              </ul>
+            <section className="min-h-0">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Đã kết thúc
+              </p>
+              <div className="-mr-1 max-h-80 overflow-y-auto overscroll-contain pr-1 sm:max-h-96 lg:max-h-[28rem]">
+                <ul
+                  className="flex flex-col gap-2"
+                  aria-label="Danh sách phòng đã kết thúc"
+                >
+                  {endedSessions.map((s) => (
+                    <RecentSessionRow key={s.sessionId} session={s} />
+                  ))}
+                </ul>
+              </div>
             </section>
           ) : null}
         </div>

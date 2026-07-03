@@ -138,7 +138,6 @@ function resolvePlayerStatus(
   quest: RoleQuest,
 ): DutyStatus {
   if (
-    snapshot.autoHost &&
     !participant.isBot &&
     canFastForwardPhase(snapshot.status, snapshot.phase) &&
     participant.phaseReady
@@ -184,7 +183,6 @@ export function buildPlayerEntries(
       const quest = questForParticipant(snapshot, participant);
       const status = resolvePlayerStatus(snapshot, participant, quest);
       const showPhaseReady =
-        snapshot.autoHost &&
         !participant.isBot &&
         canFastForwardPhase(snapshot.status, snapshot.phase);
 

@@ -4,11 +4,13 @@ import { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useSessionSnapshot } from "@/hooks/use-session-room";
 import { useCommand } from "@/hooks/use-command";
+import { ApiClientError } from "@/hooks/use-api";
 import { RoleTaskScreen } from "@/components/session/role-task-screen";
 import { GovernmentInsightPanel } from "@/components/session/role-insight-panels";
 import { PolicyCard } from "./policy-card";
 import { Button } from "@/components/ui/button";
 import { POLICIES } from "@/lib/scenario";
+import { errorMessage } from "@/lib/error-messages";
 import { formatThousandDong } from "@/lib/money";
 import type { GovernmentRoundState } from "@/lib/role-state";
 import type { PolicyType } from "@/generated/prisma/enums";
@@ -73,6 +75,10 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
   const decisionOpen = data.phase === "DECISION" && data.currentRound >= 2;
   const exportOpen = data.phase === "MARKET_OPEN" && data.currentRound >= 2 && !used;
   const budget = data.self.balanceVnd ?? 0;
+  const commandError =
+    command.isError && command.error instanceof ApiClientError
+      ? errorMessage(command.error.code, command.error.message)
+      : null;
 
   const visiblePolicies = DECISION_POLICIES.filter(
     (p) => !p.rounds || p.rounds.includes(data.currentRound),
@@ -183,15 +189,22 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
                 <AlertCircle className="size-3.5 shrink-0" aria-hidden />
                 <span>Cơ quan quản lý không trực tiếp ấn định giá thị trường.</span>
               </div>
-              <Button
-                disabled={
-                  command.isPending ||
-                  (selected === "EXPORT_PROMOTION" ? !exportOpen : !decisionOpen)
-                }
-                onClick={applyPolicy}
-              >
-                Áp dụng chính sách
-              </Button>
+              <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                <Button
+                  disabled={
+                    command.isPending ||
+                    (selected === "EXPORT_PROMOTION" ? !exportOpen : !decisionOpen)
+                  }
+                  onClick={applyPolicy}
+                >
+                  {command.isPending ? "Đang áp dụng…" : "Áp dụng chính sách"}
+                </Button>
+                {commandError ? (
+                  <p className="max-w-xs text-xs text-danger" role="alert">
+                    {commandError}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </>
         ) : (

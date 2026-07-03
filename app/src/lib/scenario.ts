@@ -105,7 +105,7 @@ export const UPGRADE_COSTS = {
 export const PHASE_DURATIONS_SEC = {
   EVENT: 22,
   DECISION: 60,
-  MARKET_OPEN: 60,
+  MARKET_OPEN: 300,
   SETTLEMENT: 0, // server-driven, no fixed timer
   RECAP: 30, // minimum before host may advance
 } as const;

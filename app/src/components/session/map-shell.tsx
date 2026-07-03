@@ -32,6 +32,7 @@ export function MapShell({ sessionId }: { sessionId: string }) {
 
   const recapRound = data.analytics.find((r) => r.number === data.currentRound);
   const role = data.self?.role ?? null;
+  const selfParticipant = data.participants.find((p) => p.isSelf);
   const mapInteractive =
     data.status !== "INTRO" &&
     (data.phase === "DECISION" || data.phase === "MARKET_OPEN");
@@ -53,6 +54,10 @@ export function MapShell({ sessionId }: { sessionId: string }) {
         role={role}
         roleState={data.self?.roleState ?? null}
         marketListingCount={data.market?.listings.length ?? 0}
+        phaseReady={selfParticipant?.phaseReady ?? false}
+        autoHost={data.autoHost}
+        paused={data.paused}
+        showPhaseReady={Boolean(selfParticipant && !selfParticipant.isBot)}
       />
       <GamePhaseStepperStrip data={data} variant="map" />
       {data.phase === "RECAP" && recapRound ? (

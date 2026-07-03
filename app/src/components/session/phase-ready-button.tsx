@@ -4,18 +4,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/hooks/use-api";
 import type { SessionSnapshot } from "@/lib/session-service";
+import { cn } from "@/lib/utils";
 
 /** TFT-style "ready" to fast-forward the current phase when everyone is done. */
 export function PhaseReadyButton({
   sessionId,
   phaseReady,
   autoHost,
+  phase,
   disabled,
+  className,
 }: {
   sessionId: string;
   phaseReady: boolean;
   autoHost: boolean;
+  phase?: string | null;
   disabled?: boolean;
+  className?: string;
 }) {
   const queryClient = useQueryClient();
   const queryKey = ["session", sessionId] as const;
@@ -45,7 +50,18 @@ export function PhaseReadyButton({
     },
   });
 
-  if (!autoHost) return null;
+  const idleLabel =
+    phase === "MARKET_OPEN"
+      ? "Tôi đã giao dịch xong"
+      : autoHost
+        ? "Sẵn sàng — chuyển giai đoạn"
+        : "Báo đã xong cho host";
+  const readyLabel =
+    phase === "MARKET_OPEN"
+      ? "Đã xong — chờ cả chợ"
+      : autoHost
+        ? "Đã sẵn sàng — chờ người khác"
+        : "Đã báo xong cho host";
 
   return (
     <Button
@@ -53,9 +69,9 @@ export function PhaseReadyButton({
       variant={phaseReady ? "secondary" : "primary"}
       disabled={disabled || mutation.isPending}
       onClick={() => mutation.mutate(!phaseReady)}
-      className="w-full"
+      className={cn("w-full", className)}
     >
-      {phaseReady ? "Đã sẵn sàng — chờ người khác" : "Sẵn sàng — chuyển giai đoạn"}
+      {phaseReady ? readyLabel : idleLabel}
     </Button>
   );
 }

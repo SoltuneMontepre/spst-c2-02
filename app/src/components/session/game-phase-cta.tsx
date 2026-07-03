@@ -8,6 +8,7 @@ import { getRoleQuest } from "@/lib/role-quest";
 import { getTaskZoneForPhase } from "@/lib/zone-phase";
 import { zoneLabelForRole } from "@/lib/game-zones";
 import { buttonVariants } from "@/components/ui/button";
+import { PhaseReadyButton } from "@/components/session/phase-ready-button";
 import { cn } from "@/lib/utils";
 
 export function GamePhaseCta({
@@ -18,6 +19,10 @@ export function GamePhaseCta({
   roleState = null,
   marketListingCount = 0,
   variant = "default",
+  phaseReady = false,
+  autoHost = false,
+  paused = false,
+  showPhaseReady = false,
 }: {
   sessionId: string;
   phase: string | null;
@@ -26,6 +31,10 @@ export function GamePhaseCta({
   roleState?: unknown;
   marketListingCount?: number;
   variant?: "default" | "map";
+  phaseReady?: boolean;
+  autoHost?: boolean;
+  paused?: boolean;
+  showPhaseReady?: boolean;
 }) {
   if (phase !== "DECISION" && phase !== "MARKET_OPEN") return null;
 
@@ -48,6 +57,8 @@ export function GamePhaseCta({
         ? `/session/${sessionId}/task`
         : `/session/${sessionId}/map`;
   const showTaskLink = taskZone != null && !(variant === "map" && taskZone === "map");
+  const showReadyButton =
+    variant === "map" && phase === "MARKET_OPEN" && showPhaseReady;
 
   const phaseTitle =
     phase === "DECISION"
@@ -68,14 +79,28 @@ export function GamePhaseCta({
             ) : null}
           </div>
         </div>
-        {showTaskLink ? (
-          <Link
-            href={href}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[10.5px] border border-white/20 bg-white/15 px-[15px] py-[6.25px] text-[12px] font-bold text-white transition-colors hover:bg-white/25"
-          >
-            Đi tới nhiệm vụ
-            <ArrowRight className="size-3.5" aria-hidden />
-          </Link>
+        {showTaskLink || showReadyButton ? (
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            {showTaskLink ? (
+              <Link
+                href={href}
+                className="inline-flex items-center justify-center gap-1.5 rounded-[10.5px] border border-white/20 bg-white/15 px-[15px] py-[7.25px] text-[12px] font-bold text-white transition-colors hover:bg-white/25"
+              >
+                Đi tới nhiệm vụ
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
+            ) : null}
+            {showReadyButton ? (
+              <PhaseReadyButton
+                sessionId={sessionId}
+                phaseReady={phaseReady}
+                autoHost={autoHost}
+                phase={phase}
+                disabled={paused}
+                className="h-8 border border-white/25 bg-white px-3 text-[#c94a2d] hover:bg-white/90"
+              />
+            ) : null}
+          </div>
         ) : null}
       </div>
     );

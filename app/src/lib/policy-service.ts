@@ -1,6 +1,6 @@
 // Government policy actions (SRS §5.10). One policy per round from round 2.
 
-import type { PolicyType, RoundPhase } from "@/generated/prisma/enums";
+import type { InventoryStatus, PolicyType, Role, RoundPhase } from "@/generated/prisma/enums";
 import { ApiError } from "./api";
 import type { Tx, CommandContext } from "./commands";
 import { POLICIES, PRODUCER_INPUT_LOCK_SEC, PHASE_DURATIONS_SEC } from "./scenario";
@@ -19,6 +19,105 @@ async function currentRound(tx: Tx, sessionId: string, number: number) {
   return tx.round.findUniqueOrThrow({
     where: { sessionId_number: { sessionId, number } },
   });
+}
+
+type ColdStorageLot = {
+  id: string;
+  sessionId: string;
+  roundIdProduced: string;
+  ownerParticipantId: string;
+  quantity: number;
+  availableQuantity: number;
+  status: InventoryStatus;
+  unitCostVnd: number;
+};
+
+async function findColdStorageLots(
+  tx: Tx,
+  sessionId: string,
+  targetIds: string[],
+): Promise<ColdStorageLot[]> {
+  const eligibleStatuses: InventoryStatus[] = ["AVAILABLE", "CARRIED"];
+  const eligibleOwnerRoles: Role[] = ["PRODUCER", "INTERMEDIARY"];
+  const where = {
+    sessionId,
+    availableQuantity: { gt: 0 },
+    protectionState: "NONE" as const,
+    status: { in: eligibleStatuses },
+    owner: { role: { in: eligibleOwnerRoles } },
+  };
+
+  if (targetIds.length === 0) {
+    return tx.inventoryLot.findMany({
+      where,
+      orderBy: [{ availableQuantity: "desc" }, { createdAt: "asc" }],
+      take: POLICIES.COLD_STORAGE.maxUnits,
+      select: {
+        id: true,
+        sessionId: true,
+        roundIdProduced: true,
+        ownerParticipantId: true,
+        quantity: true,
+        availableQuantity: true,
+        status: true,
+        unitCostVnd: true,
+      },
+    });
+  }
+
+  const lots = await tx.inventoryLot.findMany({
+    where: { ...where, id: { in: targetIds } },
+    select: {
+      id: true,
+      sessionId: true,
+      roundIdProduced: true,
+      ownerParticipantId: true,
+      quantity: true,
+      availableQuantity: true,
+      status: true,
+      unitCostVnd: true,
+    },
+  });
+  const lotById = new Map(lots.map((lot) => [lot.id, lot]));
+  return targetIds
+    .map((id) => lotById.get(id))
+    .filter((lot): lot is (typeof lots)[number] => Boolean(lot));
+}
+
+async function protectColdStorageUnits(
+  tx: Tx,
+  lot: ColdStorageLot,
+  quantity: number,
+): Promise<string> {
+  if (quantity === lot.quantity && quantity === lot.availableQuantity) {
+    await tx.inventoryLot.update({
+      where: { id: lot.id },
+      data: { protectionState: "PROTECTED" },
+    });
+    return lot.id;
+  }
+
+  await tx.inventoryLot.update({
+    where: { id: lot.id },
+    data: {
+      quantity: { decrement: quantity },
+      availableQuantity: { decrement: quantity },
+    },
+  });
+  const protectedLot = await tx.inventoryLot.create({
+    data: {
+      sessionId: lot.sessionId,
+      roundIdProduced: lot.roundIdProduced,
+      ownerParticipantId: lot.ownerParticipantId,
+      quantity,
+      availableQuantity: quantity,
+      status: lot.status,
+      unitCostVnd: lot.unitCostVnd,
+      protectionState: "PROTECTED",
+    },
+    select: { id: true },
+  });
+  return protectedLot.id;
 }
 
 function isExportWindow(ctx: CommandContext): boolean {
@@ -81,7 +180,7 @@ export async function applyPolicy(
 
   let fixedCostVnd = 0;
   let variableCostVnd = 0;
-  const targetIds = input.targetIds ?? [];
+  let targetIds = input.targetIds ?? [];
   let exportPurchased = 0;
 
   switch (input.policyType) {
@@ -91,18 +190,20 @@ export async function applyPolicy(
     case "COLD_STORAGE": {
       const cfg = POLICIES.COLD_STORAGE;
       let units = 0;
-      for (const lotId of targetIds.slice(0, cfg.maxUnits)) {
-        const lot = await tx.inventoryLot.findUnique({ where: { id: lotId } });
-        if (!lot || lot.availableQuantity <= 0) continue;
+      const protectedTargetIds: string[] = [];
+      const lots = await findColdStorageLots(tx, ctx.session.id, targetIds);
+      for (const lot of lots) {
         const protect = Math.min(lot.availableQuantity, cfg.maxUnits - units);
         if (protect <= 0) break;
-        await tx.inventoryLot.update({
-          where: { id: lotId },
-          data: { protectionState: "PROTECTED" },
-        });
+        const protectedLotId = await protectColdStorageUnits(tx, lot, protect);
+        protectedTargetIds.push(protectedLotId);
         units += protect;
+        if (units >= cfg.maxUnits) break;
       }
-      if (units === 0) throw new ApiError("INVALID_POLICY", 422);
+      if (units === 0) {
+        throw new ApiError("INVALID_POLICY", 422, "Chưa có hàng tồn hợp lệ để bảo vệ bằng kho lạnh.");
+      }
+      targetIds = protectedTargetIds;
       variableCostVnd = units * cfg.perUnitCostVnd;
       break;
     }

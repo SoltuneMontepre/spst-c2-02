@@ -35,7 +35,6 @@ export function GamePhaseHud({
   const { enabled: tutorialOn } = useTutorial();
   const self = data.participants.find((p) => p.isSelf);
   const showReady =
-    data.autoHost &&
     data.status !== "LOBBY" &&
     data.phase !== "SETTLEMENT" &&
     canFastForwardPhase(data.status, data.phase) &&
@@ -58,6 +57,7 @@ export function GamePhaseHud({
             sessionId={sessionId}
             phaseReady={self.phaseReady}
             autoHost={data.autoHost}
+            phase={data.phase}
             disabled={data.paused}
           />
           {tutorialOn ? (
