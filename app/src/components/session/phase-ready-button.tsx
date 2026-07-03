@@ -53,12 +53,16 @@ export function PhaseReadyButton({
   const idleLabel =
     phase === "MARKET_OPEN"
       ? "Tôi đã giao dịch xong"
+      : phase === "DECISION"
+        ? "Tôi đã ra quyết định xong"
       : autoHost
         ? "Sẵn sàng — chuyển giai đoạn"
         : "Báo đã xong cho host";
   const readyLabel =
     phase === "MARKET_OPEN"
       ? "Đã xong — chờ cả chợ"
+      : phase === "DECISION"
+        ? "Đã quyết định — chờ mọi người"
       : autoHost
         ? "Đã sẵn sàng — chờ người khác"
         : "Đã báo xong cho host";

@@ -58,7 +58,9 @@ export function GamePhaseCta({
         : `/session/${sessionId}/map`;
   const showTaskLink = taskZone != null && !(variant === "map" && taskZone === "map");
   const showReadyButton =
-    variant === "map" && phase === "MARKET_OPEN" && showPhaseReady;
+    variant === "map" &&
+    (phase === "DECISION" || phase === "MARKET_OPEN") &&
+    showPhaseReady;
 
   const phaseTitle =
     phase === "DECISION"

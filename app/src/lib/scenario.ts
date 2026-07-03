@@ -126,7 +126,7 @@ export const UPGRADE_COSTS = {
 /** Phase durations in seconds (SRS §4.2, §4.3). */
 export const PHASE_DURATIONS_SEC = {
   EVENT: 22,
-  DECISION: 60,
+  DECISION: 180,
   MARKET_OPEN: 300,
   SETTLEMENT: 0, // server-driven, no fixed timer
   RECAP: 30, // minimum before host may advance
