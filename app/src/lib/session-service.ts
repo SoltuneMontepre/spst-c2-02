@@ -2,7 +2,7 @@ import type { Role, ControlMode, Presence, BadgeType } from "@/generated/prisma/
 import type { Presence as PresenceEnum } from "@/generated/prisma/enums";
 import { db } from "./db";
 import { ApiError, generateRoomCode } from "./api";
-import { MAX_PLAYERS, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS, MAX_ACTIVE_HOST_ROOMS } from "./scenario";
+import { SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS, MAX_ACTIVE_HOST_ROOMS } from "./scenario";
 import { maybeAutoAdvance } from "./game-service";
 import { ensureHostParticipant } from "./lobby-seat";
 import { sweepAbandonedSoloLobbies, syncLobbySoloSince } from "./lobby-maintenance";
@@ -10,6 +10,7 @@ import { publish } from "./events";
 import type { ConsumerRoundState } from "./role-state";
 import type { ParticipantOutcome } from "./finalize";
 import { computeMarketPrice, unitValueVnd } from "./economy";
+import { formatThousandDong } from "./money";
 import type { CreateSessionInput } from "./create-session-schema";
 export type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
 import {
@@ -164,10 +165,10 @@ export async function joinSession(
 
   if (session.status !== "LOBBY") throw new ApiError("LATE_JOIN_FORBIDDEN", 409);
 
-  const humanCount = await db.participant.count({
-    where: { sessionId: session.id, isBot: false },
+  const seatCount = await db.participant.count({
+    where: { sessionId: session.id },
   });
-  if (humanCount >= session.maxPlayers) throw new ApiError("SESSION_FULL", 409);
+  if (seatCount >= session.maxPlayers) throw new ApiError("SESSION_FULL", 409);
 
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const participant = await db.participant.create({
@@ -264,6 +265,24 @@ export interface TransactionView {
   direction: "buy" | "sell";
 }
 
+export type MarketActivityKind =
+  | "listing"
+  | "wholesale"
+  | "offer"
+  | "trade"
+  | "policy";
+
+export interface MarketActivityView {
+  id: string;
+  at: string;
+  kind: MarketActivityKind;
+  actorName: string;
+  actorIsBot: boolean;
+  role: Role | null;
+  label: string;
+  detail?: string;
+}
+
 export interface LiveRoundStats {
   unitValueVnd: number;
   marketPriceVnd: number | null;
@@ -309,6 +328,7 @@ export interface SessionSnapshot {
   market: MarketView | null;
   analytics: RoundAnalytics[];
   recentTransactions: TransactionView[];
+  marketActivity: MarketActivityView[];
   liveRoundStats: LiveRoundStats | null;
 }
 
@@ -386,6 +406,11 @@ export async function getSnapshot(
         nameById,
       )
     : [];
+  const marketActivity = await buildMarketActivity(
+    session.id,
+    session.currentRound,
+    participants,
+  );
   const liveRoundStats = await buildLiveRoundStats(
     session.id,
     session.currentRound,
@@ -415,6 +440,7 @@ export async function getSnapshot(
     market,
     analytics,
     recentTransactions,
+    marketActivity,
     liveRoundStats,
     participants: participants.map((p) => ({
       id: p.id,
@@ -597,6 +623,193 @@ async function buildRecentTransactions(
       direction: isSell ? "sell" : "buy",
     };
   });
+}
+
+function participantActivityMeta(
+  participants: {
+    id: string;
+    displayNameSnapshot: string;
+    isBot: boolean;
+    role: Role | null;
+  }[],
+): Map<string, { name: string; isBot: boolean; role: Role | null }> {
+  return new Map(
+    participants.map((p) => [
+      p.id,
+      {
+        name: p.displayNameSnapshot,
+        isBot: p.isBot,
+        role: p.role,
+      },
+    ]),
+  );
+}
+
+function activityActor(
+  meta: Map<string, { name: string; isBot: boolean; role: Role | null }>,
+  participantId: string | null,
+  fallback = "Hệ thống",
+): { name: string; isBot: boolean; role: Role | null } {
+  if (!participantId) return { name: fallback, isBot: false, role: null };
+  return meta.get(participantId) ?? { name: fallback, isBot: false, role: null };
+}
+
+function policyLabel(type: string): string {
+  const labels: Record<string, string> = {
+    INFO_DISCLOSURE: "công bố thông tin",
+    COLD_STORAGE: "mở kho lạnh",
+    EXPORT_PROMOTION: "xúc tiến xuất khẩu",
+    TECH_SUPPORT: "hỗ trợ công nghệ",
+    NONE: "không can thiệp",
+  };
+  return labels[type] ?? type;
+}
+
+async function buildMarketActivity(
+  sessionId: string,
+  currentRound: number,
+  participants: {
+    id: string;
+    displayNameSnapshot: string;
+    isBot: boolean;
+    role: Role | null;
+  }[],
+): Promise<MarketActivityView[]> {
+  if (!currentRound) return [];
+  const round = await db.round.findUnique({
+    where: { sessionId_number: { sessionId, number: currentRound } },
+    select: { id: true },
+  });
+  if (!round) return [];
+
+  const meta = participantActivityMeta(participants);
+  const [listings, wholesale, offers, transactions, policies] = await Promise.all([
+    db.listing.findMany({
+      where: { roundId: round.id },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+    db.wholesaleOffer.findMany({
+      where: { roundId: round.id },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+    db.offer.findMany({
+      where: { listing: { roundId: round.id } },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+    db.transaction.findMany({
+      where: { roundId: round.id, status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      take: 12,
+    }),
+    db.policyAction.findMany({
+      where: { roundId: round.id, status: "APPLIED" },
+      orderBy: [{ appliedAt: "desc" }, { createdAt: "desc" }],
+      take: 8,
+    }),
+  ]);
+
+  const items: (MarketActivityView & { sortAt: number })[] = [];
+
+  for (const listing of listings) {
+    const actor = activityActor(meta, listing.sellerParticipantId);
+    items.push({
+      id: `listing:${listing.id}`,
+      at: listing.createdAt.toISOString(),
+      sortAt: listing.createdAt.getTime(),
+      kind: "listing",
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label: `niêm yết ${listing.quantity} thùng`,
+      detail: `${formatThousandDong(listing.askPriceVnd)}/thùng`,
+    });
+  }
+
+  for (const w of wholesale) {
+    const actor = activityActor(meta, w.producerId);
+    items.push({
+      id: `wholesale:${w.id}`,
+      at: w.createdAt.toISOString(),
+      sortAt: w.createdAt.getTime(),
+      kind: "wholesale",
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label:
+        w.status === "COUNTERED"
+          ? `đang thương lượng sỉ ${w.quantity} thùng`
+          : `chào sỉ ${w.quantity} thùng`,
+      detail: `${formatThousandDong(w.counterPriceVnd ?? w.minimumPriceVnd)}/thùng`,
+    });
+  }
+
+  for (const offer of offers) {
+    const actor = activityActor(meta, offer.fromParticipantId);
+    const target = activityActor(meta, offer.toParticipantId);
+    items.push({
+      id: `offer:${offer.id}`,
+      at: offer.createdAt.toISOString(),
+      sortAt: offer.createdAt.getTime(),
+      kind: "offer",
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label:
+        offer.status === "COUNTERED"
+          ? `đưa giá mới ${offer.quantity} thùng`
+          : `trả giá ${offer.quantity} thùng`,
+      detail: `${target.name} · ${formatThousandDong(offer.offerPriceVnd)}/thùng`,
+    });
+  }
+
+  for (const tx of transactions) {
+    const actor = activityActor(
+      meta,
+      tx.buyerId,
+      tx.channel === "SYSTEM_EXPORT" ? "Hệ thống xuất khẩu" : "Hệ thống",
+    );
+    items.push({
+      id: `trade:${tx.id}`,
+      at: tx.completedAt.toISOString(),
+      sortAt: tx.completedAt.getTime(),
+      kind: "trade",
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label:
+        tx.channel === "WHOLESALE"
+          ? `chốt sỉ ${tx.quantity} thùng`
+          : `mua ${tx.quantity} thùng`,
+      detail: `${formatThousandDong(tx.unitPriceVnd)}/thùng`,
+    });
+  }
+
+  for (const policy of policies) {
+    const actor = activityActor(meta, policy.stateParticipantId);
+    const at = policy.appliedAt ?? policy.createdAt;
+    items.push({
+      id: `policy:${policy.id}`,
+      at: at.toISOString(),
+      sortAt: at.getTime(),
+      kind: "policy",
+      actorName: actor.name,
+      actorIsBot: actor.isBot,
+      role: actor.role,
+      label: `áp dụng ${policyLabel(policy.policyType)}`,
+      detail:
+        policy.fixedCostVnd + policy.variableCostVnd > 0
+          ? `Chi phí ${formatThousandDong(policy.fixedCostVnd + policy.variableCostVnd)}`
+          : undefined,
+    });
+  }
+
+  return items
+    .sort((a, b) => b.sortAt - a.sortAt)
+    .slice(0, 24)
+    .map(({ sortAt: _sortAt, ...item }) => item);
 }
 
 async function buildLiveRoundStats(
@@ -888,7 +1101,7 @@ export async function listPublicOpenRooms(userId: string): Promise<PublicOpenRoo
     },
     include: {
       host: { select: { displayName: true } },
-      _count: { select: { participants: { where: { isBot: false } } } },
+      _count: { select: { participants: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 30,
@@ -917,7 +1130,7 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
       session: {
         include: {
           host: { select: { displayName: true } },
-          _count: { select: { participants: { where: { isBot: false } } } },
+          _count: { select: { participants: true } },
           result: { select: { participantOutcomes: true } },
         },
       },
@@ -994,7 +1207,7 @@ export async function getHomeDashboard(userId: string): Promise<HomeDashboard> {
     where: { hostUserId: userId, status: { in: [...ACTIVE_STATUSES] } },
     include: {
       host: { select: { displayName: true } },
-      _count: { select: { participants: { where: { isBot: false } } } },
+      _count: { select: { participants: true } },
     },
     orderBy: { createdAt: "desc" },
   });

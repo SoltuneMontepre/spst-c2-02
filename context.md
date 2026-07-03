@@ -22,16 +22,27 @@ Its significance for presentations and pitch decks:
 
 ### Lobby and Role Assignment
 
-The host creates a room, shares a code or QR, and players join the lobby. The current codebase supports room capacities from **4 to 16 players**, with bots used to fill missing economic roles or keep a session moving. Roles can be auto-assigned or manually assigned by the host. The host is **not** the government role; the host is a technical/facilitation role.
+The host creates a room, shares a code or QR, and players join the lobby. Rooms support **4 to 16 seats**; the configured room size is the target economic roster, not only a human attendance limit. At session start, humans occupy the available role slots and bots fill every remaining seat so that the intended market scale is preserved. Roles can be auto-assigned or manually assigned by the host. The host is **not** the government role; the host is a technical/facilitation role.
 
-The standard role composition always prioritizes at least:
+| Seats | Producers | Consumers | Intermediaries | Government |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | 2 | 2 | 0 | 0 |
+| 5 | 2 | 2 | 1 | 0 |
+| 6 | 2 | 2 | 1 | 1 |
+| 7 | 3 | 2 | 1 | 1 |
+| 8 | 3 | 3 | 1 | 1 |
+| 9 | 4 | 3 | 1 | 1 |
+| 10 | 4 | 4 | 1 | 1 |
+| 11 | 4 | 5 | 1 | 1 |
+| 12 | 5 | 5 | 1 | 1 |
+| 13 | 5 | 5 | 2 | 1 |
+| 14 | 5 | 6 | 2 | 1 |
+| 15 | 6 | 6 | 2 | 1 |
+| 16 | 6 | 7 | 2 | 1 |
 
-- Producers
-- Consumers
-- Intermediaries when player count is high enough
-- Government / market regulator when player count is high enough
+Auto-assignment distributes humans across a balanced sequence of producer, consumer, intermediary, and government slots before bots take the unoccupied roles. Manual assignment preserves the host's choices, requires every human to have a role, and fills the missing target composition with bots. An auto-hosted, auto-assigned session can start with **one ready human**; sessions without auto-host require at least **four ready humans**. Producer profiles are spread across Traditional, Social-average, and Pioneer types according to the number of producer seats.
 
-Bots follow deterministic rules and can also take over if a participant disconnects, preserving the continuity of the live market.
+Every role is introduced with a visible score metric, a concise "how to win" statement, and three tactical priorities. Bots follow deterministic rules and can also take over if a participant disconnects, preserving the continuity of the live market.
 
 ### Intro
 
@@ -45,7 +56,7 @@ Each round follows the same phase structure:
 | --- | ---: | --- | --- |
 | **EVENT** | 22 seconds | The round shock is announced. | Establishes the economic condition of the round before decisions begin. |
 | **DECISION** | 60 seconds | Producers choose production; government may apply policy from round 2 onward. | Creates supply and institutional conditions before trade. |
-| **MARKET_OPEN** | 300 seconds | Retail, offers, counteroffers, wholesale, and export promotion can occur. | Lets price form through actual exchange. |
+| **MARKET_OPEN** | 300 seconds | Retail, offers, counteroffers, wholesale, export promotion, and paced bot actions occur; the live activity feed records market events. | Lets price form through actual exchange while making the process observable. |
 | **SETTLEMENT** | Server-driven, displayed briefly | Open offers expire, listings close, unsold goods spoil or carry if protected, final snapshot is created. | Converts market activity into reliable round data. |
 | **RECAP** | 30 seconds in auto-host mode | Players review the round's data. | Connects outcomes to theory before the next shock. |
 
@@ -113,6 +124,16 @@ Producer costs depend on individual labor time, not directly on the social value
 
 This is the game’s main representation of the distinction between **individual labor** and **socially necessary labor**.
 
+The expanded room sizes preserve productive diversity rather than duplicating one generic producer:
+
+| Producer Seats | Traditional | Social Average | Pioneer |
+| ---: | ---: | ---: | ---: |
+| 2 | 1 | 0 | 1 |
+| 3 | 1 | 1 | 1 |
+| 4 | 1 | 2 | 1 |
+| 5 | 1 | 2 | 2 |
+| 6 | 2 | 2 | 2 |
+
 ### Money, Inventory, and Price
 
 - Money is stored as integer VND and usually displayed as thousand VND.
@@ -130,6 +151,8 @@ This is the game’s main representation of the distinction between **individual
 ### Producer: Nhà Cung Cấp
 
 **Role fantasy:** owner of dragon fruit supply.
+
+**Win objective shown to the player:** maximize profit after production costs. Produce within capital and capacity, choose between retail and wholesale, and invest in technology when future cost savings justify it.
 
 **Main mechanics:**
 
@@ -157,6 +180,8 @@ The producer role embodies commodity production, private cost, competition, tech
 
 **Role fantasy:** buyer seeking use-value under budget pressure.
 
+**Win objective shown to the player:** fulfill the required need at the lowest total spending. Track remaining demand, compare listed price with standard value, and choose between buying now and bargaining.
+
 **Main mechanics:**
 
 - Receives a per-round need target, usually 2 crates per consumer.
@@ -179,6 +204,8 @@ The consumer role centers use-value and effective demand. Consumers care about s
 ### Intermediary: Đại Lý Phân Phối
 
 **Role fantasy:** distributor connecting producers to consumers.
+
+**Win objective shown to the player:** maximize the wholesale-to-retail margin while avoiding spoiled inventory. Buy wholesale with enough margin, relist quickly, and clear stock before settlement.
 
 **Main mechanics:**
 
@@ -205,6 +232,8 @@ The intermediary represents circulation, distribution, market access, and trade 
 ### Government / Market Regulator: Cơ Quan Quản Lý Thị Trường
 
 **Role fantasy:** public authority with a limited policy budget.
+
+**Win objective shown to the player:** maximize social score by increasing successful trade and need fulfillment while reducing spoilage, insolvency, and unnecessary public spending.
 
 **Main mechanics:**
 
@@ -261,14 +290,27 @@ The host is deliberately separate from the government role. This prevents confus
 
 **Main mechanics:**
 
-- Fill missing roles.
+- Fill every unoccupied seat in the configured target roster.
 - Can maintain play if a user disconnects.
 - Follow deterministic heuristics under the same phase, money, role, and inventory rules as humans.
+- Use distinct market-persona names and are visibly labeled as bots in the activity feed.
+- Act in six timed MARKET_OPEN waves rather than resolving the market in one instant.
 - Do not receive human badges.
+
+The six bot waves stage a readable chain of circulation:
+
+1. Government export action when eligible; producers create retail listings.
+2. Producers create wholesale offers.
+3. Intermediaries accept or counter wholesale offers.
+4. Producers resolve wholesale counters; intermediaries list acquired stock at retail.
+5. Consumers begin buying or bargaining.
+6. Bot sellers answer retail offers and consumers make final demand actions.
+
+Bot timers stop when the market is paused or leaves MARKET_OPEN and are rescheduled on resume. This keeps automated activity synchronized with the same public clock that constrains human players.
 
 **Significance:**
 
-Bots protect the market system from collapsing when participation is uneven. They are not meant to optimize perfectly; they preserve social interaction and keep the simulation legible.
+Bots protect the market system from collapsing when participation is uneven. They are not meant to optimize perfectly; they preserve social interaction and keep the simulation legible. Staggering their actions makes cause and effect visible: supply appears, wholesale circulation develops, retail inventory reaches consumers, and bargaining follows.
 
 ## 7. Major Gameplay Systems
 
@@ -315,6 +357,20 @@ At settlement:
 
 Spoilage is important because it shows that overproduction is not just "extra supply"; it is a social cost.
 
+### Live Market Activity and Role Guidance
+
+The map and every role workspace include a live, newest-first feed of up to **24 current-round events**. It records:
+
+- Retail listings
+- Wholesale offers and negotiation
+- Retail offers and counteroffers
+- Completed retail and wholesale trades
+- Applied government policies and their cost
+
+Each item identifies the actor, role, bot status, timestamp, quantity, and relevant price or policy detail. This makes the market more than an end-of-round chart: players can watch circulation, bargaining, intervention, and price formation unfold as a sequence of social actions.
+
+Role-goal cards remain visible in the lobby and task workspace. They connect each action to the role's scoring metric: profit for producers and intermediaries, utility for consumers, and social score for government. For facilitation and presentation, these two systems make both **motivation** and **market process** explicit without revealing private decision data.
+
 ### Observatory
 
 The observatory is open to all roles. It shows:
@@ -325,6 +381,8 @@ The observatory is open to all roles. It shows:
 - Demand
 - Expected inventory / spoilage
 - Recent transactions
+
+Alongside the observatory's aggregate evidence, the live activity feed supplies the event-level narrative behind those totals.
 
 Its central message is that **value and price are related but not identical**.
 
@@ -370,6 +428,9 @@ This supports a presentation point: **markets do not produce one shared outcome;
 | Industrial policy | Technology support discounts upgrades. | Public policy can shape productivity and competitive structure. |
 | External demand | Export promotion buys part of eligible supply. | State-created demand can absorb surplus but uses public budget. |
 | Social welfare | Government score combines fulfillment, waste, insolvency, and spending. | Policy success is multidimensional, not just high prices or high profits. |
+| Market transparency | The live feed exposes listings, negotiation, trade, and policy in sequence. | Aggregate prices conceal the social actions and bargaining that produced them. |
+| Algorithmic participation | Bots occupy vacant roles and trade through paced, rule-bound heuristics. | Automation can sustain liquidity while also shaping market tempo, supply, demand, and perceived competition. |
+| Platform governance | The server controls role composition, phase timing, valid actions, settlement, and the public record. | Markets are constituted by rules and infrastructure; they are not institution-free spaces. |
 
 ## 10. Pitch-Deck Framing
 
@@ -381,6 +442,7 @@ Phiên Chợ Giá Trị Online is a multiplayer political economy lab where stud
 - It makes theory playable without reducing it to a quiz.
 - It separates value, cost, listed price, transaction price, and market price.
 - It gives every actor a meaningful but partial objective.
+- It exposes the live chain from listing and bargaining to trade and policy, rather than showing only final totals.
 - It makes policy a constrained choice, not a magic fix.
 - It ends with evidence players created themselves.
 
@@ -391,8 +453,9 @@ Phiên Chợ Giá Trị Online is a multiplayer political economy lab where stud
 3. Show the four actors and their conflicting goals.
 4. Walk through the phase loop: event, decision, market, settlement, recap.
 5. Compare round 2 surplus with round 3 scarcity.
-6. Use the observatory chart to discuss price vs value.
-7. Close with the debrief: who gained, who lost, what spoiled, and what policy changed.
+6. Use the activity feed to trace who listed, bargained, traded, and intervened.
+7. Use the observatory chart to discuss price vs value.
+8. Close with the debrief: who gained, who lost, what spoiled, and what policy changed.
 
 ## 11. Source-of-Truth Files
 
@@ -401,9 +464,12 @@ The key mechanics above are represented in:
 - `app/src/lib/scenario.ts` — scenario constants, role composition, round events, policy definitions, phase durations.
 - `app/src/lib/economy.ts` — value, cost, production capacity, market price, and scoring formulas.
 - `app/src/lib/game-service.ts` — session start, role assignment, round entry, phase machine, role state initialization.
+- `app/src/lib/lobby-readiness.ts` — human start thresholds, readiness checks, and target-seat role composition.
+- `app/src/lib/bots.ts` and `app/src/lib/timer-service.ts` — deterministic role behavior and timed market waves.
 - `app/src/lib/market-service.ts` — production, upgrades, retail listings, buy-now, offers, counteroffers.
 - `app/src/lib/wholesale-service.ts` — producer-to-intermediary wholesale channel.
 - `app/src/lib/policy-service.ts` — government policy actions.
 - `app/src/lib/settlement.ts` — final round snapshots, spoilage, settlement.
 - `app/src/lib/finalize.ts` — final outcomes, badges, and debrief narration.
-- `app/src/lib/game-guidance.ts` and `app/src/lib/role-tutorial.ts` — role guidance and theory-facing copy.
+- `app/src/lib/session-service.ts` — live snapshots, transaction history, market activity, and analytics.
+- `app/src/lib/game-guidance.ts` and `app/src/lib/role-tutorial.ts` — role goals, tactical guidance, and theory-facing copy.

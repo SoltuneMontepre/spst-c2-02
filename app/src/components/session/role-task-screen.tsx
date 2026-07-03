@@ -5,6 +5,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { ROLE_LABELS, ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { ROLE_ICONS } from "@/components/lobby/role-distribution-dots";
 import { GameSessionLayout } from "@/components/session/game-session-layout";
+import { RoleGoalCard } from "@/components/session/role-goal-card";
 import { PHASE_LABELS } from "@/lib/labels";
 import type { GameScreen } from "@/lib/game-zones";
 import { cn } from "@/lib/utils";
@@ -135,7 +136,8 @@ export function RoleTaskScreen({
       rightPanel={insight}
     >
       <RoleTaskHeader role={role} round={round} phase={phase} />
-      <div className="mt-4 flex flex-col gap-4">{children}</div>
+      <RoleGoalCard role={role} />
+      <div className="flex flex-col gap-4">{children}</div>
     </GameSessionLayout>
   );
 }

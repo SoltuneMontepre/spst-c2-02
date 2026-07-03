@@ -4,7 +4,11 @@ import type { Role } from "@/generated/prisma/enums";
 import { BookOpen } from "lucide-react";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { Button } from "@/components/ui/button";
-import { getRoleTutorialContent, roleTutorialIcon } from "@/lib/role-tutorial";
+import {
+  getRoleGoalSummary,
+  getRoleTutorialContent,
+  roleTutorialIcon,
+} from "@/lib/role-tutorial";
 import { cn } from "@/lib/utils";
 
 const ROLE_TINT: Record<Role, { icon: string; badge: string; box: string; text: string }> = {
@@ -55,6 +59,7 @@ export function LobbyRoleCard({
   }
 
   const content = getRoleTutorialContent(role);
+  const goal = getRoleGoalSummary(role);
   const Icon = roleTutorialIcon(role);
   const tint = ROLE_TINT[role];
 
@@ -88,6 +93,17 @@ export function LobbyRoleCard({
         >
           {content.roleBlurb}
         </div>
+      </div>
+      <div className="mt-3.5 rounded-xl border border-border bg-muted/20 p-3.5 text-left">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          Cách thắng
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {goal.metricLabel}:
+          </span>{" "}
+          {goal.shortWinText}
+        </p>
       </div>
       <Button
         type="button"

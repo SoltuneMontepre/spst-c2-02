@@ -20,18 +20,18 @@ const ROLES: Role[] = ["PRODUCER", "CONSUMER", "INTERMEDIARY", "GOVERNMENT"];
 const PROFILES: ProductivityProfile[] = ["TRADITIONAL", "SOCIAL_AVERAGE", "PIONEER"];
 
 function CompositionSummary({
-  humanCount,
+  targetCount,
   counts,
 }: {
-  humanCount: number;
+  targetCount: number;
   counts: Record<Role, number>;
 }) {
-  const target = compositionTarget(humanCount);
+  const target = compositionTarget(targetCount);
 
   return (
     <section className="shrink-0 rounded-xl border border-border bg-muted/20 p-3 sm:p-4">
       <p className="text-sm font-medium">
-        Cơ cấu mục tiêu · {humanCount} người
+        Cơ cấu mục tiêu · {targetCount} ghế
       </p>
       <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {ROLES.map((role) => (
@@ -60,12 +60,12 @@ function CompositionSummary({
 
 export function LobbySetup({
   participants,
-  humanCount,
+  maxPlayers,
   pending,
   onAction,
 }: {
   participants: ParticipantView[];
-  humanCount: number;
+  maxPlayers: number;
   pending: boolean;
   onAction: (action: HostLobbyAction) => void;
 }) {
@@ -79,7 +79,10 @@ export function LobbySetup({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <CompositionSummary humanCount={humanCount} counts={counts} />
+      <CompositionSummary
+        targetCount={maxPlayers}
+        counts={counts}
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
         {participants.length === 0 ? (

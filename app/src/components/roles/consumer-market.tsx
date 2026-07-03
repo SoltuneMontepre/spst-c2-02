@@ -89,6 +89,7 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
           balanceVnd={data.self.balanceVnd}
           fulfilled={fulfilled}
           needTarget={needTarget}
+          marketActivity={data.marketActivity}
         />
       }
     >

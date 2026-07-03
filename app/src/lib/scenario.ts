@@ -39,6 +39,21 @@ export const PROFILE_ASSIGNMENT: Record<number, ProductivityProfile[]> = {
   2: ["TRADITIONAL", "PIONEER"],
   3: ["TRADITIONAL", "SOCIAL_AVERAGE", "PIONEER"],
   4: ["TRADITIONAL", "SOCIAL_AVERAGE", "SOCIAL_AVERAGE", "PIONEER"],
+  5: [
+    "TRADITIONAL",
+    "SOCIAL_AVERAGE",
+    "SOCIAL_AVERAGE",
+    "PIONEER",
+    "PIONEER",
+  ],
+  6: [
+    "TRADITIONAL",
+    "TRADITIONAL",
+    "SOCIAL_AVERAGE",
+    "SOCIAL_AVERAGE",
+    "PIONEER",
+    "PIONEER",
+  ],
 };
 
 /** Role distribution by player count (SRS §3.2). null => bot fills the role. */
@@ -53,10 +68,16 @@ export const ROLE_DISTRIBUTION: Record<
   8: { producer: 3, consumer: 3, intermediary: 1, government: 1 },
   9: { producer: 4, consumer: 3, intermediary: 1, government: 1 },
   10: { producer: 4, consumer: 4, intermediary: 1, government: 1 },
+  11: { producer: 4, consumer: 5, intermediary: 1, government: 1 },
+  12: { producer: 5, consumer: 5, intermediary: 1, government: 1 },
+  13: { producer: 5, consumer: 5, intermediary: 2, government: 1 },
+  14: { producer: 5, consumer: 6, intermediary: 2, government: 1 },
+  15: { producer: 6, consumer: 6, intermediary: 2, government: 1 },
+  16: { producer: 6, consumer: 7, intermediary: 2, government: 1 },
 };
 
 export const MIN_PLAYERS = 4;
-export const MAX_PLAYERS = 10;
+export const MAX_PLAYERS = 16;
 /** Minimum humans to start (SRS FR-HOST-01). Bots fill remaining slots. */
 export const START_MIN_HUMANS = MIN_PLAYERS;
 
@@ -69,9 +90,9 @@ export const MAX_ACTIVE_HOST_ROOMS = 2;
 /** Solo host lobby (no other humans) auto-cancel after this duration. */
 export const SOLO_LOBBY_CANCEL_MS = 60_000;
 
-/** Target role counts for a session with `humanCount` humans (SRS §3.2). */
-export function compositionTarget(humanCount: number): Record<Role, number> {
-  const slots = compositionSlots(humanCount);
+/** Target role counts for a session with `playerCount` seats (SRS §3.2). */
+export function compositionTarget(playerCount: number): Record<Role, number> {
+  const slots = compositionSlots(playerCount);
   return slots.reduce(
     (acc, role) => {
       acc[role]++;
@@ -81,17 +102,18 @@ export function compositionTarget(humanCount: number): Record<Role, number> {
   );
 }
 
-/** Ordered full role slots for a session (producers, consumers, intermediary, government). */
-export function compositionSlots(humanCount: number): Role[] {
+/** Ordered full role slots for a session (producers, consumers, intermediaries, government). */
+export function compositionSlots(playerCount: number): Role[] {
+  const targetCount = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, playerCount));
   const dist =
-    humanCount >= MIN_PLAYERS && humanCount <= 10
-      ? ROLE_DISTRIBUTION[humanCount]
-      : { producer: 2, consumer: 2 };
+    targetCount >= MIN_PLAYERS && targetCount <= MAX_PLAYERS
+      ? ROLE_DISTRIBUTION[targetCount]
+      : { producer: 2, consumer: 2, intermediary: 0, government: 0 };
   return [
     ...Array<Role>(dist.producer).fill("PRODUCER"),
     ...Array<Role>(dist.consumer).fill("CONSUMER"),
-    "INTERMEDIARY",
-    "GOVERNMENT",
+    ...Array<Role>(dist.intermediary).fill("INTERMEDIARY"),
+    ...Array<Role>(dist.government).fill("GOVERNMENT"),
   ];
 }
 

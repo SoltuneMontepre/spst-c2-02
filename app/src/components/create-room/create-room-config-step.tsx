@@ -11,18 +11,39 @@ import { CreateRoomStepper } from "@/components/create-room/create-room-stepper"
 import type { CreateSessionInput } from "@/lib/create-session-schema";
 import { ROLE_LABELS } from "@/components/lobby/role-badge";
 import { apiFetch, ApiClientError } from "@/hooks/use-api";
+import { getRoleGoalSummary } from "@/lib/role-tutorial";
 import { cn } from "@/lib/utils";
 
 const ROLE_PREVIEW = [
-  { role: "PRODUCER" as const, icon: Sprout, className: "bg-accent/15 text-accent" },
-  { role: "CONSUMER" as const, icon: ShoppingCart, className: "bg-primary/10 text-primary" },
-  { role: "INTERMEDIARY" as const, icon: Link2, className: "bg-secondary text-foreground" },
-  { role: "GOVERNMENT" as const, icon: Landmark, className: "bg-muted text-foreground" },
+  {
+    role: "PRODUCER" as const,
+    icon: Sprout,
+    className: "border-success/20 bg-success/5",
+    iconClassName: "bg-success/15 text-success",
+  },
+  {
+    role: "CONSUMER" as const,
+    icon: ShoppingCart,
+    className: "border-primary/20 bg-primary/5",
+    iconClassName: "bg-primary/10 text-primary",
+  },
+  {
+    role: "INTERMEDIARY" as const,
+    icon: Link2,
+    className: "border-violet-200 bg-violet-50/70",
+    iconClassName: "bg-violet-600/10 text-violet-700",
+  },
+  {
+    role: "GOVERNMENT" as const,
+    icon: Landmark,
+    className: "border-amber-200 bg-amber-50/80",
+    iconClassName: "bg-amber-700/10 text-amber-800",
+  },
 ];
 
 const DEFAULT_CONFIG: CreateSessionInput = {
   totalRounds: 4,
-  maxPlayers: 8,
+  maxPlayers: 16,
   autoAssignRoles: true,
   guidanceEnabled: true,
   autoHost: true,
@@ -132,10 +153,10 @@ export function CreateRoomConfigStep() {
                 <Stepper
                   value={config.maxPlayers}
                   min={4}
-                  max={10}
+                  max={16}
                   onChange={(maxPlayers) => setConfig((c) => ({ ...c, maxPlayers }))}
                 />
-                <span className="text-sm text-muted-foreground">người (tối đa 10)</span>
+                <span className="text-sm text-muted-foreground">người (tối đa 16)</span>
               </div>
             </div>
 
@@ -175,15 +196,41 @@ export function CreateRoomConfigStep() {
         <Card className="flex flex-col p-5">
           <h3 className="text-base font-semibold tracking-tight">Vai trò sẽ được phân</h3>
           <ul className="mt-4 flex flex-1 flex-col gap-2">
-            {ROLE_PREVIEW.map(({ role, icon: Icon, className }) => (
-              <li
-                key={role}
-                className={cn("flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium", className)}
-              >
-                <Icon className="size-4 shrink-0" aria-hidden />
-                {ROLE_LABELS[role]}
-              </li>
-            ))}
+            {ROLE_PREVIEW.map(({ role, icon: Icon, className, iconClassName }) => {
+              const goal = getRoleGoalSummary(role);
+
+              return (
+                <li
+                  key={role}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-xl border px-3 py-2.5",
+                    className,
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                      iconClassName,
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold text-foreground">
+                        {ROLE_LABELS[role]}
+                      </span>
+                      <span className="rounded-full bg-surface/80 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {goal.metricLabel}
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                      Thắng bằng {goal.shortWinText}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
           <Button size="lg" className="mt-5 w-full" disabled={pending} onClick={submit}>
             {pending ? "Đang tạo…" : "Tiếp tục →"}

@@ -1,7 +1,7 @@
 import type { Role } from "@/generated/prisma/enums";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { ROLE_LABELS } from "@/lib/display-labels";
-import { compositionTarget, MIN_PLAYERS, START_MIN_HUMANS } from "@/lib/scenario";
+import { compositionTarget, START_MIN_HUMANS } from "@/lib/scenario";
 
 function lobbyMinHumans(autoHost: boolean): number {
   return autoHost ? 1 : START_MIN_HUMANS;
@@ -59,10 +59,7 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
   const minHumans = lobbyMinHumans(snapshot.autoHost);
   const roleCounts = countRoles(snapshot.participants);
 
-  const target =
-    humanCount >= MIN_PLAYERS
-      ? compositionTarget(humanCount)
-      : { PRODUCER: 1, CONSUMER: 1, INTERMEDIARY: 1, GOVERNMENT: 1 };
+  const target = compositionTarget(snapshot.maxPlayers);
 
   const checklist: ChecklistItem[] = [
     {
@@ -74,29 +71,33 @@ export function computeLobbyReadiness(snapshot: SessionSnapshot): LobbyReadiness
       id: "has-producer",
       label: "Có nhà cung cấp",
       done: snapshot.autoAssignRoles
-        ? humanCount >= MIN_PLAYERS || roleCounts.PRODUCER > 0
+        ? humanCount >= minHumans || roleCounts.PRODUCER > 0
         : roleCounts.PRODUCER > 0,
     },
     {
       id: "has-consumer",
       label: "Có khách hàng",
       done: snapshot.autoAssignRoles
-        ? humanCount >= MIN_PLAYERS || roleCounts.CONSUMER > 0
+        ? humanCount >= minHumans || roleCounts.CONSUMER > 0
         : roleCounts.CONSUMER > 0,
     },
     {
       id: "has-intermediary",
       label: "Có đại lý",
-      done: snapshot.autoAssignRoles
-        ? humanCount >= MIN_PLAYERS || roleCounts.INTERMEDIARY > 0
-        : roleCounts.INTERMEDIARY > 0,
+      done:
+        target.INTERMEDIARY === 0 ||
+        (snapshot.autoAssignRoles
+          ? humanCount >= minHumans || roleCounts.INTERMEDIARY > 0
+          : roleCounts.INTERMEDIARY > 0),
     },
     {
       id: "has-government",
       label: "Có cơ quan quản lý",
-      done: snapshot.autoAssignRoles
-        ? humanCount >= MIN_PLAYERS || roleCounts.GOVERNMENT > 0
-        : roleCounts.GOVERNMENT > 0,
+      done:
+        target.GOVERNMENT === 0 ||
+        (snapshot.autoAssignRoles
+          ? humanCount >= minHumans || roleCounts.GOVERNMENT > 0
+          : roleCounts.GOVERNMENT > 0),
     },
     {
       id: "all-ready",

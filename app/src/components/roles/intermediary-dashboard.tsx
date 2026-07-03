@@ -87,6 +87,7 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
           inventoryUnits={inventoryUnits}
           soldUnits={soldUnits}
           marginK={marginK}
+          marketActivity={data.marketActivity}
         />
       }
     >

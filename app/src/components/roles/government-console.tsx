@@ -109,7 +109,12 @@ export function GovernmentConsole({ sessionId }: { sessionId: string }) {
       role="GOVERNMENT"
       round={data.currentRound}
       phase={data.phase}
-      insight={<GovernmentInsightPanel budgetVnd={budget} />}
+      insight={
+        <GovernmentInsightPanel
+          budgetVnd={budget}
+          marketActivity={data.marketActivity}
+        />
+      }
     >
       <div className="flex flex-col gap-4">
         {stats ? (

@@ -3,6 +3,7 @@
 import { Clock, Wallet, Wifi } from "lucide-react";
 import { useCountdown, formatClock } from "@/hooks/use-countdown";
 import type { SessionStreamState } from "@/hooks/use-session-stream";
+import { Brand } from "@/components/brand";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { ROLE_SHORT_LABELS } from "@/lib/display-labels";
 import { PHASE_LABELS } from "@/lib/labels";
@@ -32,9 +33,10 @@ export function GameTopBar({
   return (
     <header className="grid h-[42px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur">
       <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-        {/* Brand icon placeholder */}
-        <div className="shrink-0 size-[24.5px] rounded-[14.5px] bg-gradient-to-br from-[#c94a2d] to-[#e06040]" />
-        <span className="shrink-0 text-[12px] font-black tracking-[-0.3px]">PHIÊN CHỢ</span>
+        <Brand
+          size={24}
+          className="shrink-0 [&_span]:whitespace-nowrap [&_span]:text-[12px] [&_span]:font-black [&_span]:tracking-[-0.3px]"
+        />
 
         <div className="hidden h-[14px] w-px bg-border sm:block" />
 

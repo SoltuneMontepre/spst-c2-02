@@ -43,7 +43,11 @@ export function MapShell({ sessionId }: { sessionId: string }) {
       sessionId={sessionId}
       activeZone="map"
       rightPanel={
-        <GameInsightPanel round={data.currentRound} stats={data.liveRoundStats} />
+        <GameInsightPanel
+          round={data.currentRound}
+          stats={data.liveRoundStats}
+          activity={data.marketActivity}
+        />
       }
     >
       <GamePhaseCta

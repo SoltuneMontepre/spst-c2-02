@@ -126,7 +126,7 @@ export function HostLobbyView({
             <h3 className="mb-3 text-sm font-semibold">Gán vai thủ công</h3>
             <LobbySetup
               participants={data.participants}
-              humanCount={humans.length}
+              maxPlayers={data.maxPlayers}
               pending={host.isPending}
               onAction={(action) => host.mutate(action)}
             />

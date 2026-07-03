@@ -70,6 +70,7 @@ export function ProducerDashboard({ sessionId }: { sessionId: string }) {
             soldUnits={soldUnits}
             state={state}
             round={data.currentRound}
+            marketActivity={data.marketActivity}
           />
         ) : null
       }

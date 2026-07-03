@@ -34,6 +34,13 @@ export interface RoleTutorialContent {
   steps: [RoleTutorialStep, RoleTutorialStep, RoleTutorialStep];
 }
 
+export interface RoleGoalSummary {
+  metricLabel: string;
+  shortWinText: string;
+  winText: string;
+  bullets: [string, string, string];
+}
+
 const THEORY =
   "Giá trị chuẩn là mốc để so sánh giá bán. Trong bài học, mốc này tương ứng với lượng lao động xã hội cần thiết.";
 
@@ -173,8 +180,59 @@ const CONTENT: Record<Role, RoleTutorialContent> = {
   GOVERNMENT,
 };
 
+const GOAL_SUMMARIES: Record<Role, RoleGoalSummary> = {
+  PRODUCER: {
+    metricLabel: "Lợi nhuận",
+    shortWinText: "tối đa hóa lợi nhuận sau chi phí sản xuất.",
+    winText:
+      "Kết phiên với lợi nhuận cao: bán được nhiều thùng với giá tốt sau khi trừ chi phí sản xuất và vốn ban đầu.",
+    bullets: [
+      "Sản xuất trong giới hạn ví và năng lực vòng.",
+      "Chọn bán lẻ hoặc bán sỉ theo cung-cầu.",
+      "Đầu tư công nghệ khi giúp giảm chi phí vòng sau.",
+    ],
+  },
+  CONSUMER: {
+    metricLabel: "Hiệu ích",
+    shortWinText: "mua đủ nhu cầu với tổng chi phí thấp.",
+    winText:
+      "Đạt hiệu ích cao bằng cách mua đủ số thùng cần thiết trong mỗi vòng nhưng vẫn giữ tổng chi tiêu thấp.",
+    bullets: [
+      "Theo dõi số thùng còn thiếu trong vòng.",
+      "So sánh giá niêm yết với giá trị chuẩn.",
+      "Mua ngay hoặc trả giá để giảm chi phí.",
+    ],
+  },
+  INTERMEDIARY: {
+    metricLabel: "Lợi nhuận",
+    shortWinText: "kiếm chênh lệch mua buôn - bán lẻ.",
+    winText:
+      "Kết phiên với lợi nhuận cao từ chênh lệch mua buôn và bán lẻ, đồng thời hạn chế tồn kho bị hỏng.",
+    bullets: [
+      "Mua sỉ khi giá đủ thấp để còn biên lời.",
+      "Niêm yết bán lẻ nhanh cho khách hàng.",
+      "Xả tồn kho trước khi vòng kết thúc.",
+    ],
+  },
+  GOVERNMENT: {
+    metricLabel: "Điểm xã hội",
+    shortWinText: "tăng giao dịch, đủ nhu cầu và giảm lãng phí.",
+    winText:
+      "Đạt điểm xã hội cao bằng cách giúp thị trường giao dịch tốt hơn, khách hàng được đáp ứng, ít hàng hỏng và không lãng phí ngân sách.",
+    bullets: [
+      "Đọc cung-cầu và giá trị chuẩn trước khi can thiệp.",
+      "Dùng chính sách đúng lúc, đúng vấn đề.",
+      "Giảm tồn kho hỏng, phá sản và chi tiêu thừa.",
+    ],
+  },
+};
+
 export function getRoleTutorialContent(role: Role): RoleTutorialContent {
   return CONTENT[role];
+}
+
+export function getRoleGoalSummary(role: Role): RoleGoalSummary {
+  return GOAL_SUMMARIES[role];
 }
 
 export function roleTutorialIcon(role: Role): LucideIcon {

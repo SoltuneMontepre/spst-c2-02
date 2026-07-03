@@ -2,22 +2,41 @@
 
 const timers = new Map<string, NodeJS.Timeout>();
 
-export function scheduleTimer(sessionId: string, ms: number, fn: () => void): void {
-  const existing = timers.get(sessionId);
+function timerKey(sessionId: string, name: string): string {
+  return `${sessionId}:${name}`;
+}
+
+export function scheduleNamedTimer(
+  sessionId: string,
+  name: string,
+  ms: number,
+  fn: () => void,
+): void {
+  const key = timerKey(sessionId, name);
+  const existing = timers.get(key);
   if (existing) clearTimeout(existing);
   timers.set(
-    sessionId,
+    key,
     setTimeout(() => {
-      timers.delete(sessionId);
+      timers.delete(key);
       fn();
     }, Math.max(0, ms)),
   );
 }
 
-export function clearTimer(sessionId: string): void {
-  const t = timers.get(sessionId);
+export function clearNamedTimer(sessionId: string, name: string): void {
+  const key = timerKey(sessionId, name);
+  const t = timers.get(key);
   if (t) clearTimeout(t);
-  timers.delete(sessionId);
+  timers.delete(key);
+}
+
+export function scheduleTimer(sessionId: string, ms: number, fn: () => void): void {
+  scheduleNamedTimer(sessionId, "phase", ms, fn);
+}
+
+export function clearTimer(sessionId: string): void {
+  clearNamedTimer(sessionId, "phase");
 }
 
 /** Re-schedule timers after server restart (instrumentation hook). */

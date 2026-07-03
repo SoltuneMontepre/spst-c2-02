@@ -3,8 +3,10 @@
 import { Landmark, Link2, ShoppingCart, Sprout } from "lucide-react";
 import { ECONOMY_LABELS, ROLE_LABELS } from "@/lib/display-labels";
 import { InsightSectionLabel } from "@/components/session/event-panel";
+import { MarketActivityFeed } from "@/components/session/market-activity-feed";
 import { formatThousandDong } from "@/lib/money";
 import type { ProducerRoundState } from "@/lib/role-state";
+import type { MarketActivityView } from "@/lib/session-service";
 import {
   allowedProductionQuantity,
   producerFundsCapacity,
@@ -100,6 +102,20 @@ function InsightRowList({
   );
 }
 
+function InsightMarketActivity({
+  activity,
+}: {
+  activity?: MarketActivityView[];
+}) {
+  if (!activity) return null;
+  return (
+    <>
+      <InsightSectionLabel>Diễn biến chợ</InsightSectionLabel>
+      <MarketActivityFeed activity={activity} variant="insight" />
+    </>
+  );
+}
+
 export function ProducerInsightPanel({
   balanceVnd,
   inventoryUnits,
@@ -107,6 +123,7 @@ export function ProducerInsightPanel({
   soldUnits,
   state,
   round,
+  marketActivity,
 }: {
   balanceVnd: number | null;
   inventoryUnits: number;
@@ -114,6 +131,7 @@ export function ProducerInsightPanel({
   soldUnits: number;
   state: ProducerRoundState;
   round: number;
+  marketActivity?: MarketActivityView[];
 }) {
   const social = unitValueVnd(round);
   const unitCost = producerUnitCostVnd(state);
@@ -194,6 +212,8 @@ export function ProducerInsightPanel({
             : ""
         }`}
       />
+
+      <InsightMarketActivity activity={marketActivity} />
     </div>
   );
 }
@@ -202,10 +222,12 @@ export function ConsumerInsightPanel({
   balanceVnd,
   fulfilled,
   needTarget,
+  marketActivity,
 }: {
   balanceVnd: number | null;
   fulfilled: number;
   needTarget: number;
+  marketActivity?: MarketActivityView[];
 }) {
   const pct = needTarget > 0 ? Math.round((fulfilled / needTarget) * 100) : 0;
   const missing = Math.max(0, needTarget - fulfilled);
@@ -260,6 +282,8 @@ export function ConsumerInsightPanel({
         title="Giá niêm yết ≠ Giá TT"
         body="Giá niêm yết là đề xuất của người bán. Giá thị trường chỉ hình thành khi có giao dịch thực tế."
       />
+
+      <InsightMarketActivity activity={marketActivity} />
     </div>
   );
 }
@@ -269,11 +293,13 @@ export function IntermediaryInsightPanel({
   inventoryUnits,
   soldUnits,
   marginK,
+  marketActivity,
 }: {
   balanceVnd: number | null;
   inventoryUnits: number;
   soldUnits: number;
   marginK: number;
+  marketActivity?: MarketActivityView[];
 }) {
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
@@ -315,11 +341,19 @@ export function IntermediaryInsightPanel({
         title="Luồng đại lý"
         body="Mua sỉ từ nhà cung cấp, đưa hàng ra chợ bán lẻ cho khách hàng, rồi xem lãi/lỗ từ chênh lệch giá."
       />
+
+      <InsightMarketActivity activity={marketActivity} />
     </div>
   );
 }
 
-export function GovernmentInsightPanel({ budgetVnd }: { budgetVnd: number }) {
+export function GovernmentInsightPanel({
+  budgetVnd,
+  marketActivity,
+}: {
+  budgetVnd: number;
+  marketActivity?: MarketActivityView[];
+}) {
   return (
     <div className="flex h-full flex-col gap-2.5 overflow-y-auto px-[15px] py-3.5">
       <InsightSectionLabel>{ROLE_LABELS.GOVERNMENT}</InsightSectionLabel>
@@ -341,6 +375,8 @@ export function GovernmentInsightPanel({ budgetVnd }: { budgetVnd: number }) {
         title="Quy luật giá trị"
         body="Cơ quan quản lý tác động gián tiếp cung-cầu nhưng không thay đổi giá trị chuẩn của hàng hóa."
       />
+
+      <InsightMarketActivity activity={marketActivity} />
     </div>
   );
 }

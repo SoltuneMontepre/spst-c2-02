@@ -1,6 +1,5 @@
 import type { Role, RoundPhase, SessionStatus, ProductivityProfile } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { ROLE_BOT_LABELS } from "@/lib/display-labels";
 import { db } from "./db";
 import { ApiError } from "./api";
 import { ensureHostParticipant } from "./lobby-seat";
@@ -26,7 +25,12 @@ import {
   unitValueVnd,
 } from "./economy";
 import { settleRound } from "./settlement";
-import { runBotDecisions, runBotMarket } from "./bots";
+import {
+  clearBotMarketTimers,
+  runBotDecisions,
+  runBotMarket,
+  scheduleBotMarketWaves,
+} from "./bots";
 import { finalizeSession } from "./finalize";
 import { scheduleTimer, clearTimer } from "./timer-service";
 import type {
@@ -285,9 +289,9 @@ export async function startSession(
     session.participants.some((p) => p.role !== null);
 
   if (manualMode) {
-    await startSessionManual(sessionId, humans, lobbyBots);
+    await startSessionManual(sessionId, session.maxPlayers, humans, lobbyBots);
   } else {
-    await startSessionAuto(sessionId, humans);
+    await startSessionAuto(sessionId, session.maxPlayers, humans);
   }
 
   await touch(sessionId, "session:started");
@@ -299,12 +303,35 @@ export async function startSession(
   if (autoHost) await scheduleIntroAdvance(sessionId);
 }
 
-/** Legacy auto-assign: humans take first slots, bots fill the rest. */
+function balancedRoleSlots(slots: Role[]): Role[] {
+  const pool = countRoles(slots.map((role) => ({ role })));
+  const order: Role[] = ["PRODUCER", "CONSUMER", "INTERMEDIARY", "GOVERNMENT"];
+  const balanced: Role[] = [];
+  while (balanced.length < slots.length) {
+    for (const role of order) {
+      if (pool[role] <= 0) continue;
+      balanced.push(role);
+      pool[role]--;
+      if (balanced.length >= slots.length) break;
+    }
+  }
+  return balanced;
+}
+
+function producerProfileAt(
+  profiles: ProductivityProfile[],
+  index: number,
+): ProductivityProfile {
+  return profiles[index] ?? "SOCIAL_AVERAGE";
+}
+
+/** Auto-assign humans across balanced slots, then fill remaining seats with bots. */
 async function startSessionAuto(
   sessionId: string,
+  targetCount: number,
   humans: { id: string }[],
 ): Promise<void> {
-  const slots = compositionSlots(humans.length);
+  const slots = balancedRoleSlots(compositionSlots(targetCount));
   const producerCount = slots.filter((r) => r === "PRODUCER").length;
   const profiles = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
   const botCounters: Record<Role, number> = {
@@ -318,7 +345,8 @@ async function startSessionAuto(
     let producerIndex = 0;
     for (let i = 0; i < slots.length; i++) {
       const role = slots[i];
-      const profile = role === "PRODUCER" ? profiles[producerIndex++] : null;
+      const profile =
+        role === "PRODUCER" ? producerProfileAt(profiles, producerIndex++) : null;
       const isBot = i >= humans.length;
 
       let participantId: string;
@@ -357,6 +385,7 @@ async function startSessionAuto(
 /** Manual lobby: honor host assignments, fill any remaining standard slots with bots. */
 async function startSessionManual(
   sessionId: string,
+  targetCount: number,
   humans: { id: string; role: Role | null; productivityProfile: ProductivityProfile | null }[],
   lobbyBots: { id: string; role: Role | null; productivityProfile: ProductivityProfile | null }[],
 ): Promise<void> {
@@ -373,7 +402,13 @@ async function startSessionManual(
     throw new ApiError("INVALID_COMPOSITION", 409, "Cần ít nhất 1 nhà cung cấp và 1 khách hàng");
   }
 
-  const toCreate = missingRoleSlots(compositionSlots(humans.length), assigned);
+  const targetSlots = compositionSlots(targetCount);
+  const toCreate = missingRoleSlots(targetSlots, assigned).slice(
+    0,
+    Math.max(0, targetSlots.length - assigned.length),
+  );
+  const producerCount = targetSlots.filter((r) => r === "PRODUCER").length;
+  const profiles = PROFILE_ASSIGNMENT[producerCount] ?? PROFILE_ASSIGNMENT[2];
   const botCounters: Record<Role, number> = {
     PRODUCER: lobbyBots.filter((b) => b.role === "PRODUCER").length,
     CONSUMER: lobbyBots.filter((b) => b.role === "CONSUMER").length,
@@ -382,13 +417,15 @@ async function startSessionManual(
   };
 
   await db.$transaction(async (tx) => {
+    let producerIndex = 0;
     for (const p of assigned) {
       if (p.role === "PRODUCER" && !p.productivityProfile) {
         await tx.participant.update({
           where: { id: p.id },
-          data: { productivityProfile: "SOCIAL_AVERAGE" },
+          data: { productivityProfile: producerProfileAt(profiles, producerIndex) },
         });
       }
+      if (p.role === "PRODUCER") producerIndex++;
     }
 
     const roster: { id: string; role: Role }[] = assigned.map((p) => ({
@@ -404,7 +441,7 @@ async function startSessionManual(
           displayNameSnapshot: botName(role, botCounters[role]),
           role,
           productivityProfile:
-            role === "PRODUCER" ? "SOCIAL_AVERAGE" : null,
+            role === "PRODUCER" ? producerProfileAt(profiles, producerIndex++) : null,
           isBot: true,
           controlMode: "BOT_PERMANENT",
           ready: true,
@@ -425,15 +462,31 @@ async function startSessionManual(
   });
 }
 
-const BOT_NAMES: Record<Role, string> = {
-  PRODUCER: ROLE_BOT_LABELS.PRODUCER,
-  CONSUMER: ROLE_BOT_LABELS.CONSUMER,
-  INTERMEDIARY: ROLE_BOT_LABELS.INTERMEDIARY,
-  GOVERNMENT: ROLE_BOT_LABELS.GOVERNMENT,
+const BOT_PERSONAS: Record<Role, string[]> = {
+  PRODUCER: [
+    "Vuon An Phu",
+    "Hop tac xa Binh Minh",
+    "Trang trai Hong Ngoc",
+    "Vuon Thanh Son",
+    "Nong ho Tam Chau",
+    "Vuon Phu Quy",
+  ],
+  CONSUMER: [
+    "Co Mai",
+    "Anh Khoa",
+    "Chi Linh",
+    "Minh Quan",
+    "Bao Tran",
+    "Nha Hang Sen",
+    "Tiem Nuoc An Nhien",
+  ],
+  INTERMEDIARY: ["Dai ly Song Xanh", "Kho Van Thanh", "Dai ly Minh Phat"],
+  GOVERNMENT: ["Ban quan ly cho", "To dieu phoi gia"],
 };
 
 function botName(role: Role, index: number): string {
-  return `${BOT_NAMES[role]} ${index}`;
+  const personas = BOT_PERSONAS[role];
+  return personas[index - 1] ?? `${personas[personas.length - 1]} ${index}`;
 }
 
 // ───────────────────────── Round entry ─────────────────────────
@@ -604,6 +657,7 @@ function phaseDurationSec(phase: RoundPhase): number {
 }
 
 async function setPhase(sessionId: string, phase: RoundPhase): Promise<void> {
+  if (phase !== "MARKET_OPEN") clearBotMarketTimers(sessionId);
   const session = await db.gameSession.findUniqueOrThrow({
     where: { id: sessionId },
     select: { autoHost: true, currentRound: true },
@@ -723,6 +777,7 @@ export async function requestPhaseTransition(sessionId: string): Promise<void> {
 /** Mark session complete, persist final scores/badges. */
 async function completeSession(sessionId: string): Promise<void> {
   clearTimer(sessionId);
+  clearBotMarketTimers(sessionId);
   await db.gameSession.update({
     where: { id: sessionId },
     data: { status: "COMPLETED", phase: null, phaseEndsAt: null, endedAt: new Date() },
@@ -769,6 +824,7 @@ export async function hostPause(hostUserId: string, sessionId: string): Promise<
   if (s.paused || !s.phaseEndsAt) return;
   const remaining = Math.max(0, s.phaseEndsAt.getTime() - Date.now());
   clearTimer(sessionId);
+  if (s.phase === "MARKET_OPEN") clearBotMarketTimers(sessionId);
   await db.gameSession.update({
     where: { id: sessionId },
     data: { paused: true, pausedRemainingMs: remaining, phaseEndsAt: null },
@@ -789,6 +845,7 @@ export async function hostResume(hostUserId: string, sessionId: string): Promise
     data: { paused: false, pausedRemainingMs: null, phaseEndsAt },
   });
   scheduleAdvance(sessionId, remaining);
+  if (s.phase === "MARKET_OPEN") scheduleBotMarketWaves(sessionId, remaining);
   await touch(sessionId, "session:resumed", {
     paused: false,
     phaseEndsAt: phaseEndsAt.toISOString(),
@@ -838,6 +895,7 @@ export async function hostExtend(hostUserId: string, sessionId: string): Promise
 export async function hostEnd(hostUserId: string, sessionId: string): Promise<void> {
   const s = await assertHost(hostUserId, sessionId);
   clearTimer(sessionId);
+  clearBotMarketTimers(sessionId);
   const status = s.status === "DEBRIEF" ? "COMPLETED" : "INCOMPLETE";
   await db.gameSession.update({
     where: { id: sessionId },
@@ -864,6 +922,8 @@ export async function hostCancel(hostUserId: string, sessionId: string): Promise
   const s = await assertHost(hostUserId, sessionId);
   if (s.status !== "LOBBY" && s.status !== "CREATED")
     throw new ApiError("INVALID_STATE", 409);
+  clearTimer(sessionId);
+  clearBotMarketTimers(sessionId);
   await db.gameSession.update({
     where: { id: sessionId },
     data: {
