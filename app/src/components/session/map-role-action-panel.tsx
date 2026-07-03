@@ -201,16 +201,30 @@ function WaitingCard({
   title,
   body,
   footer,
+  videoSrc,
 }: {
   title: string;
   body: string;
   footer?: string;
+  /** Plays on loop to fill the wait — e.g. during SETTLEMENT. */
+  videoSrc?: string;
 }) {
   return (
     <div className="flex h-full min-h-80 flex-col items-center justify-center gap-3 rounded-[14px] border border-dashed border-border bg-surface/80 px-6 py-12 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-muted">
-        <Hourglass className="size-5 text-muted-foreground" aria-hidden />
-      </span>
+      {videoSrc ? (
+        <video
+          src={videoSrc}
+          className="mb-1 w-full max-w-md rounded-xl shadow-sm"
+          autoPlay
+          loop
+          muted
+          playsInline
+        />
+      ) : (
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+          <Hourglass className="size-5 text-muted-foreground" aria-hidden />
+        </span>
+      )}
       <div>
         <p className="text-sm font-semibold text-foreground">{title}</p>
         <p className="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
@@ -696,6 +710,7 @@ export function MapRoleActionPanel({ sessionId }: { sessionId: string }) {
       <WaitingCard
         title="Đang chốt sổ"
         body="Hệ thống đang tính toán kết quả vòng — chờ tổng kết."
+        videoSrc="/simlpy_remove_the_gco_fruit_f.mp4"
       />
     );
   }
