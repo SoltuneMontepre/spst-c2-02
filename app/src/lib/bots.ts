@@ -1458,9 +1458,10 @@ async function acceptBotRetailCounters(
           decision: "ACCEPT",
         });
         if (
-          trade &&
-          "sellerParticipantId" in trade &&
-          typeof trade.sellerBalanceVnd === "number"
+          trade.sellerParticipantId &&
+          trade.buyerId &&
+          typeof trade.sellerBalanceVnd === "number" &&
+          typeof trade.buyerBalanceVnd === "number"
         ) {
           walletPatches[trade.sellerParticipantId] = trade.sellerBalanceVnd;
           walletPatches[trade.buyerId] = trade.buyerBalanceVnd;

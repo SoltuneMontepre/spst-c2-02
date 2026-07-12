@@ -324,12 +324,22 @@ export async function closeListing(
   });
 }
 
+export type RetailTradeResult = {
+  transactionId: string;
+  sellerParticipantId: string;
+  buyerId: string;
+  netSellerVnd: number;
+  totalPriceVnd: number;
+  sellerBalanceVnd: number;
+  buyerBalanceVnd: number;
+};
+
 /** Consumer buys now at the ask price (SRS §6.1, atomic transfer). */
 export async function buyNow(
   tx: Tx,
   ctx: CommandContext,
   input: { listingId: string; quantity: number },
-): Promise<{ transactionId: string }> {
+): Promise<RetailTradeResult> {
   requirePhase(ctx, "MARKET_OPEN");
   requireRole(ctx, "CONSUMER");
 
@@ -416,7 +426,7 @@ export async function respondOffer(
   tx: Tx,
   ctx: CommandContext,
   input: { offerId: string; decision: "ACCEPT" | "REJECT" | "COUNTER"; counterPriceVnd?: number },
-): Promise<{ transactionId?: string; offerId?: string }> {
+): Promise<Partial<RetailTradeResult> & { offerId?: string }> {
   requirePhase(ctx, "MARKET_OPEN");
 
   const offer = await tx.offer.findUnique({
@@ -585,15 +595,7 @@ async function executeRetailTrade(
     quantity: number;
     unitPriceVnd: number;
   },
-): Promise<{
-  transactionId: string;
-  sellerParticipantId: string;
-  buyerId: string;
-  netSellerVnd: number;
-  totalPriceVnd: number;
-  sellerBalanceVnd: number;
-  buyerBalanceVnd: number;
-}> {
+): Promise<RetailTradeResult> {
   const { listing, buyerId, quantity, unitPriceVnd } = params;
   if (listing.availableQuantity < quantity) throw new ApiError("INSUFFICIENT_LISTING", 409);
   if (buyerId === listing.sellerParticipantId) throw new ApiError("SELF_TRADE", 409);
