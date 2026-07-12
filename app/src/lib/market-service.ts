@@ -423,7 +423,9 @@ export async function respondOffer(
     where: { id: input.offerId },
     include: { listing: true },
   });
-  if (!offer || (offer.status !== "OPEN" && offer.status !== "COUNTERED"))
+  // Only OPEN offers are actionable. COUNTERED parents stay for history —
+  // accepting them at the old price would bypass the counter child.
+  if (!offer || offer.status !== "OPEN")
     throw new ApiError("OFFER_UNAVAILABLE", 409);
   if (offer.toParticipantId !== ctx.participant.id)
     throw new ApiError("NOT_OFFER_RECIPIENT", 403);

@@ -46,7 +46,8 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.55, 0.75],
     upgradeBalanceShare: 0.3,
     askSteps: [1, 2],
-    willingnessVnd: [16000, 18000],
+    // Must clear TRADITIONAL retail floors (~18k) or bots never buy.
+    willingnessVnd: [18000, 20000],
     offerDiscountSteps: [2, 3],
     sellerConcessionSteps: [0, 1],
   },
@@ -54,7 +55,7 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.7, 0.9],
     upgradeBalanceShare: 0.4,
     askSteps: [0, 1],
-    willingnessVnd: [18000, 20000],
+    willingnessVnd: [19000, 22000],
     offerDiscountSteps: [1, 2],
     sellerConcessionSteps: [1, 2],
   },
@@ -62,7 +63,7 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.85, 1],
     upgradeBalanceShare: 0.5,
     askSteps: [-1, 1],
-    willingnessVnd: [19000, 20000],
+    willingnessVnd: [20000, 24000],
     offerDiscountSteps: [1, 1],
     sellerConcessionSteps: [1, 3],
   },
@@ -138,10 +139,12 @@ function intermediaryBidCeiling(
   purpose: string,
   referencePriceVnd: number,
 ): number {
+  // Bid toward consumer willingness / producer cost (~16–22k), not just
+  // social unit value — otherwise TRADITIONAL wholesale (~18k) never clears.
   const range: Record<BotTemperament, [number, number]> = {
-    CAUTIOUS: [-1, 0],
-    BALANCED: [0, 1],
-    BOLD: [0, 2],
+    CAUTIOUS: [6, 8],
+    BALANCED: [7, 10],
+    BOLD: [8, 12],
   };
   const [minStep, maxStep] = range[temperament(bot, session)];
   return Math.max(
@@ -522,6 +525,13 @@ async function runBotMarketWaveInner(
             });
             return n;
           },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await acceptBotRetailCounters(tx, session);
+            });
+            return n;
+          },
         );
       }
       if (wave === 4) {
@@ -547,13 +557,20 @@ async function runBotMarketWaveInner(
             });
             return n;
           },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await acceptBotRetailCounters(tx, session);
+            });
+            return n;
+          },
         );
       }
       if (wave === 5) {
         steps.push(async () => {
           let n = 0;
           await db.$transaction(async (tx) => {
-            n += await runBotConsumerDemand(tx, session, 1);
+            n += await runBotConsumerDemand(tx, session, 2);
           });
           return n;
         });
@@ -570,18 +587,35 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await runBotConsumerDemand(tx, session, 2);
+              n += await acceptBotRetailCounters(tx, session);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await runBotConsumerDemand(tx, session, 3);
             });
             return n;
           },
         );
       }
 
+      // Publish after each step so clients see listings/trades/counters live
+      // instead of one batched jump at the end of the wave.
       for (const step of steps) {
+        let stepActions = 0;
         const ok = await botTry(`market-wave-${wave}`, sessionId, async () => {
-          actions += await step();
+          stepActions = await step();
+          actions += stepActions;
         });
         if (!ok) continue;
+        if (stepActions > 0) {
+          await bump(sessionId, "bot:market_wave", {
+            wave,
+            actions: stepActions,
+          }).catch((e) => console.error("bot:market_wave bump:", e));
+        }
       }
     } catch (e) {
       console.error(`bot market wave ${wave} (${sessionId}):`, e);
@@ -593,6 +627,8 @@ async function runBotMarketWaveInner(
           console.error("markBotsPhaseReady:", e),
         );
       }
+      // Always emit a wave-complete signal (even if 0 actions) so phase-ready
+      // and empty waves still refresh the live room once.
       await bump(sessionId, "bot:market_wave", { wave, actions }).catch((e) =>
         console.error("bot:market_wave bump:", e),
       );
@@ -764,10 +800,15 @@ async function createBotWholesaleOffers(
         2,
       );
       try {
+        // Allow floors slightly below unit cost so TRADITIONAL lots can clear
+        // against intermediary bid ceilings (mirrors human starter offers).
         await createWholesaleOffer(tx, botCtx(seller, session), {
           inventoryLotId: lot.id,
           quantity: qty,
-          minimumPriceVnd: Math.max(unitCost, ask - discountSteps * 1000),
+          minimumPriceVnd: Math.max(
+            MIN_PRICE_VND,
+            Math.min(unitCost, ask - discountSteps * 1000),
+          ),
         });
         actions++;
       } catch {
@@ -893,21 +934,30 @@ async function respondBotWholesaleOffers(
           decision: "ACCEPT",
         });
         actions++;
-      } else if (
-        wholesale.minimumPriceVnd > bidCeiling &&
-        seededUnit(
+      } else if (wholesale.minimumPriceVnd > bidCeiling) {
+        const roll = seededUnit(
           session.id,
           session.currentRound,
           im.id,
           wholesale.id,
-          "reject-wholesale",
-        ) < 0.35
-      ) {
-        await respondWholesale(tx, botCtx(im, session), {
-          offerId: wholesale.id,
-          decision: "REJECT",
-        });
-        actions++;
+          "negotiate-wholesale",
+        );
+        const canAffordCounter =
+          im.wallet.balanceVnd >= bidCeiling * wholesale.quantity;
+        if (canAffordCounter && roll < 0.55) {
+          await respondWholesale(tx, botCtx(im, session), {
+            offerId: wholesale.id,
+            decision: "COUNTER",
+            counterPriceVnd: bidCeiling,
+          });
+          actions++;
+        } else if (roll < 0.35) {
+          await respondWholesale(tx, botCtx(im, session), {
+            offerId: wholesale.id,
+            decision: "REJECT",
+          });
+          actions++;
+        }
       }
     } catch {
       /* another buyer may have taken it */
@@ -932,11 +982,15 @@ async function acceptBotWholesaleCounters(
   for (const offer of countered) {
     const seller = producerById.get(offer.producerId);
     if (!seller) continue;
-    // 70/30 variety split: even a profitable counter gets held out/rejected
-    // 30% of the time, so producer bots don't all settle instantly.
-    const accepts =
+    // Accept at/above cost, or slightly below when the counter still clears
+    // social unit value (TRADITIONAL producers may take a small loss).
+    const social = unitValueVnd(session.currentRound);
+    const priceOk =
       Boolean(offer.counterPriceVnd) &&
-      offer.counterPriceVnd! >= offer.inventoryLot.unitCostVnd &&
+      (offer.counterPriceVnd! >= offer.inventoryLot.unitCostVnd ||
+        offer.counterPriceVnd! >= social);
+    const accepts =
+      priceOk &&
       seededUnit(
         session.id,
         session.currentRound,
@@ -1126,11 +1180,12 @@ async function runBotConsumerDemand(
               offerPriceVnd: offerPrice,
             });
             actions++;
+            // Keep shopping other listings — don't deadlock on one counter chain.
+            continue;
           }
-          break;
         }
       } catch {
-        break;
+        continue;
       }
     }
   }
@@ -1217,6 +1272,73 @@ async function respondBotRetailOffers(
       }
     } catch {
       /* offer/listing may have changed */
+    }
+  }
+  return actions;
+}
+
+/** Consumer bots accept (or reject) seller counter-offers sent to them. */
+async function acceptBotRetailCounters(
+  tx: Prisma.TransactionClient,
+  session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
+): Promise<number> {
+  let actions = 0;
+  const consumers = await tx.participant.findMany({
+    where: { sessionId: session.id, isBot: true, role: "CONSUMER" },
+    include: { wallet: true },
+  });
+  if (consumers.length === 0) return 0;
+  const consumerById = new Map(consumers.map((c) => [c.id, c]));
+  const offers = seededOrder(
+    await tx.offer.findMany({
+      where: {
+        status: "OPEN",
+        parentOfferId: { not: null },
+        toParticipantId: { in: consumers.map((c) => c.id) },
+      },
+      include: { listing: true },
+      orderBy: { createdAt: "asc" },
+      take: 16,
+    }),
+    session,
+    "retail-counter-accept-order",
+  );
+  for (const offer of offers) {
+    const consumer = consumerById.get(offer.toParticipantId);
+    if (!consumer?.wallet) continue;
+    const config = botConfig(consumer, session);
+    const willingness = botInt(
+      consumer,
+      session,
+      `consumer-counter-willingness-${offer.id}`,
+      config.willingnessVnd[0],
+      config.willingnessVnd[1],
+    );
+    const maxPay = Math.min(willingness, consumer.wallet.balanceVnd);
+    try {
+      if (offer.offerPriceVnd <= maxPay) {
+        await respondOffer(tx, botCtx(consumer, session), {
+          offerId: offer.id,
+          decision: "ACCEPT",
+        });
+        actions++;
+      } else if (
+        seededUnit(
+          session.id,
+          session.currentRound,
+          consumer.id,
+          offer.id,
+          "reject-retail-counter",
+        ) < 0.4
+      ) {
+        await respondOffer(tx, botCtx(consumer, session), {
+          offerId: offer.id,
+          decision: "REJECT",
+        });
+        actions++;
+      }
+    } catch {
+      /* offer may have expired or funds moved */
     }
   }
   return actions;

@@ -61,6 +61,18 @@ const config: NextAuthConfig = {
           picture: profile.picture as string | undefined,
         });
       }
+
+      // After a DB wipe/reset, JWTs still carry old uids. Drop them so the
+      // client re-authenticates instead of calling the game API as a ghost.
+      if (token.uid) {
+        const alive = await db.user.findFirst({
+          where: { id: token.uid as string, deletedAt: null },
+          select: { id: true },
+        });
+        if (!alive) {
+          delete token.uid;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
@@ -79,22 +91,73 @@ async function resolveGoogleUser(p: {
 }): Promise<string> {
   const existing = await db.authIdentity.findUnique({
     where: { provider_providerSubject: { provider: "GOOGLE", providerSubject: p.sub } },
+    include: { user: { select: { id: true, deletedAt: true } } },
   });
-  if (existing) return existing.userId;
+  if (existing?.user && !existing.user.deletedAt) return existing.userId;
 
-  // Link to a verified email account if one exists (FR-AUTH-05).
-  const byEmail = await db.user.findUnique({ where: { email: p.email } });
-  const user =
-    byEmail ??
-    (await db.user.create({
+  // Resurrect soft-deleted Google user instead of colliding on unique email.
+  if (existing?.user?.deletedAt) {
+    await db.user.update({
+      where: { id: existing.userId },
       data: {
-        email: p.email,
-        emailVerified: p.emailVerified ? new Date() : null,
+        deletedAt: null,
         displayName: p.name,
         avatarUrl: p.picture ?? null,
+        emailVerified: p.emailVerified ? new Date() : null,
       },
-    }));
+    });
+    return existing.userId;
+  }
 
+  // Link to a verified email account if one exists (FR-AUTH-05). Skip soft-deleted.
+  const byEmail = await db.user.findFirst({
+    where: { email: p.email, deletedAt: null },
+  });
+  if (byEmail) {
+    await db.authIdentity.create({
+      data: {
+        userId: byEmail.id,
+        provider: "GOOGLE",
+        providerSubject: p.sub,
+        verifiedAt: p.emailVerified ? new Date() : null,
+      },
+    });
+    return byEmail.id;
+  }
+
+  // Soft-deleted row may still own the email unique key — resurrect it.
+  const softDeleted = await db.user.findFirst({
+    where: { email: p.email, deletedAt: { not: null } },
+  });
+  if (softDeleted) {
+    await db.user.update({
+      where: { id: softDeleted.id },
+      data: {
+        deletedAt: null,
+        displayName: p.name,
+        avatarUrl: p.picture ?? null,
+        emailVerified: p.emailVerified ? new Date() : null,
+      },
+    });
+    await db.authIdentity.create({
+      data: {
+        userId: softDeleted.id,
+        provider: "GOOGLE",
+        providerSubject: p.sub,
+        verifiedAt: p.emailVerified ? new Date() : null,
+      },
+    });
+    return softDeleted.id;
+  }
+
+  const user = await db.user.create({
+    data: {
+      email: p.email,
+      emailVerified: p.emailVerified ? new Date() : null,
+      displayName: p.name,
+      avatarUrl: p.picture ?? null,
+    },
+  });
   await db.authIdentity.create({
     data: {
       userId: user.id,

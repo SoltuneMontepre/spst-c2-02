@@ -337,6 +337,7 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
           offerId: p.offerId,
           decision: p.decision,
           counterPriceVnd: p.counterPriceVnd,
+          quantity: p.quantity,
         }),
       );
     }
