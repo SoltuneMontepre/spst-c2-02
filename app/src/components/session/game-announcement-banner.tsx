@@ -5,13 +5,9 @@ import { useCountdown, formatClock } from "@/hooks/use-countdown";
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { PhaseReadyButton } from "@/components/session/phase-ready-button";
 import { EVENT_COPY, PHASE_BANNERS, ROUND_NAMES } from "@/lib/labels";
+import { canFastForwardPhase } from "@/lib/phase-timeline";
 import type { SessionSnapshot } from "@/lib/session-service";
 import { cn } from "@/lib/utils";
-
-function canFastForwardPhase(status: string, phase: string | null): boolean {
-  if (status === "INTRO" || status === "DEBRIEF") return false;
-  return phase === "DECISION" || phase === "MARKET_OPEN" || phase === "RECAP";
-}
 
 /** TFT-style top announcement: vòng · giai đoạn · điều phối viên · timer. */
 export function GameAnnouncementBanner({

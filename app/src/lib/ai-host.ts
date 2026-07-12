@@ -33,8 +33,9 @@ export async function maybeAutoStartLobby(sessionId: string): Promise<void> {
   }
 }
 
-/** In-game: when every connected human is ready, start a short 5s countdown
- *  (does not advance immediately — TFT-style "all ready" beat). */
+/** In-game: when every connected human is ready on RECAP, start a short
+ *  countdown. DECISION / MARKET_OPEN always run their full timers — playtest
+ *  showed a single "Tôi đã xong" click ending the market in 5s. */
 export async function maybeFastForwardPhase(sessionId: string): Promise<void> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
@@ -48,12 +49,8 @@ export async function maybeFastForwardPhase(sessionId: string): Promise<void> {
       : session.status === "DEBRIEF"
         ? null
         : session.phase;
-  // Only decision / market / recap support ready-to-advance.
-  if (
-    phaseKey !== "DECISION" &&
-    phaseKey !== "MARKET_OPEN" &&
-    phaseKey !== "RECAP"
-  ) {
+  // Only recap supports ready-to-advance. Market/decision need the full clock.
+  if (phaseKey !== "RECAP") {
     return;
   }
 

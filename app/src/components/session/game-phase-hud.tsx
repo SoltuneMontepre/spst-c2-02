@@ -3,16 +3,8 @@
 import { useTutorial } from "@/components/learning/tutorial-provider";
 import { PhaseBanner } from "@/components/session/phase-banner";
 import { PhaseReadyButton } from "@/components/session/phase-ready-button";
+import { canFastForwardPhase } from "@/lib/phase-timeline";
 import type { SessionSnapshot } from "@/lib/session-service";
-
-/** Phases where players should finish tasks before skipping (not intro/event read time). */
-function canFastForwardPhase(
-  status: string,
-  phase: string | null,
-): boolean {
-  if (status === "INTRO" || status === "DEBRIEF") return false;
-  return phase === "DECISION" || phase === "MARKET_OPEN" || phase === "RECAP";
-}
 
 /** Shared phase HUD: timer, AI narration, TFT-style phase-ready. */
 export function GamePhaseHud({

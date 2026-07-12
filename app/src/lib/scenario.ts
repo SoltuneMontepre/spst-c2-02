@@ -129,11 +129,11 @@ export const UPGRADE_COSTS = {
 
 /** Phase durations in seconds (SRS §4.2, §4.3). */
 export const PHASE_DURATIONS_SEC = {
-  EVENT: 10,
+  EVENT: 15,
   DECISION: 180,
   MARKET_OPEN: 300,
   SETTLEMENT: 0, // server-driven, no fixed timer
-  RECAP: 30, // minimum before host may advance
+  RECAP: 45, // give players time to read before host/auto advance
 } as const;
 
 /** AI-host timed intro / debrief (no manual host needed). */
@@ -152,8 +152,8 @@ export const DISCONNECT_BOT_TAKEOVER_SEC = 20;
 export const HOST_RECONNECT_WINDOW_SEC = 120;
 /** Extra silence after stale before we stop waiting on them for "everyone ready". */
 export const DISCONNECT_READY_GRACE_SEC = 5;
-/** When every connected human is phase-ready, advance after this short countdown. */
-export const ALL_READY_COUNTDOWN_SEC = 5;
+/** When every connected human is phase-ready on RECAP, advance after this. */
+export const ALL_READY_COUNTDOWN_SEC = 10;
 
 /** Round event types in fixed order (SRS §5.7, BR-ROUND-01). */
 export const ROUND_EVENTS: Record<number, EventType> = {
