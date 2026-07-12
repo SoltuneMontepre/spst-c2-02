@@ -38,10 +38,12 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [number, number];
     upgradeBalanceShare: number;
     askSteps: [number, number];
-    /** Thrifty buy-now ceiling (steps above social unit value) — 30% path. */
-    buyPremiumSteps: [number, number];
-    /** Impulse buy-now ceiling — 70% path; clears typical producer asks. */
-    impulsePremiumSteps: [number, number];
+    /**
+     * Thrifty (30%): steps vs market going rate — usually at/below market.
+     * Impulse (70%): usually at/slightly above market.
+     */
+    buyOffsetSteps: [number, number];
+    impulseOffsetSteps: [number, number];
     offerDiscountSteps: [number, number];
     sellerConcessionSteps: [number, number];
   }
@@ -49,27 +51,27 @@ const BOT_TEMPERAMENTS: Record<
   CAUTIOUS: {
     productionShare: [0.55, 0.75],
     upgradeBalanceShare: 0.3,
-    askSteps: [1, 2],
-    buyPremiumSteps: [1, 3],
-    impulsePremiumSteps: [7, 10], // ~17–20k
+    askSteps: [0, 1],
+    buyOffsetSteps: [-4, -1],
+    impulseOffsetSteps: [-1, 2],
     offerDiscountSteps: [2, 4],
     sellerConcessionSteps: [0, 1],
   },
   BALANCED: {
     productionShare: [0.7, 0.9],
     upgradeBalanceShare: 0.4,
-    askSteps: [0, 1],
-    buyPremiumSteps: [2, 4],
-    impulsePremiumSteps: [8, 11], // ~18–21k
+    askSteps: [1, 2],
+    buyOffsetSteps: [-3, 0],
+    impulseOffsetSteps: [0, 3],
     offerDiscountSteps: [2, 3],
     sellerConcessionSteps: [0, 1],
   },
   BOLD: {
     productionShare: [0.85, 1],
     upgradeBalanceShare: 0.5,
-    askSteps: [0, 1],
-    buyPremiumSteps: [3, 5],
-    impulsePremiumSteps: [9, 12], // ~19–22k
+    askSteps: [1, 3],
+    buyOffsetSteps: [-2, 1],
+    impulseOffsetSteps: [1, 4],
     offerDiscountSteps: [1, 3],
     sellerConcessionSteps: [1, 2],
   },
@@ -120,18 +122,26 @@ function botConfig(bot: Participant, session: BotSession) {
   return BOT_TEMPERAMENTS[temperament(bot, session)];
 }
 
-/** Absolute ceiling for buy-now — thrifty or impulse, both anchored to social value. */
+/**
+ * Willingness ceiling: 70/30 impulse/thrifty still applies, but both paths
+ * are random offsets around the live market going rate — not bare social 10k
+ * and not a hard "never above market" cap.
+ */
 function consumerBuyCeilingVnd(
   bot: Participant,
   session: BotSession,
   purpose: string,
-  mode: "thrifty" | "impulse" = "thrifty",
+  mode: "thrifty" | "impulse",
+  marketGoingRateVnd: number,
 ): number {
   const config = botConfig(bot, session);
   const [lo, hi] =
-    mode === "impulse" ? config.impulsePremiumSteps : config.buyPremiumSteps;
-  const premium = botInt(bot, session, purpose, lo, hi);
-  return unitValueVnd(session.currentRound) + premium * PRICE_STEP_VND;
+    mode === "impulse" ? config.impulseOffsetSteps : config.buyOffsetSteps;
+  const offset = botInt(bot, session, purpose, lo, hi);
+  return Math.min(
+    MAX_PRICE_VND,
+    Math.max(MIN_PRICE_VND, marketGoingRateVnd + offset * PRICE_STEP_VND),
+  );
 }
 
 function botInt(
@@ -142,6 +152,116 @@ function botInt(
   max: number,
 ): number {
   return seededInt(min, max, session.id, session.currentRound, bot.id, purpose);
+}
+
+function medianInt(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid]!;
+  // Round even medians to the price grid.
+  return (
+    Math.round(((sorted[mid - 1]! + sorted[mid]!) / 2) / PRICE_STEP_VND) *
+    PRICE_STEP_VND
+  );
+}
+
+/**
+ * Live market anchor for bot asks — not bare social unit value (10k).
+ * Prefer human shelf asks + clears this round, else prior-round market price.
+ */
+async function collectMarketPriceSamples(
+  tx: Prisma.TransactionClient,
+  session: { id: string; currentRound: number },
+): Promise<{ social: number; samples: number[] }> {
+  const social = unitValueVnd(session.currentRound);
+  const samples: number[] = [];
+
+  if (session.currentRound > 1) {
+    const prev = await tx.marketSnapshot.findFirst({
+      where: {
+        isFinal: true,
+        marketPriceVnd: { not: null },
+        round: {
+          sessionId: session.id,
+          number: session.currentRound - 1,
+        },
+      },
+      select: { marketPriceVnd: true },
+      orderBy: { capturedAt: "desc" },
+    });
+    if (prev?.marketPriceVnd != null && prev.marketPriceVnd > 0) {
+      samples.push(prev.marketPriceVnd);
+    }
+  }
+
+  const round = await tx.round.findUnique({
+    where: {
+      sessionId_number: {
+        sessionId: session.id,
+        number: session.currentRound,
+      },
+    },
+    select: { id: true },
+  });
+  if (!round) return { social, samples };
+
+  const listings = await tx.listing.findMany({
+    where: {
+      roundId: round.id,
+      status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+      availableQuantity: { gt: 0 },
+    },
+    select: { askPriceVnd: true, sellerParticipantId: true },
+  });
+  if (listings.length > 0) {
+    const sellers = await tx.participant.findMany({
+      where: {
+        id: { in: [...new Set(listings.map((l) => l.sellerParticipantId))] },
+      },
+      select: { id: true, isBot: true },
+    });
+    const isBot = new Map(sellers.map((s) => [s.id, s.isBot]));
+    const humanAsks = listings
+      .filter((l) => !isBot.get(l.sellerParticipantId))
+      .map((l) => l.askPriceVnd);
+    const pool =
+      humanAsks.length > 0
+        ? humanAsks
+        : listings.map((l) => l.askPriceVnd);
+    samples.push(...pool);
+  }
+
+  const trades = await tx.transaction.findMany({
+    where: {
+      roundId: round.id,
+      status: "COMPLETED",
+      channel: { in: ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY"] },
+    },
+    select: { unitPriceVnd: true },
+  });
+  if (trades.length > 0) {
+    samples.push(...trades.map((t) => t.unitPriceVnd));
+  }
+
+  return { social, samples };
+}
+
+/** Seller reference — track the going market (median), not a single outlier ask. */
+async function observeMarketReferenceVnd(
+  tx: Prisma.TransactionClient,
+  session: { id: string; currentRound: number },
+): Promise<number> {
+  const { social, samples } = await collectMarketPriceSamples(tx, session);
+  if (samples.length === 0) return social;
+  return Math.min(MAX_PRICE_VND, Math.max(social, medianInt(samples)));
+}
+
+/** Going market rate for consumer willingness (± temperament offsets). */
+async function observeMarketGoingRateVnd(
+  tx: Prisma.TransactionClient,
+  session: { id: string; currentRound: number },
+): Promise<number> {
+  return observeMarketReferenceVnd(tx, session);
 }
 
 function botAskPrice(
@@ -158,6 +278,49 @@ function botAskPrice(
   const costFloor = afterTaxBreakevenAskVnd(floorPriceVnd);
   const listFloor = Math.min(MAX_PRICE_VND, costFloor + PRICE_STEP_VND);
   return Math.max(listFloor, referencePriceVnd + step * PRICE_STEP_VND, floorPriceVnd);
+}
+
+/** Raise bot OPEN asks toward observed market (never lower mid-round). */
+async function repriceBotRetailListings(
+  tx: Prisma.TransactionClient,
+  session: BotSession,
+  marketRef: number,
+): Promise<number> {
+  const bots = await tx.participant.findMany({
+    where: { sessionId: session.id, isBot: true },
+  });
+  if (bots.length === 0) return 0;
+  const botById = new Map(bots.map((b) => [b.id, b]));
+
+  const listings = await tx.listing.findMany({
+    where: {
+      sellerParticipantId: { in: bots.map((b) => b.id) },
+      status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+      availableQuantity: { gt: 0 },
+      round: { sessionId: session.id, number: session.currentRound },
+    },
+    include: { inventoryLot: true },
+  });
+
+  let actions = 0;
+  for (const listing of listings) {
+    const seller = botById.get(listing.sellerParticipantId);
+    if (!seller) continue;
+    const target = botAskPrice(
+      seller,
+      session,
+      `reprice-${listing.id}-${marketRef}`,
+      marketRef,
+      listing.inventoryLot.unitCostVnd,
+    );
+    if (target < listing.askPriceVnd + PRICE_STEP_VND) continue;
+    await tx.listing.update({
+      where: { id: listing.id },
+      data: { askPriceVnd: target },
+    });
+    actions++;
+  }
+  return actions;
 }
 
 function intermediaryBidCeiling(
@@ -465,6 +628,8 @@ async function runBotConsumerReaction(sessionId: string): Promise<void> {
     let actions = 0;
     const walletPatches: Record<string, number> = {};
     await db.$transaction(async (tx) => {
+      const marketRef = await observeMarketReferenceVnd(tx, session);
+      actions += await repriceBotRetailListings(tx, session, marketRef);
       const demand = await runBotConsumerDemand(tx, session, 2, {
         requireHumanListings: true,
       });
@@ -579,7 +744,7 @@ async function runBotMarketWaveInner(
         where: { id: sessionId },
       });
       if (session.phase !== "MARKET_OPEN" || session.paused) return;
-      const price = unitValueVnd(session.currentRound);
+      const price = await observeMarketReferenceVnd(db, session);
       const round = await db.round.findUniqueOrThrow({
         where: {
           sessionId_number: { sessionId, number: session.currentRound },
@@ -654,6 +819,14 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
+              const marketRef = await observeMarketReferenceVnd(tx, session);
+              n += await repriceBotRetailListings(tx, session, marketRef);
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
               n += await respondBotWholesaleOffers(tx, session, round.id, price);
             });
             return n;
@@ -699,7 +872,9 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await listBotIntermediaryRetail(tx, session);
+              const marketRef = await observeMarketReferenceVnd(tx, session);
+              n += await repriceBotRetailListings(tx, session, marketRef);
+              n += await listBotIntermediaryRetail(tx, session, marketRef);
             });
             return n;
           },
@@ -1193,6 +1368,7 @@ async function acceptBotWholesaleCounters(
 async function listBotIntermediaryRetail(
   tx: Prisma.TransactionClient,
   session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
+  marketRef: number,
 ): Promise<number> {
   let actions = 0;
   const intermediaries = seededOrder(
@@ -1225,13 +1401,14 @@ async function listBotIntermediaryRetail(
         markupMin,
         markupMax,
       );
-      const retailAsk = Math.min(
-        30000,
-        Math.max(
-          afterTaxBreakevenAskVnd(lot.unitCostVnd),
-          lot.unitCostVnd + markupSteps * 1000,
-        ),
+      const costAsk = Math.max(
+        afterTaxBreakevenAskVnd(lot.unitCostVnd),
+        lot.unitCostVnd + markupSteps * PRICE_STEP_VND,
       );
+      // Track the live shelf / prior clear — don't stick at cost+tiny markup
+      // while humans are posting 20k+.
+      const marketAsk = marketRef + (aggressive ? 2 : 0) * PRICE_STEP_VND;
+      const retailAsk = Math.min(MAX_PRICE_VND, Math.max(costAsk, marketAsk));
       const retailQty = botInt(
         im,
         session,
@@ -1263,6 +1440,7 @@ async function runBotConsumerDemand(
   const requireHumanListings = opts.requireHumanListings ?? false;
   let actions = 0;
   const walletPatches: Record<string, number> = {};
+  const marketGoingRate = await observeMarketGoingRateVnd(tx, session);
   const round = await tx.round.findUniqueOrThrow({
     where: {
       sessionId_number: { sessionId: session.id, number: session.currentRound },
@@ -1352,9 +1530,8 @@ async function runBotConsumerDemand(
             ? humanListings
             : listings
           : listings;
-      const social = unitValueVnd(session.currentRound);
-      // Ignore only extreme rip-offs (e.g. 25k+ when social is 10k).
-      const ripoffAsk = social + 14 * PRICE_STEP_VND;
+      // Extreme outliers only — willingness itself is market ± temperament range.
+      const ripoffAsk = marketGoingRate + 8 * PRICE_STEP_VND;
       const fairListings = shopListings.filter((l) => l.askPriceVnd <= ripoffAsk);
       if (fairListings.length === 0) break;
       const ranked = [...fairListings].sort((a, b) => {
@@ -1376,7 +1553,7 @@ async function runBotConsumerDemand(
         ];
       if (!listing) break;
       const config = botConfig(consumer, session);
-      // 70% impulse buy-now (higher ceiling), 30% thrifty negotiate.
+      // 70% impulse buy-now (higher offset), 30% thrifty negotiate.
       const impulse =
         seededUnit(
           session.id,
@@ -1390,11 +1567,11 @@ async function runBotConsumerDemand(
         session,
         `consumer-fair-buy-${maxActionsPerConsumer}-${attempts}`,
         impulse ? "impulse" : "thrifty",
+        marketGoingRate,
       );
-      const maxPay = Math.min(
-        fairBuy,
-        Math.floor(availableVnd / Math.max(need, 1)),
-      );
+      // Use full available cash for the next unit — dividing by remaining need
+      // left bots unable to buy a ~19k fruit when need=2–3 and wallet ~40–50k.
+      const maxPay = Math.min(fairBuy, availableVnd);
       try {
         if (listing.askPriceVnd <= maxPay) {
           const trade = await buyNow(tx, botCtx(consumer, session), {
@@ -1563,6 +1740,7 @@ async function acceptBotRetailCounters(
 ): Promise<{ actions: number; walletPatches: Record<string, number> }> {
   let actions = 0;
   const walletPatches: Record<string, number> = {};
+  const marketGoingRate = await observeMarketGoingRateVnd(tx, session);
   const consumers = await tx.participant.findMany({
     where: { sessionId: session.id, isBot: true, role: "CONSUMER" },
     include: { wallet: true },
@@ -1600,6 +1778,7 @@ async function acceptBotRetailCounters(
         ) < CONSUMER_BUY_NOW_RATE
           ? "impulse"
           : "thrifty",
+        marketGoingRate,
       ),
       consumer.wallet.balanceVnd,
     );

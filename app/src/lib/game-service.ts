@@ -878,23 +878,38 @@ async function enterRound(sessionId: string, n: number): Promise<void> {
           });
         }
 
-        const consumers = participants.filter(
-          (participant) => participant.role === "CONSUMER" && participant.wallet,
-        );
-        if (consumers.length > 0) {
-          await tx.wallet.updateMany({
-            where: { participantId: { in: consumers.map((consumer) => consumer.id) } },
-            data: { balanceVnd: { increment: SCENARIO.consumerSubsidyPerRoundVnd } },
+        const subsidyLedger: Array<{
+          sessionId: string;
+          roundId: string;
+          walletId: string;
+          type: "SUBSIDY";
+          amountVnd: number;
+        }> = [];
+        let subsidyConsumerIndex = 0;
+        for (const participant of participants) {
+          if (participant.role !== "CONSUMER") continue;
+          const needUnits =
+            needPlan[subsidyConsumerIndex] ?? SCENARIO.consumerBaseNeedUnits;
+          subsidyConsumerIndex++;
+          if (!participant.wallet) continue;
+          const grant = Math.max(
+            SCENARIO.consumerSubsidyPerRoundVnd,
+            needUnits * SCENARIO.consumerBudgetPerNeedUnitVnd,
+          );
+          await tx.wallet.update({
+            where: { participantId: participant.id },
+            data: { balanceVnd: { increment: grant } },
           });
-          await tx.ledgerEntry.createMany({
-            data: consumers.map((consumer) => ({
-              sessionId,
-              roundId: round.id,
-              walletId: consumer.wallet!.id,
-              type: "SUBSIDY",
-              amountVnd: SCENARIO.consumerSubsidyPerRoundVnd,
-            })),
+          subsidyLedger.push({
+            sessionId,
+            roundId: round.id,
+            walletId: participant.wallet.id,
+            type: "SUBSIDY",
+            amountVnd: grant,
           });
+        }
+        if (subsidyLedger.length > 0) {
+          await tx.ledgerEntry.createMany({ data: subsidyLedger });
         }
 
         let consumerIndex = 0;

@@ -15,9 +15,12 @@ export const SCENARIO = {
   unitValueRounds123Vnd: 10000,
   unitValueRound4Vnd: 6000,
   producerStartingCapitalVnd: 50000,
-  // Playtest: 20k only covered ~2 concurrent offers at ~10k each; 50k lets
-  // consumers shop several stalls at once while still needing to negotiate.
+  // Floor grant each round. Actual grant scales with need × this unit budget so
+  // consumers can still buy when asks sit near TRADITIONAL after-tax (~19–22k)
+  // and round 3 bumps need +50%.
   consumerSubsidyPerRoundVnd: 50000,
+  /** Per-need-unit purchasing power used when topping up consumer wallets. */
+  consumerBudgetPerNeedUnitVnd: 24000,
   intermediaryStartingCapitalVnd: 60000,
   stateStartingBudgetVnd: 40000,
   producerLaborPoints: 8,
