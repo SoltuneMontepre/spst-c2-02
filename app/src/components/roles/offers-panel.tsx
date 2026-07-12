@@ -192,9 +192,27 @@ export function OffersPanel({
             <span className="text-xs text-muted-foreground">
               Đang chờ <span className="font-semibold text-foreground">{o.toName}</span>
             </span>
-            <span className="font-mono text-xs font-bold text-foreground">
-              {o.quantity} thùng · {formatThousandDong(o.offerPriceVnd)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-foreground">
+                {o.quantity} thùng · {formatThousandDong(o.offerPriceVnd)}
+              </span>
+              {!canCounter ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  disabled={command.isPending}
+                  onClick={() =>
+                    command.mutate({
+                      action: "cancelOffer",
+                      offerId: o.id,
+                    })
+                  }
+                >
+                  Hủy
+                </Button>
+              ) : null}
+            </div>
           </div>
         ))}
       </CardContent>

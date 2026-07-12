@@ -17,6 +17,7 @@ import { createWholesaleOffer, respondWholesale } from "./wholesale-service";
 import { applyPolicy } from "./policy-service";
 import {
   allowedProductionQuantity,
+  afterTaxBreakevenAskVnd,
   producerUnitCostVnd,
   unitValueVnd,
 } from "./economy";
@@ -28,8 +29,8 @@ import type {
   GovernmentRoundState,
 } from "./role-state";
 
-type BotSession = Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>;
 type BotTemperament = "CAUTIOUS" | "BALANCED" | "BOLD";
+type BotSession = Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>;
 
 const BOT_TEMPERAMENTS: Record<
   BotTemperament,
@@ -46,26 +47,26 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.55, 0.75],
     upgradeBalanceShare: 0.3,
     askSteps: [1, 2],
-    // Must clear TRADITIONAL retail floors (~18k) or bots never buy.
-    willingnessVnd: [18000, 20000],
-    offerDiscountSteps: [2, 3],
+    // Clear TRADITIONAL after-tax floor (~19k) with room to negotiate.
+    willingnessVnd: [20000, 23000],
+    offerDiscountSteps: [1, 2],
     sellerConcessionSteps: [0, 1],
   },
   BALANCED: {
     productionShare: [0.7, 0.9],
     upgradeBalanceShare: 0.4,
     askSteps: [0, 1],
-    willingnessVnd: [19000, 22000],
+    willingnessVnd: [21000, 25000],
     offerDiscountSteps: [1, 2],
-    sellerConcessionSteps: [1, 2],
+    sellerConcessionSteps: [0, 1],
   },
   BOLD: {
     productionShare: [0.85, 1],
     upgradeBalanceShare: 0.5,
-    askSteps: [-1, 1],
-    willingnessVnd: [20000, 24000],
+    askSteps: [0, 1],
+    willingnessVnd: [22000, 27000],
     offerDiscountSteps: [1, 1],
-    sellerConcessionSteps: [1, 3],
+    sellerConcessionSteps: [1, 2],
   },
 };
 
@@ -130,7 +131,10 @@ function botAskPrice(
 ): number {
   const [minStep, maxStep] = botConfig(bot, session).askSteps;
   const step = botInt(bot, session, purpose, minStep, maxStep);
-  return Math.max(floorPriceVnd, referencePriceVnd + step * 1000);
+  // Never list below after-tax cost recovery — sellers were bleeding out at
+  // social unit value (~10k) while TRADITIONAL cost is ~18k.
+  const costFloor = afterTaxBreakevenAskVnd(floorPriceVnd);
+  return Math.max(costFloor, referencePriceVnd + step * 1000, floorPriceVnd);
 }
 
 function intermediaryBidCeiling(
@@ -1089,13 +1093,10 @@ async function acceptBotWholesaleCounters(
   for (const offer of countered) {
     const seller = producerById.get(offer.producerId);
     if (!seller) continue;
-    // Accept at/above cost, or slightly below when the counter still clears
-    // social unit value (TRADITIONAL producers may take a small loss).
-    const social = unitValueVnd(session.currentRound);
+    // Accept at/above after-tax cost — never dump at social unit value.
+    const costFloor = afterTaxBreakevenAskVnd(offer.inventoryLot.unitCostVnd);
     const priceOk =
-      Boolean(offer.counterPriceVnd) &&
-      (offer.counterPriceVnd! >= offer.inventoryLot.unitCostVnd ||
-        offer.counterPriceVnd! >= social);
+      Boolean(offer.counterPriceVnd) && offer.counterPriceVnd! >= costFloor;
     const accepts =
       priceOk &&
       seededUnit(
@@ -1153,7 +1154,13 @@ async function listBotIntermediaryRetail(
         markupMin,
         markupMax,
       );
-      const retailAsk = Math.min(30000, lot.unitCostVnd + markupSteps * 1000);
+      const retailAsk = Math.min(
+        30000,
+        Math.max(
+          afterTaxBreakevenAskVnd(lot.unitCostVnd),
+          lot.unitCostVnd + markupSteps * 1000,
+        ),
+      );
       const retailQty = botInt(
         im,
         session,
@@ -1209,17 +1216,45 @@ async function runBotConsumerDemand(
     if (!state) continue;
     let need = Math.max(0, state.needTarget - state.fulfilledUnits);
     let attempts = 0;
-    while (need > 0 && attempts < maxActionsPerConsumer) {
+    // Shop up to remaining need (not a hard 1–2), so bots can place several
+    // concurrent offers across stalls within one wave.
+    const actionCap = Math.min(12, Math.max(maxActionsPerConsumer, need));
+    const alreadyOffered = new Set(
+      (
+        await tx.offer.findMany({
+          where: {
+            fromParticipantId: consumer.id,
+            status: "OPEN",
+            listingId: { not: null },
+            listing: {
+              round: { sessionId: session.id, number: session.currentRound },
+            },
+          },
+          select: { listingId: true },
+        })
+      )
+        .map((o) => o.listingId)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    while (need > 0 && attempts < actionCap) {
       const wallet = await tx.wallet.findUnique({
         where: { participantId: consumer.id },
       });
       if (!wallet) break;
+      const availableVnd = Math.max(
+        0,
+        wallet.balanceVnd - (state.reservedOfferVnd ?? 0),
+      );
+      if (availableVnd < 1000) break;
       const listings = await tx.listing.findMany({
         where: {
           round: { sessionId: session.id, number: session.currentRound },
           status: { in: ["OPEN", "PARTIALLY_FILLED"] },
           availableQuantity: { gt: 0 },
           sellerParticipantId: { not: consumer.id },
+          ...(alreadyOffered.size > 0
+            ? { id: { notIn: [...alreadyOffered] } }
+            : {}),
         },
         orderBy: [{ askPriceVnd: "asc" }, { createdAt: "asc" }],
         take: 16,
@@ -1282,7 +1317,7 @@ async function runBotConsumerDemand(
       );
       const maxPay = Math.min(
         willingness,
-        Math.floor(wallet.balanceVnd / Math.max(need, 1)),
+        Math.floor(availableVnd / Math.max(need, 1)),
       );
       try {
         if (listing.askPriceVnd <= maxPay) {
@@ -1308,13 +1343,15 @@ async function runBotConsumerDemand(
           );
           if (
             offerPrice < listing.askPriceVnd &&
-            wallet.balanceVnd >= offerPrice
+            availableVnd >= offerPrice
           ) {
             await makeOffer(tx, botCtx(consumer, session), {
               listingId: listing.id,
               quantity: 1,
               offerPriceVnd: offerPrice,
             });
+            alreadyOffered.add(listing.id);
+            state.reservedOfferVnd = (state.reservedOfferVnd ?? 0) + offerPrice;
             actions++;
             continue;
           }
@@ -1378,7 +1415,17 @@ async function respondBotRetailOffers(
       offer.offerPriceVnd + 1000,
       offer.listing.askPriceVnd - Math.max(1, concessionSteps) * 1000,
     );
-    const acceptFloor = Math.max(1000, Math.min(price, counterPrice));
+    // Accept only at/above after-tax cost floor (lot cost), not social unit value.
+    const lotCost = offer.listing
+      ? (
+          await tx.inventoryLot.findUnique({
+            where: { id: offer.listing.inventoryLotId },
+            select: { unitCostVnd: true },
+          })
+        )?.unitCostVnd ?? price
+      : price;
+    const costFloor = afterTaxBreakevenAskVnd(lotCost);
+    const acceptFloor = Math.max(costFloor, Math.min(offer.listing.askPriceVnd, counterPrice));
     const counterGapSteps = botInt(
       seller,
       session,
@@ -1396,12 +1443,13 @@ async function respondBotRetailOffers(
       } else if (
         offer.listing.askPriceVnd - offer.offerPriceVnd >=
           counterGapSteps * 1000 &&
-        counterPrice < offer.listing.askPriceVnd
+        counterPrice < offer.listing.askPriceVnd &&
+        counterPrice >= costFloor
       ) {
         await respondOffer(tx, botCtx(seller, session), {
           offerId: offer.id,
           decision: "COUNTER",
-          counterPriceVnd: counterPrice,
+          counterPriceVnd: Math.max(counterPrice, costFloor),
         });
         actions++;
       }

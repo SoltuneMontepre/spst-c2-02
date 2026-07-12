@@ -421,6 +421,25 @@ export async function makeOffer(
   return { offerId: offer.id };
 }
 
+/** Consumer withdraws their own OPEN retail offer and frees the reservation. */
+export async function cancelOffer(
+  tx: Tx,
+  ctx: CommandContext,
+  offerId: string,
+): Promise<void> {
+  requirePhase(ctx, "MARKET_OPEN");
+  requireRole(ctx, "CONSUMER");
+
+  const offer = await tx.offer.findUnique({ where: { id: offerId } });
+  if (!offer || offer.status !== "OPEN") throw new ApiError("OFFER_UNAVAILABLE", 409);
+  if (offer.fromParticipantId !== ctx.participant.id) throw new ApiError("NOT_OFFER_RECIPIENT", 403);
+  // Seller counters flip fromParticipantId to the seller — those are not cancellable here.
+  if (offer.parentOfferId) throw new ApiError("OFFER_UNAVAILABLE", 409);
+
+  await releaseOfferReservation(tx, ctx.session.id, ctx.session.currentRound, offer);
+  await tx.offer.update({ where: { id: offer.id }, data: { status: "CANCELLED" } });
+}
+
 /** Accept, reject, or counter an open retail offer. */
 export async function respondOffer(
   tx: Tx,

@@ -118,6 +118,12 @@ export const offerSchema = z.object({
   offerPriceVnd: priceVndSchema,
 });
 
+export const cancelOfferSchema = z.object({
+  clientActionId,
+  expectedStateVersion,
+  offerId: z.string().uuid(),
+});
+
 export const respondOfferSchema = z.object({
   clientActionId,
   expectedStateVersion,

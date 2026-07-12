@@ -178,6 +178,9 @@ export function ConsumerMarket({ sessionId }: { sessionId: string }) {
           unitValueVnd={unitValue}
           pending={command.isPending}
           balanceVnd={data.self?.balanceVnd ?? 0}
+          reservedOfferVnd={
+            (data.self?.roleState as ConsumerRoundState | null)?.reservedOfferVnd ?? 0
+          }
           onBuy={(quantity) => {
             command.mutate({
               action: "buy",

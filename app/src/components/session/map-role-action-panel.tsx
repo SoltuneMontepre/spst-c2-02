@@ -479,6 +479,7 @@ function ConsumerActions({ sessionId }: { sessionId: string }) {
           unitValueVnd={unitValue}
           pending={command.isPending}
           balanceVnd={data.self.balanceVnd ?? 0}
+          reservedOfferVnd={state?.reservedOfferVnd ?? 0}
           onBuy={(quantity) => {
             command.mutate({
               action: "buy",

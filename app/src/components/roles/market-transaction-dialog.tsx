@@ -17,6 +17,7 @@ export function MarketTransactionDialog({
   unitValueVnd,
   pending,
   balanceVnd,
+  reservedOfferVnd = 0,
   onBuy,
   onOffer,
   onClose,
@@ -25,6 +26,8 @@ export function MarketTransactionDialog({
   unitValueVnd?: number | null;
   pending: boolean;
   balanceVnd: number;
+  /** Funds already held for other open offers. */
+  reservedOfferVnd?: number;
   onBuy: (quantity: number) => void;
   onOffer: (quantity: number, offerPriceVnd: number) => void;
   onClose: () => void;
@@ -43,9 +46,10 @@ export function MarketTransactionDialog({
 
   const totalBuy = quantity * listing.askPriceVnd;
   const totalOffer = quantity * offerPriceK * 1000;
+  const availableVnd = Math.max(0, balanceVnd - reservedOfferVnd);
   // Trả giá is precisely for when the buyer *can't* afford the full ask —
-  // affordability must track the mode's own total, not always the ask price.
-  const canAfford = balanceVnd >= (mode === "buy" ? totalBuy : totalOffer);
+  // affordability must track the mode's own total against free (unreserved) funds.
+  const canAfford = availableVnd >= (mode === "buy" ? totalBuy : totalOffer);
 
   const handlePrimary = () => {
     if (mode === "buy") {
@@ -199,6 +203,22 @@ export function MarketTransactionDialog({
               <span>Số dư ví</span>
               <span>{formatThousandDong(balanceVnd)}</span>
             </div>
+            {reservedOfferVnd > 0 ? (
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>Đang giữ cho đề nghị khác</span>
+                <span>{formatThousandDong(reservedOfferVnd)}</span>
+              </div>
+            ) : null}
+            <div className="mt-1 flex items-center justify-between text-xs font-medium text-foreground">
+              <span>Khả dụng</span>
+              <span className="font-mono">{formatThousandDong(availableVnd)}</span>
+            </div>
+            {!canAfford ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-danger">
+                Không đủ tiền khả dụng — hủy bớt đề nghị đang chờ hoặc giảm giá/số
+                lượng.
+              </p>
+            ) : null}
           </div>
 
           {/* Actions */}

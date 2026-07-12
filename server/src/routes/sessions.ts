@@ -45,6 +45,7 @@ import {
   buyNow,
   makeOffer,
   respondOffer,
+  cancelOffer,
   cancelProduction,
   investUpgrade,
   closeListing,
@@ -59,6 +60,7 @@ import {
   listSchema,
   buySchema,
   offerSchema,
+  cancelOfferSchema,
   respondOfferSchema,
   wholesaleCreateSchema,
   respondWholesaleSchema,
@@ -130,6 +132,7 @@ const commandActionSchema = z.object({
     "closeListing",
     "buy",
     "offer",
+    "cancelOffer",
     "respondOffer",
     "wholesale",
     "respondWholesale",
@@ -319,6 +322,12 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
     if (action === "offer") {
       const p = offerSchema.parse(body);
       return cmd(user.id, sessionId, p, "market:offer_made", (tx, ctx) => makeOffer(tx, ctx, p));
+    }
+    if (action === "cancelOffer") {
+      const p = cancelOfferSchema.parse(body);
+      return cmd(user.id, sessionId, p, "market:offer_cancelled", (tx, ctx) =>
+        cancelOffer(tx, ctx, p.offerId),
+      );
     }
     if (action === "respondOffer") {
       const p = respondOfferSchema.parse(body);

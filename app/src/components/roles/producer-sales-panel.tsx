@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useCommand } from "@/hooks/use-command";
 import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
-import { producerUnitCostVnd, unitValueVnd } from "@/lib/economy";
+import { producerUnitCostVnd, suggestedRetailAskVnd } from "@/lib/economy";
 import { MAX_PRICE_VND, MIN_PRICE_VND, PRICE_STEP_VND } from "@/lib/money";
 import { UPGRADE_COSTS, SCENARIO } from "@/lib/scenario";
 import {
@@ -56,9 +56,11 @@ export function ProducerSalesPanel({
     setQty((current) => Math.min(current, maxQty));
   }, [maxQty]);
 
-  const retailStandardPrice = unitValueVnd(currentRound);
   const unitCost = producerUnitCostVnd(state);
-  const wholesaleStandardPrice = Math.max(MIN_PRICE_VND, unitCost);
+  // Default to cost-covering ask (after tax) — NOT social unit value, which
+  // underprices TRADITIONAL (~18k cost) at 10k and guarantees a loss.
+  const retailStandardPrice = suggestedRetailAskVnd(unitCost, currentRound);
+  const wholesaleStandardPrice = Math.max(MIN_PRICE_VND, retailStandardPrice);
 
   const [retailPrice, setRetailPrice] = useState(retailStandardPrice);
   const [wholesalePrice, setWholesalePrice] = useState(wholesaleStandardPrice);
@@ -206,14 +208,20 @@ export function ProducerSalesPanel({
               </Button>
             </div>
             <p className="border-t border-border bg-muted/10 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-              Sau thuế 10% bạn nhận ~{formatCompactVnd(netPerUnitAfterTax)}/thùng
-              (vốn {formatCompactVnd(unitCost)}).
+              Sau thuế {(salesTaxRate * 100).toFixed(0)}% bạn nhận ~
+              {formatCompactVnd(netPerUnitAfterTax)}/thùng (vốn{" "}
+              {formatCompactVnd(unitCost)}).
               {sellsBelowCost ? (
                 <span className="font-semibold text-danger">
                   {" "}
                   Giá này lỗ so với chi phí sản xuất — ví sẽ giảm dù bán được.
                 </span>
-              ) : null}
+              ) : (
+                <span className="font-semibold text-success">
+                  {" "}
+                  Giá này đủ hòa vốn sau thuế.
+                </span>
+              )}
             </p>
 
             <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-border px-3 py-2.5">

@@ -15,13 +15,15 @@ export const SCENARIO = {
   unitValueRounds123Vnd: 10000,
   unitValueRound4Vnd: 6000,
   producerStartingCapitalVnd: 50000,
-  consumerSubsidyPerRoundVnd: 20000,
+  // Playtest: 20k only covered ~2 concurrent offers at ~10k each; 50k lets
+  // consumers shop several stalls at once while still needing to negotiate.
+  consumerSubsidyPerRoundVnd: 50000,
   intermediaryStartingCapitalVnd: 60000,
   stateStartingBudgetVnd: 40000,
   producerLaborPoints: 8,
   roundProductionCap: 4,
-  /** VAT-style cut on every retail/wholesale sale, routed to the government wallet. */
-  salesTaxRate: 0.1,
+  /** VAT-style cut on sales → government. 5% keeps TRADITIONAL viable at ~19k ask. */
+  salesTaxRate: 0.05,
   needFulfillmentUtilityVnd: 20000,
   consumerBaseNeedUnits: 2, // base need target per consumer per round
 } as const;

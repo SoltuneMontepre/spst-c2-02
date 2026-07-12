@@ -2,7 +2,7 @@
 
 import type { ProductivityProfile } from "@/generated/prisma/enums";
 import { PRODUCTIVITY_PROFILES, SCENARIO } from "./scenario";
-import { roundToThousandHalfUp } from "./money";
+import { roundToThousandHalfUp, MIN_PRICE_VND, MAX_PRICE_VND, PRICE_STEP_VND } from "./money";
 import type { ProducerRoundState } from "./role-state";
 
 /** TGLĐXHCT for a round (SRS §5.7). */
@@ -76,6 +76,36 @@ export function roundResources(roundNumber: number): {
 
 export function producerUnitCostVnd(state: ProducerRoundState): number {
   return state.unitCostVnd ?? state.individualUnitCostVnd;
+}
+
+/**
+ * Minimum ask so that after sales tax the seller still recovers `unitCostVnd`.
+ * Snapped up to the next 1.000 VND price step.
+ */
+export function afterTaxBreakevenAskVnd(
+  unitCostVnd: number,
+  salesTaxRate: number = SCENARIO.salesTaxRate,
+): number {
+  const rate = Math.min(0.5, Math.max(0, salesTaxRate));
+  const netFactor = 1 - rate;
+  if (netFactor <= 0) return MAX_PRICE_VND;
+  const raw = unitCostVnd / netFactor;
+  return Math.min(
+    MAX_PRICE_VND,
+    Math.max(MIN_PRICE_VND, Math.ceil(raw / PRICE_STEP_VND) * PRICE_STEP_VND),
+  );
+}
+
+/** Suggested retail ask: cover cost after tax, never below social unit value. */
+export function suggestedRetailAskVnd(
+  unitCostVnd: number,
+  roundNumber: number,
+  salesTaxRate: number = SCENARIO.salesTaxRate,
+): number {
+  return Math.min(
+    MAX_PRICE_VND,
+    Math.max(unitValueVnd(roundNumber), afterTaxBreakevenAskVnd(unitCostVnd, salesTaxRate)),
+  );
 }
 
 export function producerProductionCapacity(state: ProducerRoundState): number {
