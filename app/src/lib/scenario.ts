@@ -155,8 +155,8 @@ export const DISCONNECT_BOT_TAKEOVER_SEC = 20;
 export const HOST_RECONNECT_WINDOW_SEC = 120;
 /** Extra silence after stale before we stop waiting on them for "everyone ready". */
 export const DISCONNECT_READY_GRACE_SEC = 5;
-/** When every connected human is phase-ready on RECAP, advance after this. */
-export const ALL_READY_COUNTDOWN_SEC = 10;
+/** When every connected human is phase-ready, advance after this (TFT-style). */
+export const ALL_READY_COUNTDOWN_SEC = 5;
 
 /** Round event types in fixed order (SRS §5.7, BR-ROUND-01). */
 export const ROUND_EVENTS: Record<number, EventType> = {

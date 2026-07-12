@@ -28,8 +28,9 @@ export function canFastForwardPhase(
   phase: string | null,
 ): boolean {
   if (status === "INTRO" || status === "DEBRIEF") return false;
-  // Ready-skip only on recap — decision/market always use the full timer.
-  return phase === "RECAP";
+  return (
+    phase === "DECISION" || phase === "MARKET_OPEN" || phase === "RECAP"
+  );
 }
 
 export function isInGameTimelineStatus(status: string): boolean {
