@@ -38,8 +38,10 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [number, number];
     upgradeBalanceShare: number;
     askSteps: [number, number];
-    /** Max steps above social unit value for buy-now (not absolute VND). */
+    /** Thrifty buy-now ceiling (steps above social unit value) — 30% path. */
     buyPremiumSteps: [number, number];
+    /** Impulse buy-now ceiling — 70% path; clears typical producer asks. */
+    impulsePremiumSteps: [number, number];
     offerDiscountSteps: [number, number];
     sellerConcessionSteps: [number, number];
   }
@@ -48,7 +50,8 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.55, 0.75],
     upgradeBalanceShare: 0.3,
     askSteps: [1, 2],
-    buyPremiumSteps: [0, 2], // ~10–12k in rounds 1–3
+    buyPremiumSteps: [1, 3],
+    impulsePremiumSteps: [7, 10], // ~17–20k
     offerDiscountSteps: [2, 4],
     sellerConcessionSteps: [0, 1],
   },
@@ -56,7 +59,8 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.7, 0.9],
     upgradeBalanceShare: 0.4,
     askSteps: [0, 1],
-    buyPremiumSteps: [1, 3], // ~11–13k
+    buyPremiumSteps: [2, 4],
+    impulsePremiumSteps: [8, 11], // ~18–21k
     offerDiscountSteps: [2, 3],
     sellerConcessionSteps: [0, 1],
   },
@@ -64,11 +68,15 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.85, 1],
     upgradeBalanceShare: 0.5,
     askSteps: [0, 1],
-    buyPremiumSteps: [2, 5], // ~12–15k — still won't clear a 25k ask
+    buyPremiumSteps: [3, 5],
+    impulsePremiumSteps: [9, 12], // ~19–22k
     offerDiscountSteps: [1, 3],
     sellerConcessionSteps: [1, 2],
   },
 };
+
+/** 70% impulse buy-now / 30% thrifty negotiate. */
+const CONSUMER_BUY_NOW_RATE = 0.7;
 
 function seededUnit(...parts: Array<string | number>): number {
   const seed = parts.join(":");
@@ -112,13 +120,16 @@ function botConfig(bot: Participant, session: BotSession) {
   return BOT_TEMPERAMENTS[temperament(bot, session)];
 }
 
-/** Absolute ceiling for impulse buy-now — anchored to social unit value, not raw capital. */
+/** Absolute ceiling for buy-now — thrifty or impulse, both anchored to social value. */
 function consumerBuyCeilingVnd(
   bot: Participant,
   session: BotSession,
   purpose: string,
+  mode: "thrifty" | "impulse" = "thrifty",
 ): number {
-  const [lo, hi] = botConfig(bot, session).buyPremiumSteps;
+  const config = botConfig(bot, session);
+  const [lo, hi] =
+    mode === "impulse" ? config.impulsePremiumSteps : config.buyPremiumSteps;
   const premium = botInt(bot, session, purpose, lo, hi);
   return unitValueVnd(session.currentRound) + premium * PRICE_STEP_VND;
 }
@@ -1342,20 +1353,17 @@ async function runBotConsumerDemand(
             : listings
           : listings;
       const social = unitValueVnd(session.currentRound);
-      const ripoffAsk = social + 6 * PRICE_STEP_VND;
-      // Prefer fair-priced stalls; ignore rip-off asks so a lone expensive
-      // human listing doesn't get cleared by every bot.
+      // Ignore only extreme rip-offs (e.g. 25k+ when social is 10k).
+      const ripoffAsk = social + 14 * PRICE_STEP_VND;
       const fairListings = shopListings.filter((l) => l.askPriceVnd <= ripoffAsk);
       if (fairListings.length === 0) break;
-      // Prefer human sellers; among equals, cheapest first.
       const ranked = [...fairListings].sort((a, b) => {
         const aBot = sellerIsBot.get(a.sellerParticipantId) ? 1 : 0;
         const bBot = sellerIsBot.get(b.sellerParticipantId) ? 1 : 0;
         if (aBot !== bBot) return aBot - bBot;
         return a.askPriceVnd - b.askPriceVnd;
       });
-      // Usually pick among the 2 cheapest — not a random expensive stall.
-      const pool = ranked.slice(0, Math.min(2, ranked.length));
+      const pool = ranked.slice(0, Math.min(4, ranked.length));
       const listing =
         pool[
           botInt(
@@ -1368,10 +1376,20 @@ async function runBotConsumerDemand(
         ];
       if (!listing) break;
       const config = botConfig(consumer, session);
+      // 70% impulse buy-now (higher ceiling), 30% thrifty negotiate.
+      const impulse =
+        seededUnit(
+          session.id,
+          session.currentRound,
+          consumer.id,
+          listing.id,
+          `buy-now-roll-${attempts}`,
+        ) < CONSUMER_BUY_NOW_RATE;
       const fairBuy = consumerBuyCeilingVnd(
         consumer,
         session,
         `consumer-fair-buy-${maxActionsPerConsumer}-${attempts}`,
+        impulse ? "impulse" : "thrifty",
       );
       const maxPay = Math.min(
         fairBuy,
@@ -1573,6 +1591,15 @@ async function acceptBotRetailCounters(
         consumer,
         session,
         `consumer-counter-fair-${offer.id}`,
+        seededUnit(
+          session.id,
+          session.currentRound,
+          consumer.id,
+          offer.id,
+          "counter-impulse",
+        ) < CONSUMER_BUY_NOW_RATE
+          ? "impulse"
+          : "thrifty",
       ),
       consumer.wallet.balanceVnd,
     );
