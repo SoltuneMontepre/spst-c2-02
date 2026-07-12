@@ -380,6 +380,18 @@ function ProducerActions({ sessionId }: { sessionId: string }) {
       />
 
       {data.phase === "MARKET_OPEN" ? (
+        <WholesalePanel
+          sessionId={sessionId}
+          stateVersion={data.stateVersion}
+          inventory={data.self.inventory}
+          offers={data.market?.wholesaleOffers ?? []}
+          role="PRODUCER"
+          balanceVnd={data.self.balanceVnd}
+          showCreate={false}
+        />
+      ) : null}
+
+      {data.phase === "MARKET_OPEN" ? (
         <OffersPanel
           sessionId={sessionId}
           stateVersion={data.stateVersion}

@@ -110,27 +110,48 @@ export async function respondWholesale(
   }
 
   // ACCEPT
-  let unitPrice: number;
-  let intermediaryId: string;
-  let tradeQuantity = offer.quantity;
-
+  // Intermediary "buy at floor" used to settle instantly — producers never saw
+  // a confirm step. Treat floor bids as COUNTERED at minimumPrice so the
+  // producer must explicitly accept (same as a negotiated counter).
   if (ctx.participant.role === "INTERMEDIARY" && offer.status === "OPEN") {
-    unitPrice = offer.minimumPriceVnd;
-    intermediaryId = ctx.participant.id;
+    let bidQty = offer.quantity;
     if (input.quantity != null) {
       if (input.quantity <= 0 || input.quantity > offer.quantity) {
         throw new ApiError("INVALID_QUANTITY", 422);
       }
-      tradeQuantity = input.quantity;
+      bidQty = input.quantity;
     }
-  } else if (ctx.participant.role === "PRODUCER" && offer.status === "COUNTERED") {
-    if (!offer.counterPriceVnd || !offer.intermediaryId)
-      throw new ApiError("OFFER_UNAVAILABLE", 409);
-    unitPrice = offer.counterPriceVnd;
-    intermediaryId = offer.intermediaryId;
-  } else {
+    const leftover = offer.quantity - bidQty;
+    if (leftover > 0) {
+      await tx.inventoryLot.update({
+        where: { id: offer.inventoryLotId },
+        data: {
+          availableQuantity: { increment: leftover },
+          status: "AVAILABLE",
+        },
+      });
+    }
+    await tx.wholesaleOffer.update({
+      where: { id: offer.id },
+      data: {
+        status: "COUNTERED",
+        quantity: bidQty,
+        counterPriceVnd: offer.minimumPriceVnd,
+        intermediaryId: ctx.participant.id,
+      },
+    });
+    return {};
+  }
+
+  if (ctx.participant.role !== "PRODUCER" || offer.status !== "COUNTERED") {
     throw new ApiError("WRONG_ROLE", 403);
   }
+  if (!offer.counterPriceVnd || !offer.intermediaryId)
+    throw new ApiError("OFFER_UNAVAILABLE", 409);
+
+  const unitPrice = offer.counterPriceVnd;
+  const intermediaryId = offer.intermediaryId;
+  const tradeQuantity = offer.quantity;
 
   const result = await executeWholesaleTrade(
     tx,
@@ -141,16 +162,10 @@ export async function respondWholesale(
     tradeQuantity,
   );
 
-  // Partial fill (buying less than the full offer) leaves the remainder open
-  // at the original floor price for other intermediaries to negotiate.
-  if (tradeQuantity < offer.quantity) {
-    await tx.wholesaleOffer.update({
-      where: { id: offer.id },
-      data: { quantity: { decrement: tradeQuantity } },
-    });
-  } else {
-    await tx.wholesaleOffer.update({ where: { id: offer.id }, data: { status: "ACCEPTED" } });
-  }
+  await tx.wholesaleOffer.update({
+    where: { id: offer.id },
+    data: { status: "ACCEPTED" },
+  });
   return { transactionId: result.transactionId };
 }
 

@@ -24,6 +24,7 @@ export function WholesalePanel({
   offers,
   role,
   balanceVnd,
+  showCreate = true,
 }: {
   sessionId: string;
   stateVersion?: number;
@@ -31,6 +32,8 @@ export function WholesalePanel({
   offers: WholesaleView[];
   role: "PRODUCER" | "INTERMEDIARY";
   balanceVnd?: number | null;
+  /** Producer map already has create in ProducerSalesPanel. */
+  showCreate?: boolean;
 }) {
   const command = useCommand(sessionId, stateVersion);
   const [lotId, setLotId] = useState(inventory[0]?.id ?? "");
@@ -51,13 +54,13 @@ export function WholesalePanel({
 
   return (
     <div className="flex flex-col gap-3 text-sm">
-        {role === "PRODUCER" && inventory.length > 0 ? (
+        {role === "PRODUCER" && showCreate && inventory.length > 0 ? (
           <>
             <div className="rounded-[10.5px] border border-border bg-muted/20 p-3">
               <p className="text-sm font-semibold">Đăng bán sỉ cho đại lý</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Chọn số thùng và giá tối thiểu. Đại lý có thể mua ngay hoặc gửi
-                giá phản hồi.
+                Chọn số thùng và giá tối thiểu. Đại lý gửi đề nghị mua — bạn phải
+                chấp nhận thì giao dịch mới hoàn tất.
               </p>
             </div>
             {inventory.length > 1 ? (
@@ -105,9 +108,19 @@ export function WholesalePanel({
                 <span>
                   Lô của bạn: {o.quantity} thùng · tối thiểu {formatThousandDong(o.minimumPriceVnd)}
                 </span>
+                {o.status === "OPEN" ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Đang chờ đại lý gửi đề nghị mua.
+                  </p>
+                ) : null}
                 {o.status === "COUNTERED" && o.counterPriceVnd ? (
-                  <div className="mt-2 flex gap-2">
-                    <span>Phản giá: {formatThousandDong(o.counterPriceVnd)}</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-sm">
+                      Đề nghị mua: {formatThousandDong(o.counterPriceVnd)}/thùng
+                      {o.counterPriceVnd >= o.minimumPriceVnd
+                        ? " (đủ giá sàn)"
+                        : " (thấp hơn sàn)"}
+                    </span>
                     <Button
                       size="sm"
                       disabled={command.isPending}
@@ -187,11 +200,10 @@ export function WholesalePanel({
                 {openOffers.map((offer) => {
                   const counterPrice = counterPrices[offer.id] ?? offer.minimumPriceVnd;
                   const isFloor = counterPrice === offer.minimumPriceVnd;
-                  // Partial quantity only applies to instant buys at the floor
-                  // price — a counter offer still negotiates the whole lot.
-                  const quantity = isFloor
-                    ? Math.min(buyQuantities[offer.id] ?? offer.quantity, offer.quantity)
-                    : offer.quantity;
+                  const quantity = Math.min(
+                    buyQuantities[offer.id] ?? offer.quantity,
+                    offer.quantity,
+                  );
                   const total = counterPrice * quantity;
                   const canAfford = balanceVnd == null || balanceVnd >= total;
 
@@ -208,21 +220,15 @@ export function WholesalePanel({
                           {offer.quantity} thùng · sàn {formatThousandDong(offer.minimumPriceVnd)}
                         </span>
                       </span>
-                      {isFloor ? (
-                        <Stepper
-                          size="sm"
-                          value={quantity}
-                          min={1}
-                          max={offer.quantity}
-                          onChange={(next) =>
-                            setBuyQuantities((p) => ({ ...p, [offer.id]: next }))
-                          }
-                        />
-                      ) : (
-                        <span className="text-center text-xs text-muted-foreground">
-                          cả lô
-                        </span>
-                      )}
+                      <Stepper
+                        size="sm"
+                        value={quantity}
+                        min={1}
+                        max={offer.quantity}
+                        onChange={(next) =>
+                          setBuyQuantities((p) => ({ ...p, [offer.id]: next }))
+                        }
+                      />
                       <PriceStepper
                         value={counterPrice}
                         min={MIN_PRICE_VND}
@@ -254,7 +260,7 @@ export function WholesalePanel({
                           )
                         }
                       >
-                        {isFloor ? "Mua" : "Gửi giá"}
+                        {isFloor ? "Đề nghị mua" : "Gửi giá"}
                       </Button>
                     </div>
                   );
@@ -262,8 +268,8 @@ export function WholesalePanel({
               </div>
             )}
             <p className="text-[11px] leading-4 text-muted-foreground">
-              Mua đúng giá sàn nhập kho ngay. Chỉnh giá thấp hơn rồi «Gửi giá» để
-              nhà cung cấp duyệt trước khi giao dịch hoàn tất.
+              Mọi đề nghị (kể cả đúng giá sàn) đều chờ nhà cung cấp chấp nhận trước
+              khi hàng vào kho của bạn.
             </p>
           </>
         ) : null}
