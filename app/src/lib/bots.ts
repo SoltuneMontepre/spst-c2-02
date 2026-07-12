@@ -38,7 +38,8 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [number, number];
     upgradeBalanceShare: number;
     askSteps: [number, number];
-    willingnessVnd: [number, number];
+    /** Max steps above social unit value for buy-now (not absolute VND). */
+    buyPremiumSteps: [number, number];
     offerDiscountSteps: [number, number];
     sellerConcessionSteps: [number, number];
   }
@@ -47,25 +48,24 @@ const BOT_TEMPERAMENTS: Record<
     productionShare: [0.55, 0.75],
     upgradeBalanceShare: 0.3,
     askSteps: [1, 2],
-    // Clear TRADITIONAL after-tax floor (~19k) with room to negotiate.
-    willingnessVnd: [20000, 23000],
-    offerDiscountSteps: [1, 2],
+    buyPremiumSteps: [0, 2], // ~10–12k in rounds 1–3
+    offerDiscountSteps: [2, 4],
     sellerConcessionSteps: [0, 1],
   },
   BALANCED: {
     productionShare: [0.7, 0.9],
     upgradeBalanceShare: 0.4,
     askSteps: [0, 1],
-    willingnessVnd: [21000, 25000],
-    offerDiscountSteps: [1, 2],
+    buyPremiumSteps: [1, 3], // ~11–13k
+    offerDiscountSteps: [2, 3],
     sellerConcessionSteps: [0, 1],
   },
   BOLD: {
     productionShare: [0.85, 1],
     upgradeBalanceShare: 0.5,
     askSteps: [0, 1],
-    willingnessVnd: [22000, 27000],
-    offerDiscountSteps: [1, 1],
+    buyPremiumSteps: [2, 5], // ~12–15k — still won't clear a 25k ask
+    offerDiscountSteps: [1, 3],
     sellerConcessionSteps: [1, 2],
   },
 };
@@ -110,6 +110,17 @@ function temperament(bot: Participant, session: BotSession): BotTemperament {
 
 function botConfig(bot: Participant, session: BotSession) {
   return BOT_TEMPERAMENTS[temperament(bot, session)];
+}
+
+/** Absolute ceiling for impulse buy-now — anchored to social unit value, not raw capital. */
+function consumerBuyCeilingVnd(
+  bot: Participant,
+  session: BotSession,
+  purpose: string,
+): number {
+  const [lo, hi] = botConfig(bot, session).buyPremiumSteps;
+  const premium = botInt(bot, session, purpose, lo, hi);
+  return unitValueVnd(session.currentRound) + premium * PRICE_STEP_VND;
 }
 
 function botInt(
@@ -1325,21 +1336,21 @@ async function runBotConsumerDemand(
             ? humanListings
             : listings
           : listings;
+      const social = unitValueVnd(session.currentRound);
+      const ripoffAsk = social + 6 * PRICE_STEP_VND;
+      // Prefer fair-priced stalls; ignore rip-off asks so a lone expensive
+      // human listing doesn't get cleared by every bot.
+      const fairListings = shopListings.filter((l) => l.askPriceVnd <= ripoffAsk);
+      if (fairListings.length === 0) break;
       // Prefer human sellers; among equals, cheapest first.
-      const ranked = [...shopListings].sort((a, b) => {
+      const ranked = [...fairListings].sort((a, b) => {
         const aBot = sellerIsBot.get(a.sellerParticipantId) ? 1 : 0;
         const bBot = sellerIsBot.get(b.sellerParticipantId) ? 1 : 0;
         if (aBot !== bBot) return aBot - bBot;
         return a.askPriceVnd - b.askPriceVnd;
       });
-      const shopsWide =
-        seededUnit(
-          session.id,
-          session.currentRound,
-          consumer.id,
-          `consumer-pool-${maxActionsPerConsumer}-${attempts}`,
-        ) < 0.3;
-      const pool = shopsWide ? ranked : ranked.slice(0, Math.min(3, ranked.length));
+      // Usually pick among the 2 cheapest — not a random expensive stall.
+      const pool = ranked.slice(0, Math.min(2, ranked.length));
       const listing =
         pool[
           botInt(
@@ -1352,15 +1363,13 @@ async function runBotConsumerDemand(
         ];
       if (!listing) break;
       const config = botConfig(consumer, session);
-      const willingness = botInt(
+      const fairBuy = consumerBuyCeilingVnd(
         consumer,
         session,
-        `consumer-willingness-${maxActionsPerConsumer}-${attempts}`,
-        config.willingnessVnd[0],
-        config.willingnessVnd[1],
+        `consumer-fair-buy-${maxActionsPerConsumer}-${attempts}`,
       );
       const maxPay = Math.min(
-        willingness,
+        fairBuy,
         Math.floor(availableVnd / Math.max(need, 1)),
       );
       try {
@@ -1382,8 +1391,11 @@ async function runBotConsumerDemand(
             config.offerDiscountSteps[1],
           );
           const offerPrice = Math.max(
-            1000,
-            listing.askPriceVnd - discountSteps * 1000,
+            PRICE_STEP_VND,
+            Math.min(
+              maxPay,
+              listing.askPriceVnd - discountSteps * PRICE_STEP_VND,
+            ),
           );
           if (
             offerPrice < listing.askPriceVnd &&
@@ -1539,15 +1551,14 @@ async function acceptBotRetailCounters(
   for (const offer of offers) {
     const consumer = consumerById.get(offer.toParticipantId);
     if (!consumer?.wallet) continue;
-    const config = botConfig(consumer, session);
-    const willingness = botInt(
-      consumer,
-      session,
-      `consumer-counter-willingness-${offer.id}`,
-      config.willingnessVnd[0],
-      config.willingnessVnd[1],
+    const maxPay = Math.min(
+      consumerBuyCeilingVnd(
+        consumer,
+        session,
+        `consumer-counter-fair-${offer.id}`,
+      ),
+      consumer.wallet.balanceVnd,
     );
-    const maxPay = Math.min(willingness, consumer.wallet.balanceVnd);
     try {
       if (offer.offerPriceVnd <= maxPay) {
         const trade = await respondOffer(tx, botCtx(consumer, session), {
