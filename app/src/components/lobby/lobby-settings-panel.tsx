@@ -109,12 +109,12 @@ export function LobbySettingsPanel({
       <div className="mt-3 flex flex-col gap-2.5">
         <SettingRow
           icon={Sparkles}
-          label="Bot dẫn dắt (AI điều phối)"
+          label="Bot dẫn dắt (tự động điều phối)"
           description={
             isHost
               ? autoHost
                 ? "Đang bật — phiên tự chuyển giai đoạn khi mọi người sẵn sàng."
-                : "Để AI tự điều phối timer và lời dẫn; bạn vẫn là host phòng."
+                : "Để hệ thống tự điều phối timer và lời dẫn; bạn vẫn là host phòng."
               : undefined
           }
           checked={autoHost}

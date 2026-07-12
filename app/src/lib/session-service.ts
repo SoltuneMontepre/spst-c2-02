@@ -12,11 +12,6 @@ import type { ParticipantOutcome } from "./finalize";
 import { computeMarketPrice, unitValueVnd } from "./economy";
 import { formatThousandDong } from "./money";
 import type { CreateSessionInput } from "./create-session-schema";
-export type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
-import {
-  ensureAiDebriefReview,
-} from "./debrief-ai";
-import type { AiDebriefParticipantReview, AiDebriefReview } from "./debrief-review";
 import {
   readLiveRoom,
   writeLiveRoom,
@@ -387,9 +382,6 @@ export interface SessionResultView {
   analytics: RoundAnalytics[];
   selfOutcome: ParticipantOutcome | null;
   selfBadges: BadgeView[];
-  /** AI pedagogical grades + comments (overall + per participant), one generation pass. */
-  aiDebrief: AiDebriefReview | null;
-  selfAiReview: AiDebriefParticipantReview | null;
 }
 
 /** Rebuild the shared live frame (memory + Redis) for one session. */
@@ -1161,35 +1153,15 @@ export async function getSessionResult(
   const outcomes = result.participantOutcomes as unknown as ParticipantOutcome[];
   const selfId = selfParticipant?.id;
   const analytics = await buildAnalytics(sessionId);
-  const sessionCompleted = session.status === "COMPLETED";
-
-  const aiDebrief = await ensureAiDebriefReview({
-    sessionId,
-    outcomes,
-    badges: dbBadges.map((b) => ({
-      participantId: b.participantId,
-      type: b.type as BadgeType,
-    })),
-    analytics,
-    sessionCompleted,
-    existing: result.aiDebrief,
-  }).catch((e) => {
-    console.error("ensureAiDebriefReview:", e);
-    return null;
-  });
 
   return {
     status: session.status,
-    narration: aiDebrief?.overall.comment ?? result.narration,
+    narration: result.narration,
     outcomes,
     badges,
     analytics,
     selfOutcome: selfId ? outcomes.find((o) => o.participantId === selfId) ?? null : null,
     selfBadges: selfId ? badges.filter((b) => b.participantId === selfId) : [],
-    aiDebrief,
-    selfAiReview: selfId
-      ? aiDebrief?.participants.find((p) => p.participantId === selfId) ?? null
-      : null,
   };
 }
 

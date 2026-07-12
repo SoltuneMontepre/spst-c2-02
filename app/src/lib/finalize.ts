@@ -1,4 +1,4 @@
-// Session finalization (SRS §5.9): scores, badges, and an AI debrief narration.
+// Session finalization (SRS §5.9): scores, badges, and a debrief narration.
 
 import type { BadgeType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
@@ -10,9 +10,7 @@ import {
   socialScore,
 } from "./economy";
 import type { ConsumerRoundState } from "./role-state";
-import { generateText } from "./ai";
 import { formatThousandDong } from "./money";
-import { generateAiDebriefReview } from "./debrief-ai";
 
 const RETAIL = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"];
 
@@ -136,19 +134,7 @@ export async function finalizeSession(sessionId: string): Promise<void> {
   }
 
   const badges = completed ? await computeBadges(outcomes, sessionId) : [];
-  const marketLines = snapshots.map(
-    (s) =>
-      `Vòng ${s.round.number}: giá trị ${formatThousandDong(s.unitValueVnd)}, giá thị trường ${
-        s.marketPriceVnd === null ? "không hình thành" : formatThousandDong(s.marketPriceVnd)
-      }`,
-  );
-  const aiDebrief = await generateAiDebriefReview({
-    outcomes,
-    badges,
-    marketLines,
-    sessionCompleted: completed,
-  }).catch(() => null);
-  const narration = aiDebrief?.overall.comment ?? (await buildNarration(snapshots).catch(() => null));
+  const narration = buildNarration(snapshots);
 
   await db.$transaction(async (tx) => {
     await tx.badge.deleteMany({ where: { sessionId } });
@@ -167,14 +153,12 @@ export async function finalizeSession(sessionId: string): Promise<void> {
         participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
         badges: badges as unknown as Prisma.InputJsonValue,
         narration,
-        aiDebrief: aiDebrief as unknown as Prisma.InputJsonValue,
       },
       update: {
         status: session.status,
         participantOutcomes: outcomes as unknown as Prisma.InputJsonValue,
         badges: badges as unknown as Prisma.InputJsonValue,
         narration,
-        aiDebrief: aiDebrief as unknown as Prisma.InputJsonValue,
       },
     });
   });
@@ -237,9 +221,11 @@ async function computeBadges(
   return badges;
 }
 
-async function buildNarration(
+/** Deterministic Vietnamese debrief summary built from the real per-round data —
+ *  no external service, so the debrief is instant and always available. */
+function buildNarration(
   snapshots: { round: { number: number }; unitValueVnd: number; marketPriceVnd: number | null }[],
-): Promise<string | null> {
+): string | null {
   if (snapshots.length === 0) return null;
   const lines = snapshots
     .map(
@@ -249,10 +235,9 @@ async function buildNarration(
         }`,
     )
     .join("; ");
-  return generateText({
-    systemInstruction:
-      "Bạn là trợ giảng Kinh tế Chính trị Mác-Lênin. Viết 3-4 câu tiếng Việt, " +
-      "không đánh đồng giá trị với giá cả, nhấn mạnh giá cả dao động quanh giá trị và tác động cung-cầu.",
-    prompt: `Tổng kết phiên chợ thanh long từ dữ liệu thật: ${lines}. Giải thích ngắn gọn cho sinh viên.`,
-  });
+  return (
+    `${lines}. Qua các vòng, giá cả thị trường dao động lên xuống quanh giá trị (hao phí ` +
+    `lao động xã hội cần thiết) dưới tác động của quan hệ cung – cầu: giá trị là cơ sở, ` +
+    `còn giá cả là hình thức biểu hiện bằng tiền của giá trị và xoay quanh nó.`
+  );
 }

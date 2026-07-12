@@ -5,40 +5,22 @@ import { RoleBadge } from "@/components/lobby/role-badge";
 import { ParticipantAvatar } from "@/components/session/participant-avatar";
 import type { BadgeView, ParticipantView } from "@/lib/session-service";
 import type { ParticipantOutcome } from "@/lib/finalize";
-import type { AiDebriefParticipantReview } from "@/lib/debrief-review";
 import { formatThousandDong } from "@/lib/money";
-import { cn } from "@/lib/utils";
 
 function formatScore(o: { role: string; scoreVnd: number }): string {
   if (o.role === "GOVERNMENT") return `${o.scoreVnd} điểm`;
   return formatThousandDong(o.scoreVnd);
 }
 
-function AiGradePill({ grade, className }: { grade: number; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-primary ring-1 ring-primary/25 sm:text-xs",
-        className,
-      )}
-      title="Điểm AI (hiểu bài & thực hành)"
-    >
-      {grade}/10
-    </span>
-  );
-}
-
 export function DebriefScoreboardOverview({
   participants,
   outcomesById,
   badges,
-  aiByParticipantId,
   waiting,
 }: {
   participants: ParticipantView[];
   outcomesById: Map<string, ParticipantOutcome>;
   badges: BadgeView[];
-  aiByParticipantId: Map<string, AiDebriefParticipantReview>;
   waiting: boolean;
 }) {
   const sorted = [...participants].sort((a, b) => {
@@ -56,7 +38,6 @@ export function DebriefScoreboardOverview({
       {sorted.map((p, i) => {
         const outcome = outcomesById.get(p.id);
         const hasBadge = badges.some((b) => b.participantId === p.id);
-        const ai = aiByParticipantId.get(p.id);
         return (
           <li
             key={p.id}
@@ -84,7 +65,6 @@ export function DebriefScoreboardOverview({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {ai ? <AiGradePill grade={ai.grade} /> : null}
               {hasBadge ? (
                 <span className="text-xs text-primary" title="Có danh hiệu">
                   ★

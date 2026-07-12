@@ -35,7 +35,29 @@ services:
       AUTH_URL: ${AUTH_URL:-http://localhost:3000}
       AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
       AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
-      GEMINI_KEY_1: ${GEMINI_KEY_1:-}
+      # Browser talks to the backend directly (same-site localhost → cookies flow).
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Standalone game backend: REST + Socket.IO + bots + phase timers (single writer).
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://phiencho:phiencho@db:5432/phiencho
+      DIRECT_URL: postgresql://phiencho:phiencho@db:5432/phiencho
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET:-change-me-in-production}
+      SERVER_PORT: "4000"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy

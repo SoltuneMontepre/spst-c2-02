@@ -61,12 +61,8 @@ export function useSessionResult(sessionId: string, enabled: boolean) {
     queryKey: ["session", sessionId, "result"],
     queryFn: () => apiFetch<SessionResultView>(`/api/sessions/${sessionId}/result`),
     enabled,
-    refetchInterval: (q) => {
-      const d = q.state.data;
-      if (!d) return false;
-      if (d.status === "DEBRIEF" && !d.aiDebrief) return 5000;
-      return false;
-    },
+    // The result (scores/badges/narration) is computed synchronously at finalize,
+    // so it's ready as soon as the session reaches DEBRIEF — no polling needed.
   });
 }
 

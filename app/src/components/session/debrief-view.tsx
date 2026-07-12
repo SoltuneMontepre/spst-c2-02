@@ -9,7 +9,6 @@ import { PriceValueChart } from "@/components/observatory/price-value-chart";
 import { STATUS_LABELS } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { DebriefScoreboardOverview } from "@/components/session/debrief-participant-summary";
-import { aiReviewByParticipantId } from "@/lib/debrief-review";
 import type { ParticipantOutcome } from "@/lib/finalize";
 import type { ParticipantView } from "@/lib/session-service";
 import type { Role } from "@/generated/prisma/enums";
@@ -65,11 +64,6 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
     return map;
   }, [result]);
 
-  const aiByParticipantId = useMemo(
-    () => aiReviewByParticipantId(result?.aiDebrief ?? null),
-    [result?.aiDebrief],
-  );
-
   const rosterParticipants = useMemo(
     () =>
       snapshot
@@ -88,9 +82,6 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
   }
 
   const waiting = Boolean(showResult && (resultLoading || !result));
-  const aiWaiting = Boolean(
-    showResult && !resultLoading && result && !result.aiDebrief,
-  );
   const statusLabel = STATUS_LABELS[snapshot.status] ?? snapshot.status;
 
   return (
@@ -117,38 +108,17 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
           </h1>
           {snapshot.autoHost && snapshot.status === "DEBRIEF" ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              AI điều phối sẽ tự hoàn tất phiên sau khi hết thời gian debrief.
+              Hệ thống sẽ tự hoàn tất phiên sau khi hết thời gian debrief.
             </p>
           ) : null}
         </div>
 
         {/* Overall summary */}
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
-          {aiWaiting ? (
-            <p className="text-sm text-muted-foreground">
-              AI đang chấm điểm và viết nhận xét cho phiên…
-            </p>
-          ) : result?.aiDebrief ? (
-            <div className="flex items-start gap-4">
-              <span className="flex size-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25">
-                <span className="text-2xl font-bold tabular-nums leading-none">
-                  {result.aiDebrief.overall.grade}
-                </span>
-                <span className="text-[10px] font-semibold text-primary/70">/10</span>
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Nhận xét tổng quan
-                </p>
-                <p className="mt-1 text-sm leading-relaxed sm:text-base">
-                  {result.aiDebrief.overall.comment}
-                </p>
-              </div>
-            </div>
-          ) : result?.narration ? (
+          {result?.narration ? (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Nhận xét trợ giảng AI
+                Nhận xét tổng kết
               </p>
               <p className="mt-1 text-sm leading-relaxed sm:text-base">
                 {result.narration}
@@ -158,7 +128,7 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
             <p className="text-sm text-muted-foreground">Đang tạo nhận xét tổng hợp…</p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Chưa có nhận xét AI cho phiên này.
+              Chưa có nhận xét cho phiên này.
             </p>
           )}
 
@@ -190,7 +160,6 @@ export function DebriefView({ sessionId }: { sessionId: string }) {
               participants={rosterParticipants}
               outcomesById={outcomesById}
               badges={result?.badges ?? []}
-              aiByParticipantId={aiByParticipantId}
               waiting={waiting}
             />
           </div>

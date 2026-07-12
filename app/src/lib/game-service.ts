@@ -523,39 +523,41 @@ export async function startSession(
   sessionId: string,
   _options?: { roleAssignments?: StartRoleAssignment[] },
 ): Promise<void> {
-  const session = await db.gameSession.findUnique({
-    where: { id: sessionId },
-    include: { participants: { orderBy: { createdAt: "asc" } } },
+  // Serialize with every other session mutation so an explicit host start and
+  // the all-ready auto-start (maybeAutoStartLobby) can't both run startSessionAuto
+  // and race on wallet/participant creation — the loser re-reads status and gets
+  // a clean INVALID_STATE instead of a P2002 duplicate-wallet 500.
+  await withSessionLock(sessionId, async () => {
+    const session = await db.gameSession.findUnique({
+      where: { id: sessionId },
+      include: { participants: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
+    if (session.hostUserId !== hostUserId) throw new ApiError("FORBIDDEN", 403);
+    if (session.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
+
+    const humans = session.participants.filter((p) => !p.isBot);
+    const lobbyBots = session.participants.filter((p) => p.isBot);
+    const minHumans = session.autoHost ? 1 : START_MIN_HUMANS;
+    if (humans.length < minHumans) throw new ApiError("UNDER_MIN_PLAYERS", 409);
+    if (!humans.every((p) => p.ready)) throw new ApiError("NOT_ALL_READY", 409);
+
+    if (!session.autoAssignRoles) {
+      // Players may pick a role or leave it Random (null). Resolve random picks,
+      // drop lobby bots, and fill remaining seats with bots.
+      await db.participant.deleteMany({ where: { sessionId, isBot: true } });
+      const humansWithRoles = assignRandomLobbyRoles(humans, session.maxPlayers);
+      await startSessionManual(sessionId, session.maxPlayers, humansWithRoles, []);
+    } else if (lobbyManualMode(session)) {
+      await startSessionManual(sessionId, session.maxPlayers, humans, lobbyBots);
+    } else {
+      await startSessionAuto(sessionId, session.maxPlayers, humans);
+    }
+
+    await touch(sessionId, "session:started");
+
+    if (session.autoHost) await scheduleIntroAdvance(sessionId);
   });
-  if (!session) throw new ApiError("ROOM_NOT_FOUND", 404);
-  if (session.hostUserId !== hostUserId) throw new ApiError("FORBIDDEN", 403);
-  if (session.status !== "LOBBY") throw new ApiError("INVALID_STATE", 409);
-
-  const humans = session.participants.filter((p) => !p.isBot);
-  const lobbyBots = session.participants.filter((p) => p.isBot);
-  const minHumans = session.autoHost ? 1 : START_MIN_HUMANS;
-  if (humans.length < minHumans) throw new ApiError("UNDER_MIN_PLAYERS", 409);
-  if (!humans.every((p) => p.ready)) throw new ApiError("NOT_ALL_READY", 409);
-
-  if (!session.autoAssignRoles) {
-    // Players may pick a role or leave it Random (null). Resolve random picks,
-    // drop lobby bots, and fill remaining seats with bots.
-    await db.participant.deleteMany({ where: { sessionId, isBot: true } });
-    const humansWithRoles = assignRandomLobbyRoles(humans, session.maxPlayers);
-    await startSessionManual(sessionId, session.maxPlayers, humansWithRoles, []);
-  } else if (lobbyManualMode(session)) {
-    await startSessionManual(sessionId, session.maxPlayers, humans, lobbyBots);
-  } else {
-    await startSessionAuto(sessionId, session.maxPlayers, humans);
-  }
-
-  await touch(sessionId, "session:started");
-
-  const { autoHost } = await db.gameSession.findUniqueOrThrow({
-    where: { id: sessionId },
-    select: { autoHost: true },
-  });
-  if (autoHost) await scheduleIntroAdvance(sessionId);
 }
 
 function balancedRoleSlots(slots: Role[]): Role[] {

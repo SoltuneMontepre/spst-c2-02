@@ -44,7 +44,7 @@ export function GameAnnouncementBanner({
 
   const phaseLabel = data.paused
     ? data.autoHost
-      ? "AI điều phối đã tạm dừng"
+      ? "Tự động điều phối đã tạm dừng"
       : "Host đã tạm dừng phiên"
     : data.phase
       ? PHASE_BANNERS[data.phase]

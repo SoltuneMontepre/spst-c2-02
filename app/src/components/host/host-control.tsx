@@ -101,7 +101,7 @@ function HostDashboard({
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Bảng điều phối</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Bảng projector · {data.autoHost ? "AI điều phối" : "Host thủ công"}
+              Bảng projector · {data.autoHost ? "Tự động điều phối" : "Host thủ công"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -143,7 +143,7 @@ function HostDashboard({
           <BentoTile
             colSpan="col-span-12 lg:col-span-3 lg:row-start-1 lg:col-start-10"
             title="Điều khiển"
-            description={data.autoHost ? "AI đang điều phối" : "Host thủ công"}
+            description={data.autoHost ? "Đang tự động điều phối" : "Host thủ công"}
             className="lg:self-start"
           >
             <div className="flex h-full flex-col gap-4">

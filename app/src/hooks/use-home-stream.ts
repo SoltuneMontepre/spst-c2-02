@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { HomeDashboard } from "@/lib/session-service";
 import { apiFetch } from "./use-api";
+import { getSocket } from "@/lib/realtime";
 
 export type HomeStreamState = "connecting" | "connected" | "disconnected";
 
-/** SSE-backed home dashboard invalidation stream (Redis fans out across instances). */
+/** Socket.IO-backed home dashboard stream (Redis fans out across instances). */
 export function useHomeStream(): HomeStreamState {
   const queryClient = useQueryClient();
   const [streamState, setStreamState] = useState<HomeStreamState>("connecting");
   const wasDisconnected = useRef(false);
 
   useEffect(() => {
+    const socket = getSocket();
     const queryKey = ["home-dashboard"] as const;
 
     const applyDashboard = (dashboard: HomeDashboard) => {
@@ -28,35 +30,33 @@ export function useHomeStream(): HomeStreamState {
 
     refetchDashboard();
 
-    let closed = false;
-
-    const onSnapshot = (e: Event) => {
-      try {
-        const payload = JSON.parse((e as MessageEvent).data) as { dashboard: HomeDashboard };
-        applyDashboard(payload.dashboard);
-      } catch {
-        /* malformed payload */
-      }
+    const onSnapshot = (payload: { dashboard: HomeDashboard }) => {
+      applyDashboard(payload.dashboard);
     };
 
-    const source = new EventSource("/api/me/home-stream");
-    source.addEventListener("snapshot", onSnapshot);
-    source.addEventListener("open", () => {
-      if (closed) return;
+    const subscribe = () => socket.emit("home:subscribe");
+    const onConnect = () => {
+      subscribe();
       if (wasDisconnected.current) refetchDashboard();
       wasDisconnected.current = false;
       setStreamState("connected");
-    });
-    source.addEventListener("error", () => {
-      if (!closed) {
-        wasDisconnected.current = true;
-        setStreamState("disconnected");
-      }
-    });
+    };
+    const onDisconnect = () => {
+      wasDisconnected.current = true;
+      setStreamState("disconnected");
+    };
+
+    socket.on("home:snapshot", onSnapshot);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+
+    if (socket.connected) onConnect();
 
     return () => {
-      closed = true;
-      source.close();
+      socket.emit("home:unsubscribe");
+      socket.off("home:snapshot", onSnapshot);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       setStreamState("connecting");
     };
   }, [queryClient]);

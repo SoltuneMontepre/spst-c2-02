@@ -1,6 +1,7 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME === "edge") return;
-  const { rescheduleActiveTimers } = await import("./lib/timer-service");
-  const { maybeAutoAdvance } = await import("./lib/game-service");
-  await rescheduleActiveTimers((sessionId) => maybeAutoAdvance(sessionId));
+// The game loop (phase timers + bots) now runs in the standalone backend
+// (server/), which is the single authoritative writer. The Next app is
+// frontend + auth only and must NOT reschedule timers, or two processes would
+// advance sessions and double-write. Intentionally a no-op.
+export async function register(): Promise<void> {
+  // no-op — see server/src/index.ts startGameLoop()
 }

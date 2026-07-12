@@ -19,12 +19,14 @@ on:
       - main
     paths:
       - "app/**"
+      - "server/**"
       - ".github/workflows/cd.yml"
   workflow_dispatch:
 
 env:
   WORKING_DIRECTORY: app
   IMAGE: docker.io/soltunemontepre/thanh-long-market
+  BACKEND_IMAGE: docker.io/soltunemontepre/thanh-long-backend
   MEDIFAB_REPO: SoltuneMontepre/medifab
   MEDIFAB_OVERLAY: src/infra/clusters/environments/lims/apps/thanh-long
 
@@ -52,7 +54,7 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push frontend image
         uses: useblacksmith/build-push-action@v2
         with:
           context: ${{ env.WORKING_DIRECTORY }}
@@ -69,6 +71,26 @@ jobs:
           provenance: false
           sbom: false
 
+      # The backend reuses app/src/lib in place, so its build context is the repo
+      # root (both app/ and server/ present) with server/Dockerfile.
+      - name: Build and push backend image
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: |
+            type=gha,scope=backend
+            type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: |
+            type=gha,mode=max,scope=backend
+            type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+          provenance: false
+          sbom: false
+
       - name: Check out medifab (FluxCD manifests)
         uses: actions/checkout@v4
         with:
@@ -77,13 +99,22 @@ jobs:
           ref: main
           path: medifab
 
-      - name: Update image tag in Flux overlay
+      - name: Update frontend image tag in Flux overlay
         uses: mikefarah/yq@v4.47.1
         env:
           SHA: ${{ github.sha }}
         with:
           cmd: >-
             yq -i '(.images[] | select(.name == "${{ env.IMAGE }}") | .newTag) = strenv(SHA)'
+            medifab/${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml
+
+      - name: Update backend image tag in Flux overlay
+        uses: mikefarah/yq@v4.47.1
+        env:
+          SHA: ${{ github.sha }}
+        with:
+          cmd: >-
+            yq -i '(.images[] | select(.name == "${{ env.BACKEND_IMAGE }}") | .newTag) = strenv(SHA)'
             medifab/${{ env.MEDIFAB_OVERLAY }}/kustomization.yaml
 
       - name: Commit and push manifest update to medifab
@@ -99,6 +130,6 @@ jobs:
             echo "Image tag already at $SOURCE_SHA — nothing to commit."
             exit 0
           fi
-          git commit -m "chore(cd): update thanh-long-market image to ${SOURCE_SHA} (from ${SOURCE_REPO})"
+          git commit -m "chore(cd): update thanh-long-market + backend images to ${SOURCE_SHA} (from ${SOURCE_REPO})"
           git pull --rebase origin main
           git push

@@ -35,7 +35,7 @@ export function PhaseBanner({
             <span className="text-sm font-semibold">
               {paused
                 ? autoHost
-                  ? "AI điều phối đã tạm dừng"
+                  ? "Tự động điều phối đã tạm dừng"
                   : "Host đã tạm dừng phiên"
                 : phase
                   ? PHASE_BANNERS[phase]
