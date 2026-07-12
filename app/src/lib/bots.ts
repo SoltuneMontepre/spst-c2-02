@@ -22,7 +22,7 @@ import {
   unitValueVnd,
 } from "./economy";
 import { PHASE_DURATIONS_SEC, POLICIES, UPGRADE_COSTS } from "./scenario";
-import { MIN_PRICE_VND } from "./money";
+import { MIN_PRICE_VND, MAX_PRICE_VND, PRICE_STEP_VND } from "./money";
 import type {
   ProducerRoundState,
   ConsumerRoundState,
@@ -131,10 +131,11 @@ function botAskPrice(
 ): number {
   const [minStep, maxStep] = botConfig(bot, session).askSteps;
   const step = botInt(bot, session, purpose, minStep, maxStep);
-  // Never list below after-tax cost recovery — sellers were bleeding out at
-  // social unit value (~10k) while TRADITIONAL cost is ~18k.
+  // Never list below after-tax cost recovery — leave ≥1 step headroom above
+  // floor so buyers can counter-offer and bots still have room to reply.
   const costFloor = afterTaxBreakevenAskVnd(floorPriceVnd);
-  return Math.max(costFloor, referencePriceVnd + step * 1000, floorPriceVnd);
+  const listFloor = Math.min(MAX_PRICE_VND, costFloor + PRICE_STEP_VND);
+  return Math.max(listFloor, referencePriceVnd + step * PRICE_STEP_VND, floorPriceVnd);
 }
 
 function intermediaryBidCeiling(
@@ -386,6 +387,7 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
 const BOT_MARKET_WAVE_COUNT = 6;
 const BOT_MARKET_TIMER_PREFIX = "bot-market-wave";
 const BOT_CONSUMER_REACT_TIMER = "bot-consumer-react";
+const BOT_SELLER_REACT_TIMER = "bot-seller-react";
 
 function botMarketTimerName(wave: number): string {
   return `${BOT_MARKET_TIMER_PREFIX}-${wave}`;
@@ -408,6 +410,7 @@ export function clearBotMarketTimers(sessionId: string): void {
     clearNamedTimer(sessionId, botMarketTimerName(wave));
   }
   clearNamedTimer(sessionId, BOT_CONSUMER_REACT_TIMER);
+  clearNamedTimer(sessionId, BOT_SELLER_REACT_TIMER);
 }
 
 /**
@@ -420,6 +423,15 @@ export function scheduleBotConsumerReaction(sessionId: string): void {
   scheduleNamedTimer(sessionId, BOT_CONSUMER_REACT_TIMER, 2_500, () => {
     void runBotConsumerReaction(sessionId).catch((e) =>
       console.error("bot consumer reaction:", e),
+    );
+  });
+}
+
+/** Bot sellers reply to human counter-offers within ~2s (not only on market waves). */
+export function scheduleBotSellerReaction(sessionId: string): void {
+  scheduleNamedTimer(sessionId, BOT_SELLER_REACT_TIMER, 2_000, () => {
+    void runBotSellerReaction(sessionId).catch((e) =>
+      console.error("bot seller reaction:", e),
     );
   });
 }
@@ -443,6 +455,38 @@ async function runBotConsumerReaction(sessionId: string): Promise<void> {
     if (actions > 0) {
       await bump(sessionId, "bot:consumer_react", { actions, walletPatches }).catch(
         (e) => console.error("bot:consumer_react bump:", e),
+      );
+    }
+  });
+}
+
+async function runBotSellerReaction(sessionId: string): Promise<void> {
+  await withSessionLock(sessionId, async () => {
+    const session = await db.gameSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.phase !== "MARKET_OPEN" || session.paused) return;
+    const price = unitValueVnd(session.currentRound);
+    let actions = 0;
+    const walletPatches: Record<string, number> = {};
+    await db.$transaction(async (tx) => {
+      actions += await respondBotRetailOffers(tx, session, price);
+      const counters = await acceptBotRetailCounters(tx, session);
+      actions += counters.actions;
+      Object.assign(walletPatches, counters.walletPatches);
+      actions += await acceptBotWholesaleCounters(tx, session, (
+        await tx.round.findUniqueOrThrow({
+          where: {
+            sessionId_number: {
+              sessionId: session.id,
+              number: session.currentRound,
+            },
+          },
+          select: { id: true },
+        })
+      ).id);
+    });
+    if (actions > 0) {
+      await bump(sessionId, "bot:seller_react", { actions, walletPatches }).catch(
+        (e) => console.error("bot:seller_react bump:", e),
       );
     }
   });
@@ -1374,6 +1418,7 @@ async function respondBotRetailOffers(
     await tx.offer.findMany({
       where: {
         status: "OPEN",
+        parentOfferId: null, // buyer→seller bids only (not seller counters awaiting buyer)
         listing: {
           round: { sessionId: session.id, number: session.currentRound },
           sellerParticipantId: {
@@ -1392,7 +1437,7 @@ async function respondBotRetailOffers(
       },
       include: { listing: true },
       orderBy: { createdAt: "asc" },
-      take: 12,
+      take: 24,
     }),
     session,
     "retail-offer-response-order",
@@ -1404,6 +1449,15 @@ async function respondBotRetailOffers(
     });
     if (!seller?.isBot) continue;
     const config = botConfig(seller, session);
+    const lotCost =
+      (
+        await tx.inventoryLot.findUnique({
+          where: { id: offer.listing.inventoryLotId },
+          select: { unitCostVnd: true },
+        })
+      )?.unitCostVnd ?? price;
+    const costFloor = afterTaxBreakevenAskVnd(lotCost);
+    const ask = offer.listing.askPriceVnd;
     const concessionSteps = botInt(
       seller,
       session,
@@ -1411,48 +1465,43 @@ async function respondBotRetailOffers(
       config.sellerConcessionSteps[0],
       config.sellerConcessionSteps[1],
     );
+    // Prefer a mid counter, but never below cost recovery.
     const counterPrice = Math.max(
-      offer.offerPriceVnd + 1000,
-      offer.listing.askPriceVnd - Math.max(1, concessionSteps) * 1000,
-    );
-    // Accept only at/above after-tax cost floor (lot cost), not social unit value.
-    const lotCost = offer.listing
-      ? (
-          await tx.inventoryLot.findUnique({
-            where: { id: offer.listing.inventoryLotId },
-            select: { unitCostVnd: true },
-          })
-        )?.unitCostVnd ?? price
-      : price;
-    const costFloor = afterTaxBreakevenAskVnd(lotCost);
-    const acceptFloor = Math.max(costFloor, Math.min(offer.listing.askPriceVnd, counterPrice));
-    const counterGapSteps = botInt(
-      seller,
-      session,
-      `seller-counter-gap-${offer.id}`,
-      2,
-      4,
+      costFloor,
+      Math.min(
+        ask - PRICE_STEP_VND,
+        Math.max(
+          offer.offerPriceVnd + PRICE_STEP_VND,
+          ask - Math.max(1, concessionSteps) * PRICE_STEP_VND,
+        ),
+      ),
     );
     try {
-      if (offer.offerPriceVnd >= acceptFloor) {
+      // Cover cost → accept even below ask (better than ghosting the buyer).
+      if (offer.offerPriceVnd >= costFloor) {
         await respondOffer(tx, botCtx(seller, session), {
           offerId: offer.id,
           decision: "ACCEPT",
         });
         actions++;
-      } else if (
-        offer.listing.askPriceVnd - offer.offerPriceVnd >=
-          counterGapSteps * 1000 &&
-        counterPrice < offer.listing.askPriceVnd &&
-        counterPrice >= costFloor
-      ) {
+        continue;
+      }
+      // Room to counter above the bid and still under ask at/above cost floor.
+      if (costFloor < ask && counterPrice < ask && counterPrice > offer.offerPriceVnd) {
         await respondOffer(tx, botCtx(seller, session), {
           offerId: offer.id,
           decision: "COUNTER",
-          counterPriceVnd: Math.max(counterPrice, costFloor),
+          counterPriceVnd: counterPrice,
         });
         actions++;
+        continue;
       }
+      // Ask already at floor / no legal counter — reject so the buyer gets a reply.
+      await respondOffer(tx, botCtx(seller, session), {
+        offerId: offer.id,
+        decision: "REJECT",
+      });
+      actions++;
     } catch {
       /* offer/listing may have changed */
     }

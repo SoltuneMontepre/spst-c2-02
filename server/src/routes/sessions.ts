@@ -38,7 +38,7 @@ import {
   hostSwapRoles,
 } from "@/lib/game-service";
 import { runCommand } from "@/lib/commands";
-import { scheduleBotConsumerReaction } from "@/lib/bots";
+import { scheduleBotConsumerReaction, scheduleBotSellerReaction } from "@/lib/bots";
 import {
   produce,
   listForSale,
@@ -321,7 +321,12 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
     }
     if (action === "offer") {
       const p = offerSchema.parse(body);
-      return cmd(user.id, sessionId, p, "market:offer_made", (tx, ctx) => makeOffer(tx, ctx, p));
+      const result = await cmd(user.id, sessionId, p, "market:offer_made", (tx, ctx) =>
+        makeOffer(tx, ctx, p),
+      );
+      // Bot sellers reply promptly instead of waiting for the next market wave.
+      scheduleBotSellerReaction(sessionId);
+      return result;
     }
     if (action === "cancelOffer") {
       const p = cancelOfferSchema.parse(body);
@@ -331,13 +336,15 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
     }
     if (action === "respondOffer") {
       const p = respondOfferSchema.parse(body);
-      return cmd(user.id, sessionId, p, "market:offer_responded", (tx, ctx) =>
+      const result = await cmd(user.id, sessionId, p, "market:offer_responded", (tx, ctx) =>
         respondOffer(tx, ctx, {
           offerId: p.offerId,
           decision: p.decision,
           counterPriceVnd: p.counterPriceVnd,
         }),
       );
+      if (p.decision === "COUNTER") scheduleBotSellerReaction(sessionId);
+      return result;
     }
     if (action === "wholesale") {
       const p = wholesaleCreateSchema.parse(body);
@@ -345,7 +352,7 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
     }
     if (action === "respondWholesale") {
       const p = respondWholesaleSchema.parse(body);
-      return cmd(user.id, sessionId, p, "wholesale:responded", (tx, ctx) =>
+      const result = await cmd(user.id, sessionId, p, "wholesale:responded", (tx, ctx) =>
         respondWholesale(tx, ctx, {
           offerId: p.offerId,
           decision: p.decision,
@@ -353,6 +360,11 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
           quantity: p.quantity,
         }),
       );
+      // Producer bots must accept/reject pending wholesale bids promptly.
+      if (p.decision === "ACCEPT" || p.decision === "COUNTER") {
+        scheduleBotSellerReaction(sessionId);
+      }
+      return result;
     }
     if (action === "applyPolicy") {
       const p = applyPolicySchema.parse(body);
