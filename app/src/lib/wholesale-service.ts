@@ -250,7 +250,8 @@ async function executeWholesaleTrade(
   return { transactionId: tradeTx.id };
 }
 
-async function releaseWholesaleInventory(
+/** Return reserved wholesale qty to the producer's lot (reject / expire). */
+export async function releaseWholesaleInventory(
   tx: Tx,
   offer: { inventoryLotId: string; quantity: number },
 ): Promise<void> {

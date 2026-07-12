@@ -2,7 +2,7 @@ import type { Role, ControlMode, Presence, BadgeType } from "@/generated/prisma/
 import type { Presence as PresenceEnum } from "@/generated/prisma/enums";
 import { db } from "./db";
 import { ApiError, generateRoomCode } from "./api";
-import { SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS, MAX_ACTIVE_HOST_ROOMS } from "./scenario";
+import { SCENARIO, SCENARIO_VERSION, ROOM_CODE_EXPIRY_HOURS, MAX_ACTIVE_HOST_ROOMS } from "./scenario";
 import { maybeAutoAdvance } from "./game-service";
 import { ensureHostParticipant } from "./lobby-seat";
 import { sweepAbandonedSoloLobbies, syncLobbySoloSince } from "./lobby-maintenance";
@@ -578,10 +578,14 @@ async function buildSelfState(
           where: {
             status: { in: ["OPEN"] },
             OR: [{ fromParticipantId: participantId }, { toParticipantId: participantId }],
-            listing: { round: { sessionId: participant.sessionId, number: currentRound } },
+            listing: {
+              round: { sessionId: participant.sessionId, number: currentRound },
+              status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+              availableQuantity: { gt: 0 },
+            },
           },
           include: {
-            listing: { select: { id: true, askPriceVnd: true } },
+            listing: { select: { id: true, askPriceVnd: true, availableQuantity: true } },
           },
         })
       : [];
@@ -597,6 +601,12 @@ async function buildSelfState(
     status: o.status,
     isIncoming: o.toParticipantId === participantId,
   });
+
+  const actionableOffers = offers.filter(
+    (o) =>
+      o.listing != null &&
+      o.quantity <= (o.listing.availableQuantity ?? 0),
+  );
 
   return {
     participantId: participant.id,
@@ -618,8 +628,12 @@ async function buildSelfState(
       availableQuantity: l.availableQuantity,
       isOwn: true,
     })),
-    incomingOffers: offers.filter((o) => o.toParticipantId === participantId).map(mapOffer),
-    outgoingOffers: offers.filter((o) => o.fromParticipantId === participantId).map(mapOffer),
+    incomingOffers: actionableOffers
+      .filter((o) => o.toParticipantId === participantId)
+      .map(mapOffer),
+    outgoingOffers: actionableOffers
+      .filter((o) => o.fromParticipantId === participantId)
+      .map(mapOffer),
   };
 }
 
@@ -938,7 +952,9 @@ async function buildMarketActivity(
         : isWholesale
           ? `chốt sỉ ${tx.quantity} thùng`
           : `mua ${tx.quantity} thùng`,
-      detail: `${formatThousandDong(tx.unitPriceVnd)}/thùng`,
+      detail: selfIsSeller && !selfIsBuyer
+        ? `+${formatThousandDong(Math.round(tx.totalPriceVnd * (1 - SCENARIO.salesTaxRate)))} sau thuế`
+        : `${formatThousandDong(tx.unitPriceVnd)}/thùng`,
     });
   }
 

@@ -122,6 +122,9 @@ export function GameBentoShell({
         displayName={selfParticipant?.displayName}
         presence={selfParticipant?.presence ?? "ONLINE"}
         streamState={streamState}
+        wholesaleListedUnits={(data.market?.wholesaleOffers ?? [])
+          .filter((w) => w.isOwn && (w.status === "OPEN" || w.status === "COUNTERED"))
+          .reduce((s, w) => s + w.quantity, 0)}
       />
 
       <SessionRosterWall

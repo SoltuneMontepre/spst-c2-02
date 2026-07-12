@@ -123,5 +123,33 @@ async function bumpAndPublish(
   await import("./session-service")
     .then((m) => m.refreshLiveRoom(sessionId))
     .catch((e) => console.error("live-room refresh:", e));
+
+  // Trade handlers return post-commit balances from the same transaction —
+  // stamp them onto the live frame so sellers never keep a stale ví.
+  const trade = data as
+    | {
+        sellerParticipantId?: string;
+        buyerId?: string;
+        sellerBalanceVnd?: number;
+        buyerBalanceVnd?: number;
+      }
+    | null
+    | undefined;
+  if (
+    trade &&
+    typeof trade.sellerParticipantId === "string" &&
+    typeof trade.sellerBalanceVnd === "number"
+  ) {
+    const balances: Record<string, number> = {
+      [trade.sellerParticipantId]: trade.sellerBalanceVnd,
+    };
+    if (typeof trade.buyerId === "string" && typeof trade.buyerBalanceVnd === "number") {
+      balances[trade.buyerId] = trade.buyerBalanceVnd;
+    }
+    await import("./live-room")
+      .then((m) => m.patchLiveRoomBalances(sessionId, balances))
+      .catch((e) => console.error("live-room wallet patch:", e));
+  }
+
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }

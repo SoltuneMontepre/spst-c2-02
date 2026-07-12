@@ -38,6 +38,7 @@ import {
   hostSwapRoles,
 } from "@/lib/game-service";
 import { runCommand } from "@/lib/commands";
+import { scheduleBotConsumerReaction } from "@/lib/bots";
 import {
   produce,
   listForSale,
@@ -292,13 +293,16 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
     }
     if (action === "list") {
       const p = listSchema.parse(body);
-      return cmd(user.id, sessionId, p, "market:listed", (tx, ctx) =>
+      const result = await cmd(user.id, sessionId, p, "market:listed", (tx, ctx) =>
         listForSale(tx, ctx, {
           inventoryLotId: p.inventoryLotId,
           quantity: p.quantity,
           askPriceVnd: p.askPriceVnd,
         }),
       );
+      // Bot customers re-evaluate once goods actually hit the shelf.
+      scheduleBotConsumerReaction(sessionId);
+      return result;
     }
     if (action === "closeListing") {
       const p = closeListingSchema.parse(body);

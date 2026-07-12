@@ -95,11 +95,14 @@ export function PersonalInventoryHud({
   displayName,
   presence = "ONLINE",
   streamState = "connected",
+  wholesaleListedUnits = 0,
 }: {
   self: SelfState | null;
   displayName?: string;
   presence?: Presence;
   streamState?: SessionStreamState;
+  /** Own OPEN/COUNTERED wholesale qty (reserved out of Tồn kho). */
+  wholesaleListedUnits?: number;
 }) {
   const isClient = useIsClient();
 
@@ -108,7 +111,8 @@ export function PersonalInventoryHud({
   const role = self.role;
   const state = self.roleState as ProducerRoundState | GovernmentRoundState | null;
   const inventoryUnits = self.inventory.reduce((s, l) => s + l.availableQuantity, 0);
-  const listedUnits = self.listings.reduce((s, l) => s + l.availableQuantity, 0);
+  const listedUnits =
+    self.listings.reduce((s, l) => s + l.availableQuantity, 0) + wholesaleListedUnits;
   const status = connectionStatus(streamState, presence);
   const RoleIcon = ROLE_ICON[role];
 

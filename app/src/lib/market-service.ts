@@ -313,9 +313,9 @@ export async function closeListing(
     });
   }
 
-  await tx.offer.updateMany({
-    where: { listingId: listing.id, status: "OPEN" },
-    data: { status: "EXPIRED" },
+  await expireOffersBeyondListingStock(tx, ctx.session.id, ctx.session.currentRound, {
+    id: listing.id,
+    availableQuantity: 0,
   });
 
   await tx.listing.update({
@@ -438,17 +438,29 @@ export async function respondOffer(
 
   if (input.decision === "ACCEPT") {
     if (!offer.listing) throw new ApiError("LISTING_UNAVAILABLE", 409);
+    // Re-read listing stock — another buyNow may have emptied it since the
+    // offer was created (UI can still show the stale OPEN offer).
+    const liveListing = await tx.listing.findUnique({ where: { id: offer.listing.id } });
+    if (
+      !liveListing ||
+      (liveListing.status !== "OPEN" && liveListing.status !== "PARTIALLY_FILLED") ||
+      liveListing.availableQuantity < offer.quantity
+    ) {
+      await releaseOfferReservation(tx, ctx.session.id, ctx.session.currentRound, offer);
+      await tx.offer.update({ where: { id: offer.id }, data: { status: "EXPIRED" } });
+      throw new ApiError("INSUFFICIENT_LISTING", 409);
+    }
     const buyerId =
       ctx.participant.role === "CONSUMER" ? ctx.participant.id : offer.fromParticipantId;
     await releaseOfferReservation(tx, ctx.session.id, ctx.session.currentRound, offer);
     const result = await executeRetailTrade(tx, ctx, {
-      listing: offer.listing,
+      listing: liveListing,
       buyerId,
       quantity: offer.quantity,
       unitPriceVnd: offer.offerPriceVnd,
     });
     await tx.offer.update({ where: { id: offer.id }, data: { status: "ACCEPTED" } });
-    return { transactionId: result.transactionId };
+    return result;
   }
 
   // COUNTER — seller proposes a price between the buyer's offer and the ask.
@@ -530,6 +542,34 @@ async function releaseOfferReservation(
   });
 }
 
+/** Drop OPEN offers that no longer fit remaining listing stock. */
+async function expireOffersBeyondListingStock(
+  tx: Tx,
+  sessionId: string,
+  roundNumber: number,
+  listing: { id: string; availableQuantity: number },
+): Promise<void> {
+  const stale =
+    listing.availableQuantity <= 0
+      ? await tx.offer.findMany({
+          where: { listingId: listing.id, status: "OPEN" },
+        })
+      : await tx.offer.findMany({
+          where: {
+            listingId: listing.id,
+            status: "OPEN",
+            quantity: { gt: listing.availableQuantity },
+          },
+        });
+  for (const offer of stale) {
+    await releaseOfferReservation(tx, sessionId, roundNumber, offer);
+    await tx.offer.update({
+      where: { id: offer.id },
+      data: { status: "EXPIRED" },
+    });
+  }
+}
+
 async function executeRetailTrade(
   tx: Tx,
   ctx: CommandContext,
@@ -545,9 +585,18 @@ async function executeRetailTrade(
     quantity: number;
     unitPriceVnd: number;
   },
-): Promise<{ transactionId: string }> {
+): Promise<{
+  transactionId: string;
+  sellerParticipantId: string;
+  buyerId: string;
+  netSellerVnd: number;
+  totalPriceVnd: number;
+  sellerBalanceVnd: number;
+  buyerBalanceVnd: number;
+}> {
   const { listing, buyerId, quantity, unitPriceVnd } = params;
   if (listing.availableQuantity < quantity) throw new ApiError("INSUFFICIENT_LISTING", 409);
+  if (buyerId === listing.sellerParticipantId) throw new ApiError("SELF_TRADE", 409);
 
   const total = quantity * unitPriceVnd;
   const buyerWallet = await tx.wallet.findUniqueOrThrow({
@@ -563,12 +612,15 @@ async function executeRetailTrade(
     roundId: round.id,
     totalPriceVnd: total,
   });
+  if (!Number.isFinite(netSellerVnd) || netSellerVnd < 0) {
+    throw new ApiError("INTERNAL", 500);
+  }
 
-  await tx.wallet.update({
+  const buyerAfter = await tx.wallet.update({
     where: { participantId: buyerId },
     data: { balanceVnd: { decrement: total } },
   });
-  await tx.wallet.update({
+  const sellerAfter = await tx.wallet.update({
     where: { participantId: listing.sellerParticipantId },
     data: { balanceVnd: { increment: netSellerVnd } },
   });
@@ -595,6 +647,13 @@ async function executeRetailTrade(
   await tx.listing.update({
     where: { id: listing.id },
     data: { availableQuantity: left, status: left === 0 ? "FILLED" : "PARTIALLY_FILLED" },
+  });
+
+  // buyNow can empty a listing while OPEN offers still point at it — expire
+  // those so sellers don't see ghost "Chấp nhận" buttons that always 409.
+  await expireOffersBeyondListingStock(tx, ctx.session.id, ctx.session.currentRound, {
+    id: listing.id,
+    availableQuantity: left,
   });
 
   const buyer = await tx.participant.findUniqueOrThrow({ where: { id: buyerId } });
@@ -667,5 +726,13 @@ async function executeRetailTrade(
       status: "COMPLETED",
     },
   });
-  return { transactionId: tradeTx.id };
+  return {
+    transactionId: tradeTx.id,
+    sellerParticipantId: listing.sellerParticipantId,
+    buyerId,
+    netSellerVnd,
+    totalPriceVnd: total,
+    sellerBalanceVnd: sellerAfter.balanceVnd,
+    buyerBalanceVnd: buyerAfter.balanceVnd,
+  };
 }

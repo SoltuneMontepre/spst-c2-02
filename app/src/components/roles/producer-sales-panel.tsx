@@ -8,7 +8,7 @@ import { ApiClientError } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/error-messages";
 import { producerUnitCostVnd, unitValueVnd } from "@/lib/economy";
 import { MAX_PRICE_VND, MIN_PRICE_VND, PRICE_STEP_VND } from "@/lib/money";
-import { UPGRADE_COSTS } from "@/lib/scenario";
+import { UPGRADE_COSTS, SCENARIO } from "@/lib/scenario";
 import {
   formatCompactVnd,
   PriceStepper,
@@ -62,6 +62,10 @@ export function ProducerSalesPanel({
 
   const [retailPrice, setRetailPrice] = useState(retailStandardPrice);
   const [wholesalePrice, setWholesalePrice] = useState(wholesaleStandardPrice);
+
+  const salesTaxRate = SCENARIO.salesTaxRate;
+  const netPerUnitAfterTax = Math.round(retailPrice * (1 - salesTaxRate));
+  const sellsBelowCost = netPerUnitAfterTax < unitCost;
 
   useEffect(() => {
     setRetailPrice(retailStandardPrice);
@@ -201,6 +205,16 @@ export function ProducerSalesPanel({
                 Bán
               </Button>
             </div>
+            <p className="border-t border-border bg-muted/10 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              Sau thuế 10% bạn nhận ~{formatCompactVnd(netPerUnitAfterTax)}/thùng
+              (vốn {formatCompactVnd(unitCost)}).
+              {sellsBelowCost ? (
+                <span className="font-semibold text-danger">
+                  {" "}
+                  Giá này lỗ so với chi phí sản xuất — ví sẽ giảm dù bán được.
+                </span>
+              ) : null}
+            </p>
 
             <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border-t border-border px-3 py-2.5">
               <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -231,6 +245,10 @@ export function ProducerSalesPanel({
               </Button>
             </div>
           </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            Hàng đang bán vẫn thuộc về bạn (HUD &quot;Đang bán&quot;). Hết giờ chợ mà chưa bán —
+            không có kho lạnh thì hàng hỏng ở cuối vòng.
+          </p>
         </>
       )}
 

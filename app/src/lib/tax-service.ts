@@ -29,7 +29,9 @@ export async function collectSalesTax(
   const gov = await findGovernmentWallet(tx, params.sessionId);
   if (!gov) return { netSellerVnd: params.totalPriceVnd, taxVnd: 0 };
 
-  const taxVnd = Math.round(params.totalPriceVnd * SCENARIO.salesTaxRate);
+  // Cap the cut at 50% so a bad rate can never zero out the seller.
+  const rate = Math.min(0.5, Math.max(0, SCENARIO.salesTaxRate));
+  const taxVnd = Math.round(params.totalPriceVnd * rate);
   if (taxVnd <= 0) return { netSellerVnd: params.totalPriceVnd, taxVnd: 0 };
 
   await tx.wallet.update({

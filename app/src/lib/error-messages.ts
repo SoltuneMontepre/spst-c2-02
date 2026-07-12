@@ -5,7 +5,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_FUNDS: "Số dư không đủ cho giao dịch này.",
   INSUFFICIENT_INVENTORY: "Hàng đã được bán hoặc không còn đủ số lượng.",
   INVALID_QUANTITY: "Số lượng không hợp lệ cho lô hàng này.",
-  INSUFFICIENT_LISTING: "Hàng đã được bán hoặc không còn đủ số lượng.",
+  INSUFFICIENT_LISTING: "Hàng đã được bán hết hoặc không còn đủ số lượng — đề nghị này đã hết hiệu lực.",
   OFFER_EXPIRED: "Lượt chợ đã đóng; đề nghị này không còn hiệu lực.",
   STALE_STATE: "Thị trường vừa thay đổi. Dữ liệu đang được cập nhật.",
   SESSION_BUSY: "Phiên đang xử lý thao tác khác. Vui lòng thử lại.",

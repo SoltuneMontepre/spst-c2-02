@@ -92,3 +92,29 @@ export function snapshotFromLiveRoom(
 ): SessionSnapshot | null {
   return frame.byUserId[userId] ?? null;
 }
+
+/** Overlay known-good wallet balances onto every viewer projection.
+ *  Used right after a trade so Neon/pool read lag cannot leave sellers at the
+ *  pre-sale balance in Redis while the DB already has the credit. */
+export async function patchLiveRoomBalances(
+  sessionId: string,
+  balancesByParticipantId: Record<string, number>,
+): Promise<void> {
+  const entries = Object.entries(balancesByParticipantId);
+  if (entries.length === 0) return;
+
+  const frame = await readLiveRoom(sessionId);
+  if (!frame) return;
+
+  let changed = false;
+  for (const snapshot of Object.values(frame.byUserId)) {
+    const selfId = snapshot.self?.participantId;
+    if (!selfId) continue;
+    const next = balancesByParticipantId[selfId];
+    if (next == null || snapshot.self == null) continue;
+    if (snapshot.self.balanceVnd === next) continue;
+    snapshot.self = { ...snapshot.self, balanceVnd: next };
+    changed = true;
+  }
+  if (changed) await writeLiveRoom(sessionId, frame);
+}

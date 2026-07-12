@@ -178,6 +178,15 @@ async function bump(
   await import("./session-service")
     .then((m) => m.refreshLiveRoom(sessionId))
     .catch((e) => console.error("live-room refresh:", e));
+
+  const patches = (data as { walletPatches?: Record<string, number> } | undefined)
+    ?.walletPatches;
+  if (patches && Object.keys(patches).length > 0) {
+    await import("./live-room")
+      .then((m) => m.patchLiveRoomBalances(sessionId, patches))
+      .catch((e) => console.error("live-room wallet patch:", e));
+  }
+
   await publish({ sessionId, type, stateVersion: s.stateVersion, data });
 }
 
@@ -372,6 +381,7 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
 
 const BOT_MARKET_WAVE_COUNT = 6;
 const BOT_MARKET_TIMER_PREFIX = "bot-market-wave";
+const BOT_CONSUMER_REACT_TIMER = "bot-consumer-react";
 
 function botMarketTimerName(wave: number): string {
   return `${BOT_MARKET_TIMER_PREFIX}-${wave}`;
@@ -393,6 +403,45 @@ export function clearBotMarketTimers(sessionId: string): void {
   for (let wave = 1; wave <= BOT_MARKET_WAVE_COUNT; wave++) {
     clearNamedTimer(sessionId, botMarketTimerName(wave));
   }
+  clearNamedTimer(sessionId, BOT_CONSUMER_REACT_TIMER);
+}
+
+/**
+ * Debounced re-shop after a human (or late) listing appears. Consumer bots used
+ * to decide only in late waves — often while the shelf was still empty — then
+ * never revisit human goods. This fires ~2.5s after each listing so demand
+ * tracks the live market.
+ */
+export function scheduleBotConsumerReaction(sessionId: string): void {
+  scheduleNamedTimer(sessionId, BOT_CONSUMER_REACT_TIMER, 2_500, () => {
+    void runBotConsumerReaction(sessionId).catch((e) =>
+      console.error("bot consumer reaction:", e),
+    );
+  });
+}
+
+async function runBotConsumerReaction(sessionId: string): Promise<void> {
+  await withSessionLock(sessionId, async () => {
+    const session = await db.gameSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.phase !== "MARKET_OPEN" || session.paused) return;
+    let actions = 0;
+    const walletPatches: Record<string, number> = {};
+    await db.$transaction(async (tx) => {
+      const demand = await runBotConsumerDemand(tx, session, 2, {
+        requireHumanListings: true,
+      });
+      actions += demand.actions;
+      Object.assign(walletPatches, demand.walletPatches);
+      const counters = await acceptBotRetailCounters(tx, session);
+      actions += counters.actions;
+      Object.assign(walletPatches, counters.walletPatches);
+    });
+    if (actions > 0) {
+      await bump(sessionId, "bot:consumer_react", { actions, walletPatches }).catch(
+        (e) => console.error("bot:consumer_react bump:", e),
+      );
+    }
+  });
 }
 
 export function scheduleBotMarketWaves(
@@ -440,7 +489,7 @@ async function runBotMarketWave(
  * Caller must already hold the session lock (e.g. from within transition()).
  */
 export async function runFinalBotConsumerPass(sessionId: string): Promise<void> {
-  await runBotMarketWaveInner(sessionId, 5);
+  // Last chance before settlement — may buy bot stock if humans never listed.
   await runBotMarketWaveInner(sessionId, 6);
 }
 
@@ -449,6 +498,7 @@ async function runBotMarketWaveInner(
   wave: number,
 ): Promise<void> {
     let actions = 0;
+    const walletPatches: Record<string, number> = {};
     try {
       const session = await db.gameSession.findUniqueOrThrow({
         where: { id: sessionId },
@@ -501,13 +551,28 @@ async function runBotMarketWaveInner(
         );
       }
       if (wave === 2) {
-        steps.push(async () => {
-          let n = 0;
-          await db.$transaction(async (tx) => {
-            n += await createBotWholesaleOffers(tx, session, round.id, price);
-          });
-          return n;
-        });
+        steps.push(
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              n += await createBotWholesaleOffers(tx, session, round.id, price);
+            });
+            return n;
+          },
+          // Early consumer pass — catch human listings that appear mid-phase,
+          // not only after the shelf was empty at wave 1.
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              const demand = await runBotConsumerDemand(tx, session, 1, {
+                requireHumanListings: true,
+              });
+              Object.assign(walletPatches, demand.walletPatches);
+              n += demand.actions;
+            });
+            return n;
+          },
+        );
       }
       if (wave === 3) {
         steps.push(
@@ -528,7 +593,20 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await acceptBotRetailCounters(tx, session);
+              const counters = await acceptBotRetailCounters(tx, session);
+              Object.assign(walletPatches, counters.walletPatches);
+              n += counters.actions;
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              const demand = await runBotConsumerDemand(tx, session, 1, {
+                requireHumanListings: true,
+              });
+              Object.assign(walletPatches, demand.walletPatches);
+              n += demand.actions;
             });
             return n;
           },
@@ -560,7 +638,20 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await acceptBotRetailCounters(tx, session);
+              const counters = await acceptBotRetailCounters(tx, session);
+              Object.assign(walletPatches, counters.walletPatches);
+              n += counters.actions;
+            });
+            return n;
+          },
+          async () => {
+            let n = 0;
+            await db.$transaction(async (tx) => {
+              const demand = await runBotConsumerDemand(tx, session, 1, {
+                requireHumanListings: true,
+              });
+              Object.assign(walletPatches, demand.walletPatches);
+              n += demand.actions;
             });
             return n;
           },
@@ -570,7 +661,11 @@ async function runBotMarketWaveInner(
         steps.push(async () => {
           let n = 0;
           await db.$transaction(async (tx) => {
-            n += await runBotConsumerDemand(tx, session, 2);
+            const demand = await runBotConsumerDemand(tx, session, 2, {
+              requireHumanListings: true,
+            });
+            Object.assign(walletPatches, demand.walletPatches);
+            n += demand.actions;
           });
           return n;
         });
@@ -587,14 +682,20 @@ async function runBotMarketWaveInner(
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await acceptBotRetailCounters(tx, session);
+              const counters = await acceptBotRetailCounters(tx, session);
+              Object.assign(walletPatches, counters.walletPatches);
+              n += counters.actions;
             });
             return n;
           },
           async () => {
             let n = 0;
             await db.$transaction(async (tx) => {
-              n += await runBotConsumerDemand(tx, session, 3);
+              const demand = await runBotConsumerDemand(tx, session, 3, {
+                requireHumanListings: false,
+              });
+              Object.assign(walletPatches, demand.walletPatches);
+              n += demand.actions;
             });
             return n;
           },
@@ -614,24 +715,30 @@ async function runBotMarketWaveInner(
           await bump(sessionId, "bot:market_wave", {
             wave,
             actions: stepActions,
+            walletPatches,
           }).catch((e) => console.error("bot:market_wave bump:", e));
         }
       }
     } catch (e) {
       console.error(`bot market wave ${wave} (${sessionId}):`, e);
     } finally {
-      // Ready after the first listing wave (and again at the end) so the UI
-      // does not wait on later optional trading waves.
-      if (wave === 1 || wave >= BOT_MARKET_WAVE_COUNT) {
+      // Only mark ready once trading waves (incl. consumer demand) finish —
+      // wave 1 used to mark consumers "ready" before they ever shopped.
+      if (wave >= BOT_MARKET_WAVE_COUNT) {
         await markBotsPhaseReady(sessionId).catch((e) =>
           console.error("markBotsPhaseReady:", e),
         );
       }
-      // Always emit a wave-complete signal (even if 0 actions) so phase-ready
-      // and empty waves still refresh the live room once.
-      await bump(sessionId, "bot:market_wave", { wave, actions }).catch((e) =>
-        console.error("bot:market_wave bump:", e),
-      );
+      await bump(sessionId, "bot:market_wave", {
+        wave,
+        actions,
+        walletPatches,
+      }).catch((e) => console.error("bot:market_wave bump:", e));
+      // After human-facing listing waves, nudge consumers — they still require
+      // human stock until the final wave.
+      if (wave === 4) {
+        scheduleBotConsumerReaction(sessionId);
+      }
     }
 }
 
@@ -1073,8 +1180,11 @@ async function runBotConsumerDemand(
   tx: Prisma.TransactionClient,
   session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
   maxActionsPerConsumer: number,
-): Promise<number> {
+  opts: { requireHumanListings?: boolean } = {},
+): Promise<{ actions: number; walletPatches: Record<string, number> }> {
+  const requireHumanListings = opts.requireHumanListings ?? false;
   let actions = 0;
+  const walletPatches: Record<string, number> = {};
   const round = await tx.round.findUniqueOrThrow({
     where: {
       sessionId_number: { sessionId: session.id, number: session.currentRound },
@@ -1090,7 +1200,7 @@ async function runBotConsumerDemand(
       },
     }),
     session,
-    `consumer-demand-order-${maxActionsPerConsumer}`,
+    `consumer-demand-order-${maxActionsPerConsumer}-${requireHumanListings}`,
   );
   for (const consumer of consumers) {
     const state = consumer.roleStates[0]?.state as unknown as
@@ -1100,7 +1210,6 @@ async function runBotConsumerDemand(
     let need = Math.max(0, state.needTarget - state.fulfilledUnits);
     let attempts = 0;
     while (need > 0 && attempts < maxActionsPerConsumer) {
-      attempts++;
       const wallet = await tx.wallet.findUnique({
         where: { participantId: consumer.id },
       });
@@ -1113,12 +1222,37 @@ async function runBotConsumerDemand(
           sellerParticipantId: { not: consumer.id },
         },
         orderBy: [{ askPriceVnd: "asc" }, { createdAt: "asc" }],
-        take: 10,
+        take: 16,
       });
+      // Empty shelf — wait for a later wave / listing reaction; don't burn attempts.
       if (listings.length === 0) break;
-      // 70% of the time shop within the 3 cheapest listings; 30% of the time
-      // browse the wider pool so bots don't all pile onto the single best
-      // price every round.
+
+      const sellerIds = [...new Set(listings.map((l) => l.sellerParticipantId))];
+      const sellers = await tx.participant.findMany({
+        where: { id: { in: sellerIds } },
+        select: { id: true, isBot: true },
+      });
+      const sellerIsBot = new Map(sellers.map((s) => [s.id, s.isBot]));
+      const humanListings = listings.filter(
+        (l) => !sellerIsBot.get(l.sellerParticipantId),
+      );
+      // Wait for players to put goods on the market before buying bot stock.
+      if (requireHumanListings && humanListings.length === 0) break;
+
+      attempts++;
+      const shopListings =
+        requireHumanListings || humanListings.length > 0
+          ? humanListings.length > 0
+            ? humanListings
+            : listings
+          : listings;
+      // Prefer human sellers; among equals, cheapest first.
+      const ranked = [...shopListings].sort((a, b) => {
+        const aBot = sellerIsBot.get(a.sellerParticipantId) ? 1 : 0;
+        const bBot = sellerIsBot.get(b.sellerParticipantId) ? 1 : 0;
+        if (aBot !== bBot) return aBot - bBot;
+        return a.askPriceVnd - b.askPriceVnd;
+      });
       const shopsWide =
         seededUnit(
           session.id,
@@ -1126,7 +1260,7 @@ async function runBotConsumerDemand(
           consumer.id,
           `consumer-pool-${maxActionsPerConsumer}-${attempts}`,
         ) < 0.3;
-      const pool = shopsWide ? listings : listings.slice(0, 3);
+      const pool = shopsWide ? ranked : ranked.slice(0, Math.min(3, ranked.length));
       const listing =
         pool[
           botInt(
@@ -1152,10 +1286,12 @@ async function runBotConsumerDemand(
       );
       try {
         if (listing.askPriceVnd <= maxPay) {
-          await buyNow(tx, botCtx(consumer, session), {
+          const trade = await buyNow(tx, botCtx(consumer, session), {
             listingId: listing.id,
             quantity: 1,
           });
+          walletPatches[trade.sellerParticipantId] = trade.sellerBalanceVnd;
+          walletPatches[trade.buyerId] = trade.buyerBalanceVnd;
           need--;
           actions++;
         } else {
@@ -1180,7 +1316,6 @@ async function runBotConsumerDemand(
               offerPriceVnd: offerPrice,
             });
             actions++;
-            // Keep shopping other listings — don't deadlock on one counter chain.
             continue;
           }
         }
@@ -1189,7 +1324,7 @@ async function runBotConsumerDemand(
       }
     }
   }
-  return actions;
+  return { actions, walletPatches };
 }
 
 async function respondBotRetailOffers(
@@ -1281,13 +1416,14 @@ async function respondBotRetailOffers(
 async function acceptBotRetailCounters(
   tx: Prisma.TransactionClient,
   session: Awaited<ReturnType<typeof db.gameSession.findUniqueOrThrow>>,
-): Promise<number> {
+): Promise<{ actions: number; walletPatches: Record<string, number> }> {
   let actions = 0;
+  const walletPatches: Record<string, number> = {};
   const consumers = await tx.participant.findMany({
     where: { sessionId: session.id, isBot: true, role: "CONSUMER" },
     include: { wallet: true },
   });
-  if (consumers.length === 0) return 0;
+  if (consumers.length === 0) return { actions: 0, walletPatches };
   const consumerById = new Map(consumers.map((c) => [c.id, c]));
   const offers = seededOrder(
     await tx.offer.findMany({
@@ -1317,10 +1453,18 @@ async function acceptBotRetailCounters(
     const maxPay = Math.min(willingness, consumer.wallet.balanceVnd);
     try {
       if (offer.offerPriceVnd <= maxPay) {
-        await respondOffer(tx, botCtx(consumer, session), {
+        const trade = await respondOffer(tx, botCtx(consumer, session), {
           offerId: offer.id,
           decision: "ACCEPT",
         });
+        if (
+          trade &&
+          "sellerParticipantId" in trade &&
+          typeof trade.sellerBalanceVnd === "number"
+        ) {
+          walletPatches[trade.sellerParticipantId] = trade.sellerBalanceVnd;
+          walletPatches[trade.buyerId] = trade.buyerBalanceVnd;
+        }
         actions++;
       } else if (
         seededUnit(
@@ -1341,7 +1485,7 @@ async function acceptBotRetailCounters(
       /* offer may have expired or funds moved */
     }
   }
-  return actions;
+  return { actions, walletPatches };
 }
 
 /** Run bot actions for participants under BOT_TAKEOVER during active phases. */
