@@ -438,9 +438,9 @@ export function scheduleBotConsumerReaction(sessionId: string): void {
   });
 }
 
-/** Bot sellers reply to human counter-offers within ~2s (not only on market waves). */
+/** Bot sellers reply to human counter-offers within ~1.5s (not only on market waves). */
 export function scheduleBotSellerReaction(sessionId: string): void {
-  scheduleNamedTimer(sessionId, BOT_SELLER_REACT_TIMER, 2_000, () => {
+  scheduleNamedTimer(sessionId, BOT_SELLER_REACT_TIMER, 1_500, () => {
     void runBotSellerReaction(sessionId).catch((e) =>
       console.error("bot seller reaction:", e),
     );
@@ -478,23 +478,28 @@ async function runBotSellerReaction(sessionId: string): Promise<void> {
     const price = unitValueVnd(session.currentRound);
     let actions = 0;
     const walletPatches: Record<string, number> = {};
+
+    // Separate txs — a wholesale failure must not roll back retail accept/reject.
     await db.$transaction(async (tx) => {
       actions += await respondBotRetailOffers(tx, session, price);
+    });
+    await db.$transaction(async (tx) => {
       const counters = await acceptBotRetailCounters(tx, session);
       actions += counters.actions;
       Object.assign(walletPatches, counters.walletPatches);
-      actions += await acceptBotWholesaleCounters(tx, session, (
-        await tx.round.findUniqueOrThrow({
-          where: {
-            sessionId_number: {
-              sessionId: session.id,
-              number: session.currentRound,
-            },
-          },
-          select: { id: true },
-        })
-      ).id);
     });
+    const round = await db.round.findUnique({
+      where: {
+        sessionId_number: { sessionId: session.id, number: session.currentRound },
+      },
+      select: { id: true },
+    });
+    if (round) {
+      await db.$transaction(async (tx) => {
+        actions += await acceptBotWholesaleCounters(tx, session, round.id);
+      });
+    }
+
     if (actions > 0) {
       await bump(sessionId, "bot:seller_react", { actions, walletPatches }).catch(
         (e) => console.error("bot:seller_react bump:", e),
@@ -1426,25 +1431,26 @@ async function respondBotRetailOffers(
   price: number,
 ): Promise<number> {
   let actions = 0;
+  const botSellers = await tx.participant.findMany({
+    where: {
+      sessionId: session.id,
+      isBot: true,
+      role: { in: ["PRODUCER", "INTERMEDIARY"] },
+    },
+    select: { id: true },
+  });
+  if (botSellers.length === 0) return 0;
+  const botSellerIds = botSellers.map((p) => p.id);
+
   const offers = seededOrder(
     await tx.offer.findMany({
       where: {
         status: "OPEN",
-        parentOfferId: null, // buyer→seller bids only (not seller counters awaiting buyer)
+        parentOfferId: null,
+        toParticipantId: { in: botSellerIds },
         listing: {
           round: { sessionId: session.id, number: session.currentRound },
-          sellerParticipantId: {
-            in: (
-              await tx.participant.findMany({
-                where: {
-                  sessionId: session.id,
-                  isBot: true,
-                  role: { in: ["PRODUCER", "INTERMEDIARY"] },
-                },
-                select: { id: true },
-              })
-            ).map((p) => p.id),
-          },
+          status: { in: ["OPEN", "PARTIALLY_FILLED"] },
         },
       },
       include: { listing: true },
@@ -1454,12 +1460,33 @@ async function respondBotRetailOffers(
     session,
     "retail-offer-response-order",
   );
+
+  const decide = async (
+    seller: Participant,
+    offerId: string,
+    decision: "ACCEPT" | "REJECT" | "COUNTER",
+    counterPriceVnd?: number,
+  ): Promise<boolean> => {
+    try {
+      await respondOffer(tx, botCtx(seller, session), {
+        offerId,
+        decision,
+        counterPriceVnd,
+      });
+      return true;
+    } catch (e) {
+      console.error(`bot retail ${decision}:`, offerId, e);
+      return false;
+    }
+  };
+
   for (const offer of offers) {
     if (!offer.listing) continue;
     const seller = await tx.participant.findUnique({
       where: { id: offer.toParticipantId },
     });
     if (!seller?.isBot) continue;
+
     const config = botConfig(seller, session);
     const lotCost =
       (
@@ -1477,7 +1504,6 @@ async function respondBotRetailOffers(
       config.sellerConcessionSteps[0],
       config.sellerConcessionSteps[1],
     );
-    // Prefer a mid counter, but never below cost recovery.
     const counterPrice = Math.max(
       costFloor,
       Math.min(
@@ -1488,35 +1514,26 @@ async function respondBotRetailOffers(
         ),
       ),
     );
-    try {
-      // Cover cost → accept even below ask (better than ghosting the buyer).
-      if (offer.offerPriceVnd >= costFloor) {
-        await respondOffer(tx, botCtx(seller, session), {
-          offerId: offer.id,
-          decision: "ACCEPT",
-        });
+
+    if (offer.offerPriceVnd >= costFloor) {
+      if (await decide(seller, offer.id, "ACCEPT")) {
         actions++;
         continue;
       }
-      // Room to counter above the bid and still under ask at/above cost floor.
-      if (costFloor < ask && counterPrice < ask && counterPrice > offer.offerPriceVnd) {
-        await respondOffer(tx, botCtx(seller, session), {
-          offerId: offer.id,
-          decision: "COUNTER",
-          counterPriceVnd: counterPrice,
-        });
-        actions++;
-        continue;
-      }
-      // Ask already at floor / no legal counter — reject so the buyer gets a reply.
-      await respondOffer(tx, botCtx(seller, session), {
-        offerId: offer.id,
-        decision: "REJECT",
-      });
-      actions++;
-    } catch {
-      /* offer/listing may have changed */
     }
+
+    const canCounter =
+      costFloor < ask &&
+      counterPrice < ask &&
+      counterPrice > offer.offerPriceVnd &&
+      counterPrice >= costFloor;
+    if (canCounter && (await decide(seller, offer.id, "COUNTER", counterPrice))) {
+      actions++;
+      continue;
+    }
+
+    // Lowball / no room to negotiate — always decline, never leave hanging.
+    if (await decide(seller, offer.id, "REJECT")) actions++;
   }
   return actions;
 }
@@ -1575,20 +1592,17 @@ async function acceptBotRetailCounters(
           walletPatches[trade.buyerId] = trade.buyerBalanceVnd;
         }
         actions++;
-      } else if (
-        seededUnit(
-          session.id,
-          session.currentRound,
-          consumer.id,
-          offer.id,
-          "reject-retail-counter",
-        ) < 0.4
-      ) {
-        await respondOffer(tx, botCtx(consumer, session), {
-          offerId: offer.id,
-          decision: "REJECT",
-        });
-        actions++;
+      } else {
+        // Always decline overpriced seller counters — don't leave the buyer hanging.
+        try {
+          await respondOffer(tx, botCtx(consumer, session), {
+            offerId: offer.id,
+            decision: "REJECT",
+          });
+          actions++;
+        } catch (e) {
+          console.error("bot retail counter reject:", offer.id, e);
+        }
       }
     } catch {
       /* offer may have expired or funds moved */
