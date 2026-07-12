@@ -255,8 +255,8 @@ export function ProducerSalesPanel({
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
             Hàng đang bán vẫn thuộc về bạn (HUD &quot;Đang bán&quot;). Bán sỉ: đại lý
-            gửi đề nghị — bạn chấp nhận ở khung bên dưới mới giao hàng. Hết giờ
-            chợ mà chưa bán và không có kho lạnh thì hàng hỏng cuối vòng.
+            gửi đề nghị — bạn chấp nhận ở khung bên dưới mới giao hàng. Hàng không
+            bán được sẽ giữ lại tồn kho sang vòng sau.
           </p>
         </>
       )}

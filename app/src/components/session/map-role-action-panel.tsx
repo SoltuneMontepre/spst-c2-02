@@ -580,7 +580,7 @@ function IntermediaryActions({ sessionId }: { sessionId: string }) {
       {inventoryUnits > 0 ? (
         <p className="flex items-center gap-1.5 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
           <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-          Tồn kho {inventoryUnits} thùng chưa bán sẽ giảm điểm lợi nhuận cuối vòng.
+          Tồn kho {inventoryUnits} thùng chưa bán sẽ mang sang vòng sau.
         </p>
       ) : null}
 

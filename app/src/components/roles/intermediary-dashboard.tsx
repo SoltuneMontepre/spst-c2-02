@@ -159,7 +159,7 @@ export function IntermediaryDashboard({ sessionId }: { sessionId: string }) {
               <div className="flex items-start gap-2 rounded-[10.5px] border border-[#fee685] bg-[#fffbeb] px-3 py-2.5 text-xs text-[#7b3306]">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                 <span>
-                  Tồn kho {inventoryUnits} thùng chưa bán sẽ giảm điểm lợi nhuận cuối vòng.
+                  Tồn kho {inventoryUnits} thùng chưa bán sẽ mang sang vòng sau.
                 </span>
               </div>
             ) : null}

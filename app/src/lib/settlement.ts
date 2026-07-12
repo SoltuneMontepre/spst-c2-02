@@ -1,9 +1,9 @@
 // Round settlement (SRS §5.6, §5.8). Computes the final market snapshot and
-// resolves unsold inventory (spoilage / cold-storage carry-over).
+// carries unsold inventory into the next round.
 
 import { db } from "./db";
 import { computeMarketPrice, unitValueVnd } from "./economy";
-import type { ConsumerRoundState, IntermediaryRoundState } from "./role-state";
+import type { ConsumerRoundState } from "./role-state";
 import { releaseWholesaleInventory } from "./wholesale-service";
 
 const RETAIL_CHANNELS = ["RETAIL_DIRECT", "RETAIL_INTERMEDIARY", "SYSTEM_EXPORT"] as const;
@@ -87,72 +87,24 @@ export async function settleRound(sessionId: string, n: number): Promise<void> {
       });
     }
 
-    // 3. After returns, every remaining unprotected unit spoils (§5.8). Listed-but-
-    // unsold stock used to escape this when qty was fully reserved on the listing.
+    // 3. Carry remaining stock into the next round. Playtest: perish-by-default
+    // made unsold producer inventory vanish and felt like a stock bug.
     const remaining = await tx.inventoryLot.findMany({
       where: {
         sessionId,
         availableQuantity: { gt: 0 },
-        status: { in: ["AVAILABLE", "RESERVED_LISTING", "RESERVED_WHOLESALE"] },
+        status: { in: ["AVAILABLE", "RESERVED_LISTING", "RESERVED_WHOLESALE", "CARRIED"] },
       },
     });
 
-    const ownerIds = [...new Set(remaining.map((lot) => lot.ownerParticipantId))];
-    const owners = ownerIds.length
-      ? await tx.participant.findMany({
-          where: { id: { in: ownerIds } },
-          select: { id: true, role: true },
-        })
-      : [];
-    const ownerRoleById = new Map(owners.map((o) => [o.id, o.role]));
-
-    const carriedLotIds: string[] = [];
-    const spoiledLotIds: string[] = [];
-    const spoiledByOwner = new Map<string, number>();
-    let spoiledQuantity = 0;
-
-    for (const lot of remaining) {
-      if (lot.protectionState === "PROTECTED") {
-        carriedLotIds.push(lot.id);
-        continue;
-      }
-      spoiledLotIds.push(lot.id);
-      spoiledQuantity += lot.availableQuantity;
-      if (ownerRoleById.get(lot.ownerParticipantId) === "INTERMEDIARY") {
-        spoiledByOwner.set(
-          lot.ownerParticipantId,
-          (spoiledByOwner.get(lot.ownerParticipantId) ?? 0) + lot.availableQuantity,
-        );
-      }
-    }
+    const carriedLotIds = remaining.map((lot) => lot.id);
+    const spoiledQuantity = 0;
 
     if (carriedLotIds.length > 0) {
       await tx.inventoryLot.updateMany({
         where: { id: { in: carriedLotIds } },
         data: { status: "CARRIED", protectionState: "NONE" },
       });
-    }
-    if (spoiledLotIds.length > 0) {
-      await tx.inventoryLot.updateMany({
-        where: { id: { in: spoiledLotIds } },
-        data: { status: "SPOILED" },
-      });
-    }
-
-    if (spoiledByOwner.size > 0) {
-      const intermediaryRoleStates = await tx.roleState.findMany({
-        where: { participantId: { in: [...spoiledByOwner.keys()] }, roundId: round.id },
-      });
-      for (const irs of intermediaryRoleStates) {
-        const istate = irs.state as unknown as IntermediaryRoundState;
-        const delta = spoiledByOwner.get(irs.participantId) ?? 0;
-        await tx.roleState.update({
-          where: { id: irs.id },
-          data: {
-            state: { ...istate, spoiledQuantity: (istate.spoiledQuantity ?? 0) + delta } as never,
-          },
-        });
-      }
     }
 
     await tx.marketSnapshot.create({

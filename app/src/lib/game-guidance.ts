@@ -195,7 +195,7 @@ export function getGuidance(ctx: GuidanceContext): GuidanceContent {
           tips: [
             "Mua buôn từ nhà cung cấp (giá thường thấp hơn bán lẻ).",
             "Niêm yết bán lẻ với biên lợi nhuận — kết nối cung và cầu giúp bạn giành huy hiệu Cầu nối thị trường.",
-            "Hàng không bán hết có thể hỏng cuối vòng — quản lý tồn kho cẩn thận.",
+            "Hàng không bán hết được giữ sang vòng sau — vẫn có thể bán tiếp.",
           ],
         };
       }
