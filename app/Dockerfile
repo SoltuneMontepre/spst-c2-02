@@ -45,6 +45,14 @@ RUN apk add --no-cache openssl \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 
+# Prisma migrate toolkit (installed on alpine so engines match musl).
+WORKDIR /opt/prisma-migrate
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+RUN npm install --omit=dev prisma@7.8.0 \
+    && chown -R nextjs:nodejs /opt/prisma-migrate
+
+WORKDIR /app
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static

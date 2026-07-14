@@ -36,5 +36,8 @@ ENV SERVER_PORT=4000
 ENV SERVER_HOST=0.0.0.0
 EXPOSE 4000
 
-# Run TypeScript directly with Bun (no separate build step).
-CMD ["bun", "src/index.ts"]
+COPY server/docker-entrypoint.sh /repo/server/docker-entrypoint.sh
+RUN chmod +x /repo/server/docker-entrypoint.sh
+
+# Migrate then run TypeScript directly with Bun (no separate build step).
+ENTRYPOINT ["./docker-entrypoint.sh"]
