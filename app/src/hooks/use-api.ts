@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import { BACKEND_URL } from "@/lib/backend";
 
 /** Thin fetch wrapper that throws a typed error carrying the server code. */
@@ -12,6 +13,15 @@ export class ApiClientError extends Error {
     super(message ?? code);
     this.name = "ApiClientError";
   }
+}
+
+let signingOut = false;
+
+/** Clear the Auth.js session once when the backend rejects the cookie/JWT. */
+function logoutOnUnauthorized() {
+  if (signingOut || typeof window === "undefined") return;
+  signingOut = true;
+  void signOut({ callbackUrl: "/auth" });
 }
 
 export async function apiFetch<T>(
@@ -34,11 +44,15 @@ export async function apiFetch<T>(
     ? await res.json()
     : null;
   if (!res.ok) {
-    throw new ApiClientError(
-      data?.error ?? "REQUEST_FAILED",
-      res.status,
-      data?.message,
-    );
+    const code = data?.error ?? "REQUEST_FAILED";
+    // Stale / missing session — don't leave the UI in a half-authed loop.
+    if (
+      !path.startsWith("/api/auth") &&
+      (res.status === 401 || code === "UNAUTHORIZED")
+    ) {
+      logoutOnUnauthorized();
+    }
+    throw new ApiClientError(code, res.status, data?.message);
   }
   return data as T;
 }
