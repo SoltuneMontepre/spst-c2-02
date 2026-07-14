@@ -5,15 +5,15 @@ import { AuthCard } from "@/components/auth/auth-card";
 export default async function AuthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const session = await auth();
-  const { callbackUrl } = await searchParams;
+  const { callbackUrl, error } = await searchParams;
   if (session?.user) redirect(callbackUrl ?? "/home");
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <AuthCard callbackUrl={callbackUrl ?? "/home"} />
+      <AuthCard callbackUrl={callbackUrl ?? "/home"} authError={error} />
     </main>
   );
 }

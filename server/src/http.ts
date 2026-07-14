@@ -40,8 +40,13 @@ export async function buildHttp(): Promise<FastifyInstance> {
   await registerSessionRoutes(app);
   await registerMeRoutes(app);
 
-  // Liveness/readiness probe for k8s (mirrors the old Next /api/health).
-  app.get("/api/health", async (_req, reply) => {
+  // Liveness must not queue behind the database pool: marking the only backend
+  // pod unready during DB pressure removes every service endpoint and amplifies
+  // a transient slowdown into a full outage.
+  app.get("/api/health", async () => ({ ok: true }));
+
+  // DB-aware readiness endpoint for deployments with more than one replica.
+  app.get("/api/ready", async (_req, reply) => {
     try {
       await db.$queryRaw`SELECT 1`;
       return { ok: true };

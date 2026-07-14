@@ -94,7 +94,25 @@ export async function syncLobbySoloSince(sessionId: string): Promise<void> {
 }
 
 /** Cancel LOBBY rooms where every human has been offline for SOLO_LOBBY_CANCEL_MS. */
+const SWEEP_INTERVAL_MS = 30_000;
+let lastSweepAt = 0;
+let activeSweep: Promise<void> | null = null;
+
 export async function sweepAbandonedSoloLobbies(): Promise<void> {
+  const now = Date.now();
+  if (activeSweep) return activeSweep;
+  if (now - lastSweepAt < SWEEP_INTERVAL_MS) return;
+  lastSweepAt = now;
+
+  activeSweep = sweepAbandonedSoloLobbiesNow();
+  try {
+    await activeSweep;
+  } finally {
+    activeSweep = null;
+  }
+}
+
+async function sweepAbandonedSoloLobbiesNow(): Promise<void> {
   const cutoff = new Date(Date.now() - SOLO_LOBBY_CANCEL_MS);
   const candidates = await db.gameSession.findMany({
     where: {

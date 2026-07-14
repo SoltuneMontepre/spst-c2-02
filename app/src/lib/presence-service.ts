@@ -20,6 +20,14 @@ import {
 
 const hostOfflineTimers = new Map<string, NodeJS.Timeout>();
 
+/** Skip no-op heartbeat writes when the row was touched this recently. */
+const HEARTBEAT_WRITE_MIN_MS = 2_500;
+/** At most one reconcile pass per session inside this window. */
+const RECONCILE_THROTTLE_MS = 5_000;
+
+const reconcileInflight = new Map<string, Promise<boolean>>();
+const reconcileLastRun = new Map<string, number>();
+
 /** Retry the initial bot-takeover nudge on SESSION_BUSY — a concurrent
  *  phase transition can legitimately hold the lock past the default wait,
  *  and without a retry the newly-taken-over seat gets zero actions for
@@ -114,10 +122,18 @@ export async function heartbeat(
       },
     });
   } else {
-    await db.participant.update({
-      where: { id: participant.id },
-      data: presenceData,
-    });
+    // Steady-state path: clients heartbeat every 5s, often from multiple
+    // sockets. Skip the write when lastSeenAt is still fresh so we do not
+    // pile UPDATE locks on the same Participant row (pool starvation / P2028).
+    const ageMs = participant.lastSeenAt
+      ? Date.now() - participant.lastSeenAt.getTime()
+      : Number.POSITIVE_INFINITY;
+    if (ageMs >= HEARTBEAT_WRITE_MIN_MS) {
+      await db.participant.update({
+        where: { id: participant.id },
+        data: { lastSeenAt },
+      });
+    }
   }
 
   if (session.status === "LOBBY") {
@@ -133,6 +149,34 @@ export async function heartbeat(
  * without depending on in-process timers or SSE abort.
  */
 export async function reconcileSessionPresence(sessionId: string): Promise<boolean> {
+  const active = reconcileInflight.get(sessionId);
+  if (active) return active;
+  const reconciliation = reconcileSessionPresenceNow(sessionId);
+  reconcileInflight.set(sessionId, reconciliation);
+  try {
+    return await reconciliation;
+  } finally {
+    if (reconcileInflight.get(sessionId) === reconciliation) {
+      reconcileInflight.delete(sessionId);
+    }
+  }
+}
+
+/** Coalesce socket-triggered reconciliations and cap their steady-state DB rate. */
+export async function reconcileSessionPresenceThrottled(
+  sessionId: string,
+): Promise<boolean> {
+  const active = reconcileInflight.get(sessionId);
+  if (active) return active;
+  const now = Date.now();
+  if (now - (reconcileLastRun.get(sessionId) ?? 0) < RECONCILE_THROTTLE_MS) {
+    return false;
+  }
+  reconcileLastRun.set(sessionId, now);
+  return reconcileSessionPresence(sessionId);
+}
+
+async function reconcileSessionPresenceNow(sessionId: string): Promise<boolean> {
   const session = await db.gameSession.findUnique({
     where: { id: sessionId },
     select: { status: true },

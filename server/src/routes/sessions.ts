@@ -276,6 +276,16 @@ export async function registerSessionRoutes(app: FastifyInstance): Promise<void>
   });
 
   // ── Gameplay commands ──
+  app.get("/api/sessions/:id/commands", async (_req, reply) => {
+    return reply
+      .header("allow", "POST")
+      .code(405)
+      .send({
+        error: "METHOD_NOT_ALLOWED",
+        message: "Gameplay commands must be sent with POST.",
+      });
+  });
+
   app.post("/api/sessions/:id/commands", async (req) => {
     const user = await requireUser(req);
     const sessionId = id(req);

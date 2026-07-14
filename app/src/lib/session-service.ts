@@ -385,10 +385,28 @@ export interface SessionResultView {
 }
 
 /** Rebuild the shared live frame (memory + Redis) for one session. */
+const liveRoomRefreshes = new Map<string, Promise<LiveRoomFrame>>();
+
 export async function refreshLiveRoom(sessionId: string): Promise<LiveRoomFrame> {
-  const frame = await buildLiveRoomFrame(sessionId);
-  await writeLiveRoom(sessionId, frame);
-  return frame;
+  // A state bump and every subscribed socket can request the same projection at
+  // once. Without single-flight, each caller fans out dozens of queries per
+  // viewer and exhausts the pg pool before gameplay transactions can start.
+  const active = liveRoomRefreshes.get(sessionId);
+  if (active) return active;
+
+  const refresh = (async () => {
+    const frame = await buildLiveRoomFrame(sessionId);
+    await writeLiveRoom(sessionId, frame);
+    return frame;
+  })();
+  liveRoomRefreshes.set(sessionId, refresh);
+  try {
+    return await refresh;
+  } finally {
+    if (liveRoomRefreshes.get(sessionId) === refresh) {
+      liveRoomRefreshes.delete(sessionId);
+    }
+  }
 }
 
 /** Role-filtered snapshot (FR-MARKET-07, TECH-PRIVACY).
@@ -400,9 +418,12 @@ export async function getSnapshot(
   sessionId: string,
 ): Promise<SessionSnapshot> {
   await sweepAbandonedSoloLobbies();
-  // Derive online/offline from lastSeenAt (heartbeat), not SSE abort.
-  await import("./presence-service")
-    .then((m) => m.reconcileSessionPresence(sessionId))
+  // Presence for the UI is derived from lastSeenAt (effectivePresence). Do NOT
+  // await reconcile here — every socket snapshot used to write Participant rows
+  // concurrently, forming a lock convoy that exhausted the pool (P2028).
+  // Throttled fire-and-forget keeps bot-takeover / OFFLINE broadcasts alive.
+  void import("./presence-service")
+    .then((m) => m.reconcileSessionPresenceThrottled(sessionId))
     .catch(() => {});
   // Serverless-safe: advance the phase machine if a timer elapsed.
   await maybeAutoAdvance(sessionId);
@@ -455,8 +476,13 @@ async function buildLiveRoomFrame(sessionId: string): Promise<LiveRoomFrame> {
 
   const byUserId: Record<string, SessionSnapshot> = {};
 
-  await Promise.all(
-    [...viewerIds].map(async (userId) => {
+  // Each viewer projection starts several queries in parallel. Limit the
+  // number of viewers being projected simultaneously so snapshot work leaves
+  // connections available for commands, heartbeats, and phase transitions.
+  await forEachWithConcurrency(
+    [...viewerIds],
+    4,
+    async (userId) => {
       const isHost = session.hostUserId === userId;
       const selfParticipant = participants.find((p) => p.userId === userId);
       if (!isHost && !selfParticipant) return;
@@ -534,10 +560,29 @@ async function buildLiveRoomFrame(sessionId: string): Promise<LiveRoomFrame> {
           };
         }),
       };
-    }),
+    },
   );
 
   return { stateVersion: session.stateVersion, byUserId };
+}
+
+async function forEachWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      for (;;) {
+        const index = nextIndex++;
+        if (index >= items.length) return;
+        await fn(items[index]!);
+      }
+    },
+  );
+  await Promise.all(workers);
 }
 
 async function buildSelfState(

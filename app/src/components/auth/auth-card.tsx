@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
 
 type Tab = "login" | "register";
 
-export function AuthCard({ callbackUrl }: { callbackUrl: string }) {
+export function AuthCard({
+  callbackUrl,
+  authError,
+}: {
+  callbackUrl: string;
+  authError?: string;
+}) {
   const [tab, setTab] = useState<Tab>("login");
 
   return (
@@ -20,6 +26,14 @@ export function AuthCard({ callbackUrl }: { callbackUrl: string }) {
         <CardTitle>Thanh Long Market</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
+        {authError ? (
+          <p
+            role="alert"
+            className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger"
+          >
+            Phiên đăng nhập đã hết hiệu lực hoặc không hợp lệ. Vui lòng thử đăng nhập lại.
+          </p>
+        ) : null}
         <GoogleButton callbackUrl={callbackUrl} />
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> hoặc{" "}

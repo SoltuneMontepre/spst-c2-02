@@ -525,12 +525,25 @@ export async function runBotDecisions(sessionId: string): Promise<void> {
                 if (listings > 0 && bot.wallet.balanceVnd >= coldCost + 2000) {
                   const lots = await tx.inventoryLot.findMany({
                     where: { sessionId, availableQuantity: { gt: 0 } },
-                    take: 3,
+                    orderBy: [{ availableQuantity: "desc" }, { createdAt: "asc" }],
                   });
-                  if (lots.length > 0) {
+                  // COLD_STORAGE charges per protected unit, not per lot. Keep
+                  // the bot's safety reserve and never submit targets whose
+                  // total protected quantity exceeds its live budget.
+                  let affordableUnits = Math.min(
+                    POLICIES.COLD_STORAGE.maxUnits,
+                    Math.floor((bot.wallet.balanceVnd - 2000) / coldCost),
+                  );
+                  const affordableLotIds: string[] = [];
+                  for (const lot of lots) {
+                    if (affordableUnits <= 0) break;
+                    affordableLotIds.push(lot.id);
+                    affordableUnits -= Math.min(lot.availableQuantity, affordableUnits);
+                  }
+                  if (affordableLotIds.length > 0) {
                     await applyPolicy(tx, botCtx(bot, session), {
                       policyType: "COLD_STORAGE",
-                      targetIds: lots.map((l) => l.id),
+                      targetIds: affordableLotIds,
                     });
                   }
                 }

@@ -11,8 +11,17 @@ configureAuthUrl();
 
 const config: NextAuthConfig = {
   session: { strategy: "jwt" },
-  pages: { signIn: "/auth" },
+  pages: { signIn: "/auth", error: "/auth" },
   trustHost: true,
+  logger: {
+    error(error) {
+      // Invalid credentials are a normal, user-visible result of the
+      // Credentials provider. Auth.js logs them as server errors by default,
+      // which obscures real OAuth/cookie failures in production logs.
+      if ((error as { type?: string }).type === "CredentialsSignin") return;
+      console.error("[auth][error]", error);
+    },
+  },
   providers: [
     Google({
       allowDangerousEmailAccountLinking: true,
